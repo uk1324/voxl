@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+	<CodeSnippet Format="1.0.0">
+		<Header>
+			<Title>Generates Stmt declarations</Title>
+			<Shortcut>StmtDeclaration</Shortcut>
+		</Header>
+		<Snippet>
+			<Code Language="CPP">
+				<![CDATA[
+					#pragma once
+
+					#include <Lang/Ast/Stmt.hpp>
+
+					namespace Lang
+					{
+						class $Name$Stmt : public Stmt
+						{
+						public:
+							$Name$Stmt(size_t start, size_t end);
+						
+							void accept(StmtVisitor& visitor) const override;
+							void accept(NonConstStmtVisitor& visitor) override;
+							StmtType type() const override;
+
+						public:
+						};
+					}
+				]]>
+			</Code>
+			<Declarations>
+				<Literal>
+					<ID>Name</ID>
+					<ToolTip>Name of the Stmt so for StmtExpr name is Expr</ToolTip>
+				</Literal>
+			</Declarations>
+		</Snippet>
+	</CodeSnippet>
+</CodeSnippets>

@@ -1,0 +1,41 @@
+Should I save the start and end of an expression or statement for error information?
+Could do it by saving the positions in parser functions.
+
+Don't know what to do to all the unititialized member warnings. The classes set the value on each execute so it doesn't matter.
+
+Could put all the stmts and exprs in one file.
+
+Could just store a start and end index in Token instead of std::string_view.
+Could also do the same for Expr and Stmt for easy error information.
+
+Maybe make just one AstVisitor class.
+
+Don't know if I should use std::make_unique it makes it hard to find errors because of variadic templates.
+
+Returning by value uses the move constructor.
+
+Is there even a point for the Eof token. It might be useful for error handling idk.
+
+Should I make the AstJsonifier names consistent with the class property names. idk?
+
+Should parse the numbers and store the in Expr. This would also require making a separate class for IntConstant and FloatConstant.
+
+Could make a class ErrorPrinter that would have FileInfo and the source .
+
+There should only be one NumberExpr the types should be figured out at compile time
+
+How to handle null type checking would have to either find a way to check if all return paths return a value or do the checking at run time
+
+Maybe replace start end with start and length because it is more useful for printing error information.
+
+Replace virtual function name in Expr and Stmt with type so it may be used later in parsing (get, set) and then do conversion to string
+
+Could use "@" for special functions like operator overloads or iterators. This would allow for using the same name for another function and 
+i could check if the name of the function overload is spelled correctly.
+
+Cannot use ":" for iterator for loops like in c++ for (auto [a, b] : c) because types are specifed like this for (let [a: int, b: string] : c) 
+the problem with this syntax is that I would need to type check the types at runtime as well which would be weird. 
+
+"is" keyword for checking if object is instance of type
+
+for and while loops can be desugared into a loopStmt don't know if this would make optimizations harder.

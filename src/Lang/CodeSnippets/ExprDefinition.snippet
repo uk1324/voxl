@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+	<CodeSnippet Format="1.0.0">
+		<Header>
+			<Title>Generates Expr definitions</Title>
+			<Shortcut>ExprDefinition</Shortcut>
+		</Header>
+		<Snippet>
+			<Code Language="CPP">
+				<![CDATA[
+					#include <Lang/Ast/Expr/$Name$Expr.hpp>
+					#include <Lang/Ast/ExprVisitor.hpp>
+
+					using namespace Lang;
+
+					$Name$Expr::$Name$Expr(size_t start, size_t end)
+						: Expr(start, end)
+					{}
+
+					void $Name$Expr::accept(ExprVisitor& visitor) const
+					{
+						visitor.visit$Name$Expr(*this);
+					}
+					
+					void $Name$Expr::accept(NonConstExprVisitor& visitor)
+					{
+						visitor.visit$Name$Expr(*this);
+					}
+
+					ExprType $Name$Expr::type() const
+					{
+						return ExprType::$Name$;
+					}
+				]]>
+			</Code>
+			<Declarations>
+				<Literal>
+					<ID>Name</ID>
+					<ToolTip>Name of the Expr so for ExprBinary name is Binary</ToolTip>
+				</Literal>
+			</Declarations>
+		</Snippet>
+	</CodeSnippet>
+</CodeSnippets>

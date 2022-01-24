@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+	<CodeSnippet Format="1.0.0">
+		<Header>
+			<Title>Generates Stmt definitions</Title>
+			<Shortcut>StmtDefinition</Shortcut>
+		</Header>
+		<Snippet>
+			<Code Language="CPP">
+				<![CDATA[
+					#include <Lang/Ast/Stmt/$Name$Stmt.hpp>
+					#include <Lang/Ast/StmtVisitor.hpp>
+
+					using namespace Lang;
+
+					$Name$Stmt::$Name$Stmt(size_t start, size_t end)
+						: Stmt(start, end)
+					{}
+
+					void $Name$Stmt::accept(StmtVisitor& visitor) const
+					{
+						visitor.visit$Name$Stmt(*this);
+					}
+					
+					void $Name$Stmt::accept(NonConstStmtVisitor& visitor)
+					{
+						visitor.visit$Name$Stmt(*this);
+					}
+					
+
+					StmtType $Name$Stmt::type() const
+					{
+						return StmtType::$Name$;
+					}
+				]]>
+			</Code>
+			<Declarations>
+				<Literal>
+					<ID>Name</ID>
+					<ToolTip>Name of the Stmt so for StmtExpr name is Expr</ToolTip>
+				</Literal>
+			</Declarations>
+		</Snippet>
+	</CodeSnippet>
+</CodeSnippets>
