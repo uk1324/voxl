@@ -3,10 +3,9 @@
 
 using namespace Lang;
 
-LetStmt::LetStmt(const Token& name, const DataType& type, Opt<OwnPtr<Expr>> initializer, size_t start, size_t end)
+LetStmt::LetStmt(const Token& name, Opt<OwnPtr<Expr>> initializer, size_t start, size_t end)
 	: Stmt(start, end)
 	, initializer(std::move(initializer))
-	, dataType(type)
 	, name(name)
 {}
 

@@ -7,15 +7,14 @@ namespace Lang
 	enum class Op : uint8_t
 	{
 		Add,
-		AddInt,
 		LoadConstant,
 		LoadLocal,
 		SetLocal,
+		DefineGlobal,
 		LoadGlobal,
 		SetGlobal,
-		IncrementStack,
-		IncrementGlobals,
 		Print,
+		LoadNull,
 		PopStack,
 		Return
 	};

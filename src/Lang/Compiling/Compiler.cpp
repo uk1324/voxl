@@ -5,21 +5,29 @@
 
 using namespace Lang;
 
-
 Compiler::Compiler()
 	: m_errorPrinter(nullptr)
 	, m_hadError(false)
-{
-}
+	, m_allocator(nullptr)
+{}
 
-Compiler::Result Compiler::compile(const std::vector<OwnPtr<Stmt>>& ast, ErrorPrinter* errorPrinter)
+Compiler::Result Compiler::compile(const std::vector<OwnPtr<Stmt>>& ast, ErrorPrinter& errorPrinter, Allocator& allocator)
 {
+	m_hadError = false;
 	m_program = Program{};
 	m_currentScope = std::nullopt;
+	m_errorPrinter = &errorPrinter;
 
 	for (const auto& stmt : ast)
 	{
-		stmt->accept(*this);
+		try
+		{
+			stmt->accept(*this);
+		}
+		catch (const Error&)
+		{
+			break;
+		}
 	}
 
 	emitOp(Op::Return);
@@ -27,15 +35,25 @@ Compiler::Result Compiler::compile(const std::vector<OwnPtr<Stmt>>& ast, ErrorPr
 	return Result{ m_hadError, std::move(m_program) };
 }
 
+void Compiler::compile(const Stmt& stmt)
+{
+	stmt.accept(*this);
+}
+
+void Compiler::compile(const Expr& expr)
+{
+	expr.accept(*this);
+}
+
 void Compiler::visitExprStmt(const ExprStmt& stmt)
 {
-	stmt.expr->accept(*this);
+	compile(stmt);
 	emitOp(Op::PopStack);
 }
 
 void Compiler::visitPrintStmt(const PrintStmt& stmt)
 {
-	stmt.expr->accept(*this);
+	compile(stmt);
 	emitOp(Op::Print);
 	emitOp(Op::PopStack);
 }
@@ -44,50 +62,45 @@ void Compiler::visitLetStmt(const LetStmt& stmt)
 {
 	if (m_currentScope.has_value())
 	{
-		ASSERT((*m_currentScope)->localVariables.find(stmt.name) == (*m_currentScope)->localVariables.end());
+		if ((*m_currentScope)->localVariables.find(stmt.name) != (*m_currentScope)->localVariables.end())
+		{
+			throw errorAt(stmt, "redeclaration of variable %.*s", stmt.name.text.length(), stmt.name.text.data());
+		}
+
 		(*m_currentScope)->localVariables[stmt.name] = Local{ uint32_t((*m_currentScope)->localVariables.size()) };
+		// The expression result on top of the stack becomes the variable location.
 		if (stmt.initializer.has_value())
 		{
-			// The expression result on top of the stack becomes the variable location.
-			stmt.initializer.value()->accept(*this);
+			compile(**stmt.initializer);
 		}
 		else
 		{
-			// Because there is no null value to make space for there variable a just leave it uninitalized.
-			// Initializations are checked at compile time so this shouldn't be a problem.
-			emitOp(Op::IncrementStack);
+			emitOp(Op::LoadNull);
 		}
 	}
 	else
 	{
-		ASSERT(m_gobalVariables.find(stmt.name) == m_gobalVariables.end());
-		m_gobalVariables[stmt.name] = Global{ uint32_t(m_gobalVariables.size()) };
+		loadConstant(createIdentifierConstant(stmt.name));
+		emitOp(Op::DefineGlobal);
+
 		if (stmt.initializer.has_value())
 		{
-			stmt.initializer.value()->accept(*this);
-			emitOp(Op::IncrementGlobals);
+			compile(**stmt.initializer);
 			emitOp(Op::SetGlobal);
-			emitUint32(m_gobalVariables.size() - 1);
 			emitOp(Op::PopStack);
 		}
-		else
-		{
-			emitOp(Op::IncrementGlobals);
-		}
+		emitOp(Op::PopStack);
 	}
 }
 
 void Compiler::visitBinaryExpr(const BinaryExpr& expr)
 {
-	expr.lhs->accept(*this);
-	expr.rhs->accept(*this);
+	compile(*expr.lhs);
+	compile(*expr.rhs);
 	switch (expr.op.type)
 	{
 		case TokenType::Plus:
-			if (expr.dataType.type == DataTypeType::Int)
-			{
-				emitOp(Op::AddInt);
-			}
+			emitOp(Op::Add);
 			break;
 
 		default:
@@ -108,13 +121,33 @@ void Compiler::visitFloatConstantExpr(const FloatConstantExpr& expr)
 
 void Compiler::visitIdentifierExpr(const IdentifierExpr& expr)
 {
-	loadVariable(expr.name);
+	if (m_currentScope.has_value())
+	{
+		if ((*m_currentScope)->localVariables.find(expr.name) == (*m_currentScope)->localVariables.end())
+		{
+			throw errorAt(expr, "use of undeclared variable '%.*s'", expr.name.text.length(), expr.name.text.data());
+		}
+		uint32_t variable = (*m_currentScope)->localVariables[expr.name].index;
+		emitOp(Op::LoadLocal);
+		emitUint32(variable);
+	}
+	else
+	{
+		emitOp(Op::LoadGlobal);
+		emitUint32(createIdentifierConstant(expr.name));
+	}
 }
 
 uint32_t Compiler::createConstant(Value value)
 {
 	m_program.constants.push_back(value);
 	return static_cast<uint32_t>(m_program.constants.size() - 1);
+}
+
+uint32_t Compiler::createIdentifierConstant(const Token& name)
+{
+	auto string = m_allocator->allocateString(name.text);
+	auto constant = createConstant(Value(string));
 }
 
 void Compiler::loadConstant(uint32_t index)
@@ -148,18 +181,45 @@ void Compiler::declareVariable(const Token& name)
 
 void Compiler::loadVariable(const Token& name)
 {
-	if (m_currentScope.has_value())
-	{
-		ASSERT((*m_currentScope)->localVariables.find(name) != (*m_currentScope)->localVariables.end());
-		uint32_t variable = (*m_currentScope)->localVariables[name].index;
-		emitOp(Op::LoadLocal);
-		emitUint32(variable);
-	}
-	else 
-	{
-		ASSERT(m_gobalVariables.find(name) != m_gobalVariables.end());
-		uint32_t variable = m_gobalVariables[name].index;
-		emitOp(Op::LoadGlobal);
-		emitUint32(variable);
-	}
+
+}
+
+Compiler::Error Compiler::errorAt(size_t start, size_t end, const char* format, ...)
+{
+	m_hadError = true;
+	va_list args;
+	va_start(args, format);
+	m_errorPrinter->at(start, end, format, args);
+	va_end(args);
+	return Error{};
+}
+
+Compiler::Error Compiler::errorAt(const Stmt& stmt, const char* format, ...)
+{
+	m_hadError = true;
+	va_list args;
+	va_start(args, format);
+	m_errorPrinter->at(stmt.start, stmt.start + stmt.length, format, args);
+	va_end(args);
+	return Error{};
+}
+
+Compiler::Error Compiler::errorAt(const Expr& expr, const char* format, ...)
+{
+	m_hadError = true;
+	va_list args;
+	va_start(args, format);
+	m_errorPrinter->at(expr.start, expr.start + expr.length, format, args);
+	va_end(args);
+	return Error{};
+}
+
+Compiler::Error Compiler::errorAt(const Token& token, const char* format, ...)
+{
+	m_hadError = true;
+	va_list args;
+	va_start(args, format);
+	m_errorPrinter->at(token.start, token.end, format, args);
+	va_end(args);
+	return Error{};
 }

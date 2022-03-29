@@ -21,7 +21,7 @@ namespace Lang
 	public:
 		// What to do with multi token types like function pointers? Type checking in the parser? :(
 		// Should i just capture everything between ':' and (';' or '='). Create intermediate structure
-		LetStmt(const Token& name, const DataType& type, Opt<OwnPtr<Expr>> initializer, size_t start, size_t end);
+		LetStmt(const Token& name, Opt<OwnPtr<Expr>> initializer, size_t start, size_t end);
 
 		void accept(StmtVisitor& visitor) const override;
 		void accept(NonConstStmtVisitor& visitor) override;
@@ -29,7 +29,6 @@ namespace Lang
 
 	public:
 		Token name;
-		DataType dataType;
 		Opt<OwnPtr<Expr>> initializer;
 	};
 }

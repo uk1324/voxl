@@ -7,7 +7,14 @@ namespace Lang
 	class Vm
 	{
 	public:
-		void run(const Program& program);
+		enum class Result
+		{
+			Success,
+			RuntimeError,
+		};
+
+	public:
+		Result run(const Program& program);
 
 	private:
 		uint32_t readUint32();

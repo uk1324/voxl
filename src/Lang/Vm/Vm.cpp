@@ -5,7 +5,7 @@
 
 using namespace Lang;
 
-void Vm::run(const Program& program)
+Vm::Result Vm::run(const Program& program)
 {
 	m_instructionPointer = program.code.data.data();
 
@@ -17,13 +17,20 @@ void Vm::run(const Program& program)
 
 		switch (op)
 		{
-			case Op::AddInt:
+			case Op::Add:
 			{
-				Int a = peekStack(0).as.intNumber;
-				Int b = peekStack(1).as.intNumber;
+				Value a = peekStack(1);
+				Value b = peekStack(0);
+				if (a.type == ValueType::Int && b.type == ValueType::Int)
+				{
+					pushStack(Value(a.as.intNumber + b.as.intNumber));
+				}
+				else
+				{
+					return Vm::R
+				}
 				popStack();
 				popStack();
-				pushStack(Value(a + b));
 				break;
 			}
 

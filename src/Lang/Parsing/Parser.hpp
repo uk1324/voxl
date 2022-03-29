@@ -41,8 +41,6 @@ namespace Lang
 		OwnPtr<Expr> factor();
 		OwnPtr<Expr> primary();
 
-		DataType parseDataType();
-
 		const Token& peek() const;
 		const Token& peekPrevious() const;
 		void advance();

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Lang/Obj.hpp>
+
 #include <stdint.h>
 
 namespace Lang
@@ -7,17 +9,23 @@ namespace Lang
 	enum class ValueType
 	{
 		Int,
-		Float
+		Float,
+		Obj,
+		Null,
 	};
 
 	using Int = int64_t;
 	using Float = double;
 
-	struct Value
+	class Value
 	{
 	public:
 		Value() {};
 		explicit Value(Int value);
+		explicit Value(Obj* obj);
+		
+	public:
+		static Value null();
 
 	public:
 		ValueType type;
@@ -26,6 +34,7 @@ namespace Lang
 		{
 			Int intNumber;
 			Float floatNumber;
+			Obj* obj;
 		} as;
 	};
 }

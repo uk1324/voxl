@@ -2,7 +2,6 @@
 
 #include <Lang/Ast/ExprVisitor.hpp>
 #include <Lang/Ast/StmtVisitor.hpp>
-#include <Lang/TypeChecking/DataType.hpp>
 #include <Json/Json.hpp>
 
 namespace Lang
@@ -24,9 +23,6 @@ namespace Lang
 	private:
 		void toJson(const OwnPtr<Expr>& expr);
 		void toJson(const OwnPtr<Stmt>& stmt);
-		void toJson(const DataType& type);
-
-		Json::Value dataTypeToJson(const DataType& type);
 
 		void addCommon(Json::Value& node, const Expr& expr);
 		void addCommon(Json::Value& node, const Stmt& stmt);

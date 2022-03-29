@@ -91,8 +91,6 @@ void AstJsonifier::visitLetStmt(const LetStmt& stmt)
 	{
 		node["initializer"] = Json::Value::null();
 	}
-	toJson(stmt.dataType);
-	node["dataType"] = RETURN_VALUE;
 
 	node["name"] = Json::Value(std::string(stmt.name.text));
 	
@@ -109,27 +107,14 @@ void AstJsonifier::toJson(const OwnPtr<Stmt>& stmt)
 	stmt->accept(*this);
 }
 
-void AstJsonifier::toJson(const DataType& type)
-{
-	RETURN(dataTypeToJson(type));
-}
-
-Json::Value AstJsonifier::dataTypeToJson(const DataType& type)
-{
-	Json::Value node = Json::Value::emptyObject();
-	node["type"] = dataTypeTypeToString(type.type);
-	return node;
-}
-
 void AstJsonifier::addCommon(Json::Value& node, const Expr& expr)
 {
 	node["start"] = Json::Value::IntType(expr.start);
 	node["length"] = Json::Value::IntType(expr.length);
 	node["type"] = exprTypeToString(expr.type());
-	node["dataType"] = dataTypeToJson(expr.dataType);
 }
 
-void Lang::AstJsonifier::addCommon(Json::Value& node, const Stmt& stmt)
+void AstJsonifier::addCommon(Json::Value& node, const Stmt& stmt)
 {
 	node["start"] = Json::Value::IntType(stmt.start);
 	node["length"] = Json::Value::IntType(stmt.length);

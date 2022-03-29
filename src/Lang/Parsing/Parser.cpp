@@ -14,15 +14,15 @@ Parser::Parser()
 	: m_tokens(nullptr)
 	, m_currentTokenIndex(0)
 	, m_sourceInfo(nullptr)
+	, m_errorPrinter(nullptr)
+	, m_hadError(false)
 {}
 
 Parser::Result Parser::parse(const std::vector<Token>& tokens, ErrorPrinter& errorPrinter, const SourceInfo& sourceInfo)
 {
 	m_tokens = &tokens;
 	m_sourceInfo = &sourceInfo;
-	m_currentTokenIndex = 0;
 	m_errorPrinter = &errorPrinter;
-	m_hadError = false;
 
 	std::vector<OwnPtr<Stmt>> ast;
 
@@ -37,30 +37,13 @@ Parser::Result Parser::parse(const std::vector<Token>& tokens, ErrorPrinter& err
 		}
 		catch (const ParsingError&)
 		{
-			// if (isAtEnd()) // EOF error // Should there be eof errors
-
-			// Skip errors from scanner.
+			
 			if (peek().type == TokenType::Error)
 			{
 				;
 			}
 			else
 			{
-				// GCC multi line error example
-				/*
-				source>:19:9: error: cannot convert 'X' to 'int'
-			   19 |         X(
-				  |         ^~
-				  |         |
-				  |         X
-			   20 | 
-				  |          
-			   21 |         )
-				  |         ~
-				*/
-				
-				/*std::cout << TERM_COL_RED << "error: " << TERM_COL_RESET << error.message << '\n'
-					<< m_sourceInfo->getLineText(m_sourceInfo->getLine(error.start));*/
 			}
 
 			synchronize();
@@ -111,26 +94,15 @@ OwnPtr<Stmt> Parser::letStmt()
 	expect(TokenType::Identifier, "expected variable name");
 	const Token& name = peekPrevious();
 
-	DataType dataType;
-	if (match(TokenType::Colon))
-	{
-		dataType = parseDataType();
-	}
-	else
-	{
-		dataType.type = DataTypeType::Unspecified;
-	}
-
 	if (match(TokenType::Semicolon))
 	{
-		return std::make_unique<LetStmt>(name, dataType, std::nullopt, start, peek().end);
+		return std::make_unique<LetStmt>(name, std::nullopt, start, peek().end);
 	}
-
 	expect(TokenType::Equals, "expected '='");
 	auto initializer = expr();
 	expect(TokenType::Semicolon, "expected ';'");
 
-	return std::make_unique<LetStmt>(name, dataType, std::move(initializer), start, peek().end);
+	return std::make_unique<LetStmt>(name, std::move(initializer), start, peek().end);
 }
 
 OwnPtr<Expr> Parser::expr()
@@ -167,25 +139,6 @@ OwnPtr<Expr> Parser::primary()
 
 	// TODO: Check if this error location is good or should it maybe be token.
 	throw errorAt(peek(), "expected primary expression");
-}
-
-DataType Parser::parseDataType()
-{
-	auto start = peek().start;
-
-	if (match(TokenType::Int))
-	{
-		return DataType(DataTypeType::Int);
-	}
-	if (match(TokenType::Float))
-	{
-		return DataType(DataTypeType::Float);
-	}
-
-	auto end = peek().start;
-
-	// TODO: Check if this error location is good.
-	throw errorAt(start, end, "expected type name");
 }
 
 const Token& Parser::peek() const
@@ -257,6 +210,10 @@ Parser::ParsingError Parser::errorAt(const Token& token, const char* format, ...
 void Parser::errorAtImplementation(size_t start, size_t end, const char* format, va_list args)
 {
 	m_hadError = true;
+	if (peek().type == TokenType::Error)
+	{
+		return;
+	}
 	m_errorPrinter->at(start, end, format, args);
 }
 

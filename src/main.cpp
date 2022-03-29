@@ -1,6 +1,5 @@
 #include <Lang/Parsing/Scanner.hpp>
 #include <Lang/Parsing/Parser.hpp>
-#include <Lang/TypeChecking/TypeChecker.hpp>
 #include <Lang/Compiling/Compiler.hpp>
 #include <Lang/Vm/Vm.hpp>
 #include <Lang/Debug/AstJsonifier.hpp>
@@ -61,10 +60,6 @@ int main()
 	Parser parser;
 	auto parserResult = parser.parse(scannerResult.tokens, errorPrinter, sourceInfo);
 	shouldCompile &= !parserResult.hadError;
-	
-	TypeChecker typeChecker;
-	auto typeCheckerResult = typeChecker.checkAndInferTypes(parserResult.ast, errorPrinter);
-	shouldCompile &= !typeCheckerResult.hadError;
 
 	if (shouldCompile == false)
 	{
@@ -74,9 +69,16 @@ int main()
 	AstJsonifier json;
 	std::cout << json.jsonify(parserResult.ast);
 
-	//Compiler compiler;
-	//auto program = compiler.compile(ast);
-	//Vm vm;
-	//vm.run(program);
+	return 0;
+
+	Allocator allocator;
+
+	Compiler compiler;
+	auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
+	if (compilerResult.hadError == false)
+	{
+		Vm vm;
+		vm.run(compilerResult.program);
+	}
 	
 }

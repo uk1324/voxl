@@ -7,3 +7,16 @@ Value::Value(Int value)
 {
 	as.intNumber = value;
 }
+
+Value::Value(Obj* obj)
+	: type(ValueType::Obj)
+{
+	as.obj = obj;
+}
+
+Value Value::null()
+{
+	Value value;
+	value.type = ValueType::Null;
+	return value;
+}

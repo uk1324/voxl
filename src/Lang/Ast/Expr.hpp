@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Lang/TypeChecking/DataType.hpp>
 #include <stddef.h>
 
 namespace Lang
@@ -31,7 +30,5 @@ namespace Lang
 	public:
 		size_t start;
 		size_t length;
-
-		DataType dataType;
 	};
 }
