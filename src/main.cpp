@@ -1,8 +1,7 @@
-#include <Lang/Parsing/Scanner.hpp>
-#include <Lang/Parsing/Parser.hpp>
-#include <Lang/Compiling/Compiler.hpp>
-#include <Lang/Vm/Vm.hpp>
-#include <Lang/Debug/AstJsonifier.hpp>
+#include <Parsing/Scanner.hpp>
+//#include <Parsing/Parser.hpp>
+//#include <Compiling/Compiler.hpp>
+#include <Vm/Vm.hpp>
 
 using namespace Lang;
 
@@ -45,40 +44,36 @@ int main()
 {
 	bool shouldCompile = true;
 
-	std::string filename = "src/Lang/test.voxl";
+	std::string filename = "src/test.voxl";
 	std::string source = stringFromFile(filename);
 	SourceInfo sourceInfo;
 	sourceInfo.source = source;
 	sourceInfo.filename = filename;
 
-	ErrorPrinter errorPrinter(std::cerr, sourceInfo);
-
 	Scanner scanner;
-	auto scannerResult = scanner.parse(sourceInfo, errorPrinter);
-	shouldCompile &= !scannerResult.hadError;
+	auto scannerResult = scanner.parse(sourceInfo);
+	
+	//shouldCompile &= !scannerResult.hadError;
 
-	Parser parser;
-	auto parserResult = parser.parse(scannerResult.tokens, errorPrinter, sourceInfo);
-	shouldCompile &= !parserResult.hadError;
+	//Parser parser;
+	//auto parserResult = parser.parse(scannerResult.tokens, errorPrinter, sourceInfo);
+	//shouldCompile &= !parserResult.hadError;
 
-	if (shouldCompile == false)
-	{
-		return EXIT_FAILURE;
-	}
-
-	AstJsonifier json;
-	std::cout << json.jsonify(parserResult.ast);
+	//if (shouldCompile == false)
+	//{
+	//	return EXIT_FAILURE;
+	//}
 
 	return 0;
 
-	Allocator allocator;
+	//Allocator allocator;
 
-	Compiler compiler;
-	auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
-	if (compilerResult.hadError == false)
-	{
-		Vm vm;
-		vm.run(compilerResult.program);
-	}
+	//Compiler compiler;
+	//auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
+	//if (compilerResult.hadError == false)
+	//{
+	//	Vm vm;
+	//	vm.run(compilerResult.program);
+	//}
 	
 }
