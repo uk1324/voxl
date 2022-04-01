@@ -3,6 +3,7 @@
 #include <Ast.hpp>
 #include <Parsing/Token.hpp>
 #include <Parsing/SourceInfo.hpp>
+#include <ErrorPrinter.hpp>
 
 #include <vector>
 
@@ -26,7 +27,7 @@ namespace Lang
 		Parser();
 
 		// Could use move here on return.
-		Result parse(const std::vector<Token>& tokens, const SourceInfo& sourceInfo);
+		Result parse(const std::vector<Token>& tokens, const SourceInfo& sourceInfo, ErrorPrinter& errorPrinter);
 
 	private:
 		std::unique_ptr<Stmt> stmt();
@@ -56,5 +57,6 @@ namespace Lang
 		bool m_hadError;
 
 		const SourceInfo* m_sourceInfo;
+		ErrorPrinter* m_errorPrinter;
 	};
 }

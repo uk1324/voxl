@@ -13,7 +13,6 @@ Vm::Result Vm::run(const Program& program)
 		Op op = static_cast<Op>(*m_instructionPointer);
 		m_instructionPointer++;
 
-
 		switch (op)
 		{
 			case Op::Add:
@@ -22,14 +21,14 @@ Vm::Result Vm::run(const Program& program)
 				Value b = peekStack(0);
 				if (a.type == ValueType::Int && b.type == ValueType::Int)
 				{
+					popStack();
+					popStack();
 					pushStack(Value(a.as.intNumber + b.as.intNumber));
 				}
 				else
 				{
-					//return Vm::R
+					return Result::RuntimeError;
 				}
-				popStack();
-				popStack();
 				break;
 			}
 

@@ -1,9 +1,9 @@
 #pragma once
 
-#include <memory>
-#include <optional>
 #include <Value.hpp>
 #include <Parsing/Token.hpp>
+#include <memory>
+#include <optional>
 
 namespace Lang
 {

@@ -15,7 +15,7 @@ namespace Lang
 		void emitOp(Op op);
 		void emitByte(uint8_t byte);
 		void emitWord(uint16_t word);
-		void emitDword(uint32_t dword);
+		void emitUint32(uint32_t dword);
 
 		void addConstant();
 

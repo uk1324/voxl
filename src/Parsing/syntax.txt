@@ -5,6 +5,8 @@ Maybe add a string concatenation operator.
 Don't know if I should have an empty stmt like ";". It is useful in c like languages for loops like while(doSomething());
 but this will be impossible with this language. Or I could add it to the syntax of the while loop but that would look stupid.
 
+Could remove semicolons in certain places by storing newlines as tokens. The newlines will be skipped when matching or peeking.
+
 FactorA ::= Number FactorB
 FactorB ::= (+ FactorB Number) | Nothing
 

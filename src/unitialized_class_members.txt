@@ -1,0 +1,3 @@
+Don't know what is a good way to deal with the uninitialized member variable errors. Some fields in Parser and Scanner only can get set
+when calling parse. I guess if it is compiled in release mode if I didn't set them to nullptr at start it might not segfault and
+cause problems later.

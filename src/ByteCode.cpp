@@ -17,10 +17,10 @@ void ByteCode::emitWord(uint16_t word)
 	
 }
 
-void ByteCode::emitDword(uint32_t dword)
+void ByteCode::emitUint32(uint32_t dword)
 {
-	emitByte(static_cast<uint8_t>(dword & 0xFF));
-	emitByte(static_cast<uint8_t>((dword >> 8) & 0xFF));
-	emitByte(static_cast<uint8_t>((dword >> 16) & 0xFF));
 	emitByte(static_cast<uint8_t>((dword >> 24) & 0xFF));
+	emitByte(static_cast<uint8_t>((dword >> 16) & 0xFF));
+	emitByte(static_cast<uint8_t>((dword >> 8) & 0xFF));
+	emitByte(static_cast<uint8_t>(dword & 0xFF));
 }

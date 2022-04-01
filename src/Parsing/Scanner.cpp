@@ -11,10 +11,12 @@ Scanner::Scanner()
 	, m_tokenStartIndex(0)
 	, m_sourceInfo(nullptr)
 	, m_hadError(false)
+	, m_errorPrinter(nullptr)
 {}
 
-Scanner::Result Scanner::parse(SourceInfo& sourceInfoToComplete)
+Scanner::Result Scanner::parse(SourceInfo& sourceInfoToComplete, ErrorPrinter& errorPrinter)
 {
+	m_errorPrinter = &errorPrinter;
 	m_sourceInfo = &sourceInfoToComplete;
 	m_sourceInfo->lineStartOffsets.push_back(0);
 	m_currentCharIndex = 0;
@@ -63,10 +65,18 @@ Token Scanner::token()
 
 Token Scanner::number()
 {
-	while ((isAtEnd() == false) && isDigit(peek()))
-		advance();
+	Int number = static_cast<Int>(peekPrevious()) - static_cast<Int>('0');
 
-	return makeToken(TokenType::IntNumber);
+	while ((isAtEnd() == false) && isDigit(peek()))
+	{
+		number *= 10;
+		number += static_cast<Int>(peek()) - static_cast<Int>('0');
+		advance();
+	}
+
+	auto token = makeToken(TokenType::IntNumber);
+	token.intValue = number;
+	return token;
 }
 
 Token Scanner::keywordOrIdentifier()
@@ -152,23 +162,23 @@ void Scanner::errorAt(const Token& token, const char* format, ...)
 	va_list args;
 	va_start(args, format);
 	const auto tokenStartLine = m_sourceInfo->getLine(token.start);
-	//m_errorPrinter->printErrorStart(tokenStartLine, m_currentCharIndex - m_sourceInfo->lineStartOffsets.back(), format, args);
+	m_errorPrinter->printErrorStart(tokenStartLine, m_currentCharIndex - m_sourceInfo->lineStartOffsets.back(), format, args);
 	va_end(args);
 
 	// Because the sourceInfo isn't completed yet this needs special handling.
 	for (auto currentLine = tokenStartLine; currentLine + 1 < m_sourceInfo->lineStartOffsets.size(); currentLine++)
 	{
 		auto lineText = m_sourceInfo->source.substr(m_sourceInfo->lineStartOffsets[currentLine], m_sourceInfo->lineStartOffsets[currentLine + 1] - m_sourceInfo->lineStartOffsets[currentLine]);
-		//lineText = ErrorPrinter::trimLine(lineText);
+		lineText = ErrorPrinter::trimLine(lineText);
 
-		//if (lineText.length() == 0)
-		//{
-		//	continue;
-		//}
-		//m_errorPrinter->printLine(lineText);
+		if (lineText.length() == 0)
+		{
+			continue;
+		}
+		m_errorPrinter->printLine(lineText);
 	}
 
-	/*auto currentLineStart = m_sourceInfo->lineStartOffsets.back();
+	auto currentLineStart = m_sourceInfo->lineStartOffsets.back();
 	auto currentLineEnd = m_currentCharIndex;
 	while ((currentLineEnd < m_sourceInfo->source.length()) && (m_sourceInfo->source[currentLineEnd + 1] != '\n'))
 	{
@@ -180,12 +190,17 @@ void Scanner::errorAt(const Token& token, const char* format, ...)
 	if (lastLineText.length() != 0)
 	{
 		m_errorPrinter->printLine(lastLineText);
-	}*/
+	}
 }
 
 char Scanner::peek()
 {
 	return m_sourceInfo->source[m_currentCharIndex];
+}
+
+char Scanner::peekPrevious()
+{
+	return m_sourceInfo->source[m_currentCharIndex - 1];
 }
 
 bool Scanner::isAtEnd()

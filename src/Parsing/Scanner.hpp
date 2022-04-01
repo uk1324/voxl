@@ -2,6 +2,7 @@
 
 #include <Parsing/Token.hpp>
 #include <Parsing/SourceInfo.hpp>
+#include <ErrorPrinter.hpp>
 
 // Maybe make every function private and only expose a friend function like std::vector<Token> parseTokens(std::string_view source);
 // The problem is that it would need to construct a new object for each parse.
@@ -22,7 +23,7 @@ namespace Lang
 	public:
 		Scanner();
 
-		Result parse(SourceInfo& sourceInfoToComplete);
+		Result parse(SourceInfo& sourceInfoToComplete, ErrorPrinter& errorPrinter);
 
 	private:
 		Token token();
@@ -38,12 +39,13 @@ namespace Lang
 		//Token errorToken(const char* message);
 		void errorAt(const Token& token, const char* format, ...);
 		char peek();
+		char peekPrevious();
 		bool isAtEnd();
 		void advance();
 		void advanceLine();
 
 		// Making my own functions because the c functions from ctype.h use int as input the results are also based on the current C locale.
-		// Also negative values might trigger asserts. Negative values happen because of conversion from the default on most compilers
+		// Negative values might trigger asserts. Negative values happen because of conversion from the default on most compilers
 		// signed char. UTF-8 text could trigger the asserts.
 		bool isDigit(char c);
 		bool isAlpha(char c);
@@ -56,8 +58,11 @@ namespace Lang
 		SourceInfo* m_sourceInfo;
 
 		// It could be faster to just increment a pointer.
+		// But then I would have to perform arithmetic on every token creation to get the offset and length.
 		size_t m_currentCharIndex;
 		size_t m_tokenStartIndex;
+
+		ErrorPrinter* m_errorPrinter;
 
 		bool m_hadError;
 	};

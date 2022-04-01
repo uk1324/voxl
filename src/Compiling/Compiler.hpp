@@ -1,9 +1,10 @@
 #pragma once
 
-#include <unordered_map>
-#include <Program.hpp>
 #include <Ast.hpp>
 #include <Allocator.hpp>
+#include <Program.hpp>
+#include <ErrorPrinter.hpp>
+#include <unordered_map>
 
 namespace Lang
 {
@@ -44,12 +45,18 @@ private:
 public:
 	Compiler();
 
-	Result compile(const std::vector<std::unique_ptr<Stmt>>& ast, Allocator& allocator);
-
-	void compile(const Stmt& stmt);
-	void compile(const Expr& expr);
+	Result compile(const std::vector<std::unique_ptr<Stmt>>& ast, ErrorPrinter& errorPrinter, Allocator& allocator);
 
 private:
+	void compile(const std::unique_ptr<Stmt>& stmt);
+	void exprStmt(const ExprStmt& stmt);
+	void printStmt(const PrintStmt& stmt);
+
+	void compile(const std::unique_ptr<Expr>& expr);
+	// TODO: perform constant folding
+	void intConstantExpr(const IntConstantExpr& expr);
+	void binaryExpr(const BinaryExpr& expr);
+
 	uint32_t createConstant(Value value);
 	uint32_t createIdentifierConstant(const Token& name);
 	void loadConstant(uint32_t index);
@@ -70,6 +77,7 @@ private:
 	std::optional<void*> m_currentScope;
 
 	bool m_hadError;
+	ErrorPrinter* m_errorPrinter;
 
 	Program m_program;
 };

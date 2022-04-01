@@ -1,6 +1,8 @@
 #include <Parsing/Scanner.hpp>
-//#include <Parsing/Parser.hpp>
-//#include <Compiling/Compiler.hpp>
+#include <Parsing/Parser.hpp>
+#include <ErrorPrinter.hpp>
+#include <Compiling/Compiler.hpp>
+#include <Debug/Disassembler.hpp>
 #include <Vm/Vm.hpp>
 
 using namespace Lang;
@@ -40,6 +42,9 @@ std::string stringFromFile(std::string_view path)
 	return result;
 }
 
+// TODO: Rewrite the disassembler and change program to something like a function.
+// Constants can't be modified at runtime.
+
 int main()
 {
 	bool shouldCompile = true;
@@ -49,31 +54,33 @@ int main()
 	SourceInfo sourceInfo;
 	sourceInfo.source = source;
 	sourceInfo.filename = filename;
+	
+	ErrorPrinter errorPrinter(std::cerr, sourceInfo);
 
 	Scanner scanner;
-	auto scannerResult = scanner.parse(sourceInfo);
-	
-	//shouldCompile &= !scannerResult.hadError;
+	auto scannerResult = scanner.parse(sourceInfo, errorPrinter);
+	shouldCompile &= !scannerResult.hadError;
 
-	//Parser parser;
-	//auto parserResult = parser.parse(scannerResult.tokens, errorPrinter, sourceInfo);
-	//shouldCompile &= !parserResult.hadError;
+	Parser parser;
+	auto parserResult = parser.parse(scannerResult.tokens, sourceInfo, errorPrinter);
+	shouldCompile &= !parserResult.hadError;
 
-	//if (shouldCompile == false)
-	//{
-	//	return EXIT_FAILURE;
-	//}
+	if (shouldCompile == false)
+	{
+		return EXIT_FAILURE;
+	}
 
-	return 0;
+	Allocator allocator;
 
-	//Allocator allocator;
+	Compiler compiler;
+	auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
 
-	//Compiler compiler;
-	//auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
-	//if (compilerResult.hadError == false)
-	//{
-	//	Vm vm;
-	//	vm.run(compilerResult.program);
-	//}
+	disassembleByteCode(compilerResult.program.code);
+
+	if (compilerResult.hadError == false)
+	{
+		Vm vm;
+		vm.run(compilerResult.program);
+	}
 	
 }
