@@ -8,6 +8,7 @@
 
 namespace Lang
 {
+	// This can't be const because the function modify m_out.
 	class ErrorPrinter
 	{
 	public:

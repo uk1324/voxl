@@ -45,6 +45,10 @@ std::string stringFromFile(std::string_view path)
 // TODO: Rewrite the disassembler and change program to something like a function.
 // Constants can't be modified at runtime.
 
+// TODO: Think is whileIsAt end usefull or could advance synchronize on out of range.
+
+// TODO Make a test for accessing a variable with the same name from outer in initializer.
+
 int main()
 {
 	bool shouldCompile = true;
@@ -80,7 +84,7 @@ int main()
 	if (compilerResult.hadError == false)
 	{
 		Vm vm;
-		vm.run(compilerResult.program);
+		vm.run(compilerResult.program, allocator, errorPrinter);
 	}
 	
 }

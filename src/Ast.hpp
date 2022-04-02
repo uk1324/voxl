@@ -3,7 +3,12 @@
 #include <Value.hpp>
 #include <Parsing/Token.hpp>
 #include <memory>
+#include <vector>
 #include <optional>
+
+// If I were to store the token instead of just the string view I could easily print additional error information like
+// no operator+ for types (not applicable to a dynamically typed language).
+// (invalid use of) / (redefinition of) <variable name> previously defined <location>.
 
 namespace Lang
 {
@@ -43,7 +48,7 @@ public:
 	FloatConstantExpr(Float value, size_t start, size_t end);
 	~FloatConstantExpr() = default;
 
-	Int value;
+	Float value;
 };
 
 class BinaryExpr final : public Expr
@@ -71,6 +76,7 @@ enum class StmtType
 	Expr,
 	Print,
 	Let,
+	Block,
 };
 
 class Stmt
@@ -111,6 +117,15 @@ public:
 
 	std::string_view identifier;
 	std::optional<std::unique_ptr<Expr>> initializer;
+};
+
+class BlockStmt final : public Stmt
+{
+public:
+	BlockStmt(std::vector<std::unique_ptr<Stmt>> stmts, size_t start, size_t end);
+	~BlockStmt() = default;
+
+	std::vector<std::unique_ptr<Stmt>> stmts;
 };
 
 }

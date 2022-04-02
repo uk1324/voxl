@@ -6,35 +6,37 @@
 
 namespace Lang
 {
-	enum class ValueType
-	{
-		Int,
-		Float,
-		Obj,
-		Null,
-	};
 
-	using Int = int64_t;
-	using Float = double;
+enum class ValueType
+{
+	Int,
+	Float,
+	Obj,
+	Null,
+};
 
-	class Value
-	{
-	public:
-		Value() {};
-		explicit Value(Int value);
-		explicit Value(Obj* obj);
+using Int = int64_t;
+using Float = double;
+
+class Value
+{
+public:
+	Value() {};
+	explicit Value(Int value);
+	explicit Value(Obj* obj);
 		
-	public:
-		static Value null();
+public:
+	static Value null();
 
-	public:
-		ValueType type;
+public:
+	ValueType type;
 
-		union
-		{
-			Int intNumber;
-			Float floatNumber;
-			Obj* obj;
-		} as;
-	};
+	union
+	{
+		Int intNumber;
+		Float floatNumber;
+		Obj* obj;
+	} as;
+};
+
 }

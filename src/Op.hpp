@@ -6,13 +6,14 @@ namespace Lang
 {
 	enum class Op : uint8_t
 	{
-		Add,
+		Add, // [lhs, rhs]
 		LoadConstant,
 		LoadLocal,
 		SetLocal,
-		LoadGlobal,
-		SetGlobal,
-		Print,
+		LoadGlobal, // [name]
+		SetGlobal, // [value, name]
+		CreateGlobal, // [initializer, name]
+		Print, // [value]
 		LoadNull,
 		PopStack,
 		Return

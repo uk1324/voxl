@@ -6,6 +6,11 @@
 #include <ErrorPrinter.hpp>
 #include <unordered_map>
 
+// To store the line numbers of the compiled code I could when calling compile on an expr or stmt store the line number of the start of it
+// The I could emit the number as RLE or just normally.
+
+// Could synchronize on global statements because even if an error happend It can try to compile further because globals are executed at runtime.
+
 namespace Lang
 {
 
@@ -26,21 +31,18 @@ private:
 		uint32_t index;
 	};
 
-	struct Global
+	struct Scope
 	{
 	public:
-		uint32_t index;
+		std::unordered_map<std::string_view, Local> localVariables;
+		int functionDepth;
 	};
 
-	/*struct Scope
+	enum class [[nodiscard]] Status
 	{
-	public:
-		std::unordered_map<Token, Local> localVariables;
-		Opt<Scope*> previousScope;
-	};*/
-
-	class [[nodiscard]] Error
-	{};
+		Ok,
+		Error
+	};
 
 public:
 	Compiler();
@@ -48,14 +50,23 @@ public:
 	Result compile(const std::vector<std::unique_ptr<Stmt>>& ast, ErrorPrinter& errorPrinter, Allocator& allocator);
 
 private:
-	void compile(const std::unique_ptr<Stmt>& stmt);
-	void exprStmt(const ExprStmt& stmt);
-	void printStmt(const PrintStmt& stmt);
+	Status compile(const std::unique_ptr<Stmt>& stmt);
+	Status exprStmt(const ExprStmt& stmt);
+	Status printStmt(const PrintStmt& stmt);
+	Status letStmt(const LetStmt& stmt);
+	Status blockStmt(const BlockStmt& stmt);
 
-	void compile(const std::unique_ptr<Expr>& expr);
+	Status compile(const std::unique_ptr<Expr>& expr);
 	// TODO: perform constant folding
-	void intConstantExpr(const IntConstantExpr& expr);
-	void binaryExpr(const BinaryExpr& expr);
+	Status intConstantExpr(const IntConstantExpr& expr);
+	Status binaryExpr(const BinaryExpr& expr);
+	Status identifierExpr(const IdentifierExpr& expr);
+
+	Status declareVariable(std::string_view name);
+	Status loadVariable(std::string_view name);
+	// Could make a RAII class
+	void beginScope();
+	void endScope();
 
 	uint32_t createConstant(Value value);
 	uint32_t createIdentifierConstant(const Token& name);
@@ -63,18 +74,15 @@ private:
 	void emitOp(Op op);
 	void emitUint32(uint32_t value);
 
-	void declareVariable(const Token& name);
-	void loadVariable(const Token& name);
-
-	Compiler::Error errorAt(size_t start, size_t end, const char* format, ...);
-	Compiler::Error errorAt(const Stmt& stmt, const char* format, ...);
-	Compiler::Error errorAt(const Expr& expr, const char* format, ...);
-	Compiler::Error errorAt(const Token& token, const char* format, ...);
+	Status errorAt(size_t start, size_t end, const char* format, ...);
+	Status errorAt(const Stmt& stmt, const char* format, ...);
+	Status errorAt(const Expr& expr, const char* format, ...);
+	Status errorAt(const Token& token, const char* format, ...);
 
 private:
 	Allocator* m_allocator;
 
-	std::optional<void*> m_currentScope;
+	std::vector<Scope> m_scopes;
 
 	bool m_hadError;
 	ErrorPrinter* m_errorPrinter;

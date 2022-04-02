@@ -48,6 +48,8 @@ Token Scanner::token()
 		case '=': return makeToken(TokenType::Equals);
 		case '(': return makeToken(TokenType::LeftParen);
 		case ')': return makeToken(TokenType::RightParen);
+		case '{': return makeToken(TokenType::LeftBrace);
+		case '}': return makeToken(TokenType::RightBrace);
 		case ':': return makeToken(TokenType::Colon);
 		case '"': return string();
 
@@ -96,6 +98,8 @@ Token Scanner::keywordOrIdentifier()
 
 	if (keyword != keywords.end())
 		token.type = keyword->second;
+	else
+		token.identifier = identifier;
 
 	return token;
 }

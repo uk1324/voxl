@@ -51,6 +51,8 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return printStmt();
 	if (match(TokenType::Let))
 		return letStmt();
+	if (match(TokenType::LeftBrace))
+		return blockStmt();
 	else
 		return exprStmt();
 
@@ -69,13 +71,12 @@ std::unique_ptr<Stmt> Parser::exprStmt()
 
 std::unique_ptr<Stmt> Parser::printStmt()
 {
-	size_t start = peekPrevious().start;
+	auto start = peekPrevious().start;
 	expect(TokenType::LeftParen, "expected '('");
 	auto expression = expr();
 	expect(TokenType::RightParen, "expected ')'");
 	expect(TokenType::Semicolon, "expected ';'");
-	size_t end = peek().end;
-	auto stmt = std::make_unique<PrintStmt>(std::move(expression), start, end);
+	auto stmt = std::make_unique<PrintStmt>(std::move(expression), start, peekPrevious().end);
 	return stmt;
 }
 
@@ -88,13 +89,32 @@ std::unique_ptr<Stmt> Parser::letStmt()
 
 	if (match(TokenType::Semicolon))
 	{
-		return std::make_unique<LetStmt>(name, std::nullopt, start, peek().end);
+		return std::make_unique<LetStmt>(name, std::nullopt, start, peekPrevious().end);
 	}
 	expect(TokenType::Equals, "expected '='");
 	auto initializer = expr();
 	expect(TokenType::Semicolon, "expected ';'");
 
-	return std::make_unique<LetStmt>(name, std::move(initializer), start, peek().end);
+	return std::make_unique<LetStmt>(name, std::move(initializer), start, peekPrevious().end);
+}
+
+std::unique_ptr<Stmt> Parser::blockStmt()
+{
+	auto start = peek().start;
+	auto stmts = block();
+	auto end = peekPrevious().end;
+	return std::make_unique<BlockStmt>(std::move(stmts), start, end);
+}
+
+std::vector<std::unique_ptr<Stmt>> Parser::block()
+{
+	std::vector<std::unique_ptr<Stmt>> stmts;
+	while ((isAtEnd() == false) && (match(TokenType::RightBrace) == false))
+	{
+		stmts.push_back(stmt());
+	}
+
+	return stmts;
 }
 
 std::unique_ptr<Expr> Parser::expr()

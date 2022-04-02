@@ -21,6 +21,8 @@ enum class TokenType
 	Colon,
 	LeftParen,
 	RightParen,
+	LeftBrace,
+	RightBrace,
 
 	// Keywords
 	Print,

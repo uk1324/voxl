@@ -16,7 +16,7 @@ struct Obj
 struct ObjString
 {
 	Obj obj;
-	char* chars;
+	const char* chars;
 	size_t length;
 };
 

@@ -34,6 +34,9 @@ namespace Lang
 		std::unique_ptr<Stmt> exprStmt();
 		std::unique_ptr<Stmt> printStmt();
 		std::unique_ptr<Stmt> letStmt();
+		std::unique_ptr<Stmt> blockStmt();
+
+		std::vector<std::unique_ptr<Stmt>> block();
 
 		std::unique_ptr<Expr> expr();
 		std::unique_ptr<Expr> factor();

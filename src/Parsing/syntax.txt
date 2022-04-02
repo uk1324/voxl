@@ -7,6 +7,8 @@ but this will be impossible with this language. Or I could add it to the syntax 
 
 Could remove semicolons in certain places by storing newlines as tokens. The newlines will be skipped when matching or peeking.
 
+Could later change the syntax for declarations to be <name> := <value> and assignments would be normal so there is no problem with redeclaring
+
 FactorA ::= Number FactorB
 FactorB ::= (+ FactorB Number) | Nothing
 

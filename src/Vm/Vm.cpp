@@ -1,12 +1,20 @@
 #include <Vm/Vm.hpp>
-#include <assert.h>
+#include <Asserts.hpp>
 #include <iostream>
 
 using namespace Lang;
 
-Vm::Result Vm::run(const Program& program)
+Vm::Vm()
+	: m_instructionPointer(nullptr)
+	, m_allocator(nullptr)
+	, m_errorPrinter(nullptr)
+{}
+
+Vm::Result Vm::run(const Program& program, Allocator& allocator, ErrorPrinter& errorPrinter)
 {
 	m_instructionPointer = program.code.data.data();
+	m_allocator = &allocator;
+	m_errorPrinter = &errorPrinter;
 
 	for (;;)
 	{
@@ -39,21 +47,64 @@ Vm::Result Vm::run(const Program& program)
 				break;
 			}
 
-			case Op::PopStack:
+			case Op::LoadLocal:
 			{
+				size_t stackOffset = (size_t)readUint32();
+				pushStack(m_stack[stackOffset]);
+				break;
+			}
+
+			case Op::SetLocal:
+			{
+				size_t stackOffset = (size_t)readUint32();
+				m_stack[stackOffset] = peekStack(0);
+				popStack();
+				break;
+			}
+
+			case Op::CreateGlobal:
+			{
+				// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
+				ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
+				Value value = peekStack(1);
+				bool doesNotAlreadyExist = m_globals.insert_or_assign(name, value).second;
+				if (doesNotAlreadyExist == false)
+				{
+					errorPrinter.outStream() << "redeclaration of '" << name->chars << '\'';
+					return Result::RuntimeError;
+				}
+				popStack();
 				popStack();
 				break;
 			}
 
 			case Op::LoadGlobal:
 			{
-				pushStack(m_globals[readUint32()]);
+				ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
+				auto value = m_globals.find(name);
+				if (value == m_globals.end())
+				{
+					errorPrinter.outStream() << '\'' << name->chars << "' is not defined\n";
+					return Result::RuntimeError;
+				}
+				popStack();
+				pushStack(value->second);
 				break;
 			}
 
 			case Op::SetGlobal:
 			{
-				m_globals[readUint32()] = peekStack();
+				// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
+				ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
+				Value value = peekStack(1);
+				bool doesNotAlreadyExist = m_globals.insert_or_assign(name, value).second;
+				if (doesNotAlreadyExist)
+				{
+					errorPrinter.outStream() << '\'' << name->chars << "' is not defined\n";
+					return Result::RuntimeError;
+				}
+				popStack();
+				popStack();
 				break;
 			}
 
@@ -63,13 +114,19 @@ Vm::Result Vm::run(const Program& program)
 				break;
 			}
 
+			case Op::PopStack:
+			{
+				popStack();
+				break;
+			}
+
 			case Op::Return:
 			{
 				return Result::Success;
 			}
 
 			default:
-				assert(false);
+				ASSERT_NOT_REACHED();
 				return Result::RuntimeError;
 		}
 	}
@@ -95,7 +152,7 @@ void Vm::printValue(const Value& value)
 			break;
 
 		default:
-			assert(false);
+			ASSERT_NOT_REACHED();
 	}
 }
 
@@ -128,4 +185,14 @@ uint32_t Vm::readUint32()
 		value |= static_cast<uint32_t>(readUint8());
 	}
 	return value;
+}
+
+size_t Vm::ObjStringHasher::operator()(const ObjString* string) const
+{
+	return std::hash<std::string_view>()(std::string_view(string->chars, string->length));
+}
+
+size_t Vm::ObjStringComparator::operator()(const ObjString* a, const ObjString* b) const
+{
+	return (a->length == b->length) && (memcmp(a->chars, b->chars, a->length) == 0);
 }

@@ -1,1 +1,10 @@
-print(2 + 2);
+let x = 1;
+print(x);
+{
+	print(x);
+	let x = 2;
+	print(x);
+	{
+		print(x);
+	}
+}

@@ -26,7 +26,7 @@ BinaryExpr::BinaryExpr(std::unique_ptr<Expr> lhs, TokenType op, std::unique_ptr<
 {}
 
 IdentifierExpr::IdentifierExpr(std::string_view identifier, size_t start, size_t end)
-	: Expr(start, end, ExprType::Binary)
+	: Expr(start, end, ExprType::Identifier)
 	, identifier(identifier)
 {}
 
@@ -50,4 +50,9 @@ LetStmt::LetStmt(std::string_view identifier, std::optional<std::unique_ptr<Expr
 	: Stmt(start, end, StmtType::Let)
 	, identifier(identifier)
 	, initializer(std::move(initializer))
+{}
+
+BlockStmt::BlockStmt(std::vector<std::unique_ptr<Stmt>> stmts, size_t start, size_t end)
+	: Stmt(start, end, StmtType::Block)
+	, stmts(std::move(stmts))
 {}
