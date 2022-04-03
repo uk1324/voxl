@@ -1,8 +1,8 @@
 #pragma once
 
-#include <Program.hpp>
-#include <ErrorPrinter.hpp>
 #include <Allocator.hpp>
+#include <ByteCode.hpp>
+#include <ErrorPrinter.hpp>
 #include <unordered_map>
 
 namespace Lang
@@ -34,7 +34,7 @@ public:
 	Vm();
 
 public:
-	Result run(const Program& program, Allocator& allocator, ErrorPrinter& errorPrinter);
+	Result run(const ByteCode& program, Allocator& allocator, ErrorPrinter& errorPrinter);
 
 private:
 	uint32_t readUint32();

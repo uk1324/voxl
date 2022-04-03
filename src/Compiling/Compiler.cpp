@@ -23,7 +23,7 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 {
 	m_hadError = false;
 	m_errorPrinter = &errorPrinter;
-	m_program = Program{};
+	m_bytecode = ByteCode{};
 	m_allocator = &allocator;
 
 	for (const auto& stmt : ast)
@@ -34,14 +34,20 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 		}
 	}
 
+	// The return from program is on the last line of the file.
+	m_lineNumberStack.push_back(m_errorPrinter->sourceInfo().lineStartOffsets.size());
 	emitOp(Op::Return);
+	m_lineNumberStack.pop_back();
 
-	return Result{ m_hadError, std::move(m_program) };
+	return Result{ m_hadError, std::move(m_bytecode) };
 }
 
 Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 {
-#define CASE_STMT_TYPE(stmtType, stmtFunction) case StmtType::stmtType: return stmtFunction(*static_cast<stmtType##Stmt*>(stmt.get())); break;
+#define CASE_STMT_TYPE(stmtType, stmtFunction) \
+	case StmtType::stmtType: TRY(stmtFunction(*static_cast<stmtType##Stmt*>(stmt.get()))); break;
+
+	m_lineNumberStack.push_back(m_errorPrinter->sourceInfo().getLine(stmt->start));
 	switch (stmt.get()->type)
 	{
 		CASE_STMT_TYPE(Expr, exprStmt)
@@ -49,9 +55,9 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 		CASE_STMT_TYPE(Let, letStmt)
 		CASE_STMT_TYPE(Block, blockStmt)
 	}
+	m_lineNumberStack.pop_back();
 
-	ASSERT_NOT_REACHED();
-	return Status::Error;
+	return Status::Ok;
 }
 
 Compiler::Status Compiler::exprStmt(const ExprStmt& stmt)
@@ -117,15 +123,18 @@ Compiler::Status Compiler::blockStmt(const BlockStmt& stmt)
 
 Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 {
-#define CASE_EXPR_TYPE(exprType, exprFunction) case ExprType::exprType: return exprFunction(*static_cast<exprType##Expr*>(expr.get())); break;
+#define CASE_EXPR_TYPE(exprType, exprFunction) \
+	case ExprType::exprType: TRY(exprFunction(*static_cast<exprType##Expr*>(expr.get()))); break;
+
+	m_lineNumberStack.push_back(m_errorPrinter->sourceInfo().getLine(expr->start));
 	switch (expr.get()->type)
 	{
 		CASE_EXPR_TYPE(IntConstant, intConstantExpr)
 		CASE_EXPR_TYPE(Binary, binaryExpr)
 		CASE_EXPR_TYPE(Identifier, identifierExpr)
 	}
+	m_lineNumberStack.pop_back();
 
-	ASSERT_NOT_REACHED();
 	return Status::Ok;
 }
 
@@ -174,8 +183,8 @@ Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
 
 uint32_t Compiler::createConstant(Value value)
 {
-	m_program.constants.push_back(value);
-	return static_cast<uint32_t>(m_program.constants.size() - 1);
+	m_bytecode.constants.push_back(value);
+	return static_cast<uint32_t>(m_bytecode.constants.size() - 1);
 }
 
 void Compiler::loadConstant(uint32_t index)
@@ -186,33 +195,18 @@ void Compiler::loadConstant(uint32_t index)
 
 void Compiler::emitOp(Op op)
 {
-	m_program.code.emitOp(op);
+	m_bytecode.emitOp(op);
+	m_bytecode.lineNumberAtOffset.push_back(m_lineNumberStack.back());
 }
 
 void Compiler::emitUint32(uint32_t value)
 {
-	m_program.code.emitUint32(value);
+	m_bytecode.emitUint32(value);
+	for (int i = 0; i < 4; i++)
+	{
+		m_bytecode.lineNumberAtOffset.push_back(m_lineNumberStack.back());
+	}
 }
-
-// For the function to work initializer has to already be loaded on top of the stack
-//Compiler::Status Compiler::declareVariable(std::string_view name)
-//{
-//
-//	//if (m_currentScope.has_value())
-//	//{
-//	//	ASSERT((*m_currentScope)->localVariables.find(name) == (*m_currentScope)->localVariables.end());
-//	//	(*m_currentScope)->localVariables[name] = Local{ (*m_currentScope)->localVariables.size() };
-//	//	return;
-//	//}
-//
-//	//ASSERT(m_gobalVariables.find(name) == m_gobalVariables.end());
-//	//m_gobalVariables[name] = Global{ m_gobalVariables.size() };
-//}
-
-//Compiler::Status Compiler::loadVariable(std::string_view name)
-//{
-//
-//}
 
 void Compiler::beginScope()
 {

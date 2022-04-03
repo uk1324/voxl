@@ -42,6 +42,9 @@ std::string stringFromFile(std::string_view path)
 	return result;
 }
 
+// If I wanted to I could implement things like scopes and lineNumberStack as a linked list on the call stack though I don't see what
+// would be the point.
+
 // TODO: Rewrite the disassembler and change program to something like a function.
 // Constants can't be modified at runtime.
 
@@ -79,12 +82,13 @@ int main()
 	Compiler compiler;
 	auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
 
-	disassembleByteCode(compilerResult.program.code);
+	// TODO look at objdump style
+	disassembleByteCode(compilerResult.byteCode);
 
 	if (compilerResult.hadError == false)
 	{
 		Vm vm;
-		vm.run(compilerResult.program, allocator, errorPrinter);
+		vm.run(compilerResult.byteCode, allocator, errorPrinter);
 	}
 	
 }

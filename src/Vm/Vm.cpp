@@ -10,9 +10,9 @@ Vm::Vm()
 	, m_errorPrinter(nullptr)
 {}
 
-Vm::Result Vm::run(const Program& program, Allocator& allocator, ErrorPrinter& errorPrinter)
+Vm::Result Vm::run(const ByteCode& program, Allocator& allocator, ErrorPrinter& errorPrinter)
 {
-	m_instructionPointer = program.code.data.data();
+	m_instructionPointer = program.code.data();
 	m_allocator = &allocator;
 	m_errorPrinter = &errorPrinter;
 

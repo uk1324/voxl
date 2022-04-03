@@ -1,5 +1,5 @@
 #include <Parsing/SourceInfo.hpp>
-#include <assert.h>
+#include <Asserts.hpp>
 
 using namespace Lang;
 
@@ -22,14 +22,17 @@ std::string_view SourceInfo::getLineText(size_t line) const
 size_t SourceInfo::getLine(size_t offsetInFile) const
 {
 	// + 1 because end offset points one element past position.
-	assert(offsetInFile < source.length() + 1);
+	ASSERT(offsetInFile < source.length() + 1);
+
+	if (offsetInFile == 0)
+		return 0;
 
 	// Could use binary search here
 	for (size_t i = 0; i < lineStartOffsets.size(); i++)
 	{
-		if (offsetInFile <= lineStartOffsets[i])
+		if (offsetInFile < lineStartOffsets[i])
 		{
-			return i;
+			return i - 1;
 		}
 	}
 	return lineStartOffsets.size() - 1;

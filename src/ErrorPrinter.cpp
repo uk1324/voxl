@@ -86,3 +86,8 @@ std::ostream& Lang::ErrorPrinter::outStream()
 {
 	return m_out;
 }
+
+const SourceInfo& ErrorPrinter::sourceInfo()
+{
+	return m_sourceInfo;
+}

@@ -4,12 +4,12 @@ using namespace Lang;
 
 void ByteCode::emitOp(Op op)
 {
-	data.push_back(static_cast<uint8_t>(op));
+	code.push_back(static_cast<uint8_t>(op));
 }
 
 void ByteCode::emitByte(uint8_t byte)
 {
-	data.push_back(byte);
+	code.push_back(byte);
 }
 
 void ByteCode::emitWord(uint16_t word)

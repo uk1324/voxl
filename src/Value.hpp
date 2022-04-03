@@ -1,11 +1,26 @@
 #pragma once
 
-#include <Obj.hpp>
-
-#include <stdint.h>
+#include <ostream>
 
 namespace Lang
 {
+
+enum class ObjType
+{
+	String
+};
+
+struct Obj
+{
+	ObjType type;
+};
+
+struct ObjString
+{
+	Obj obj;
+	const char* chars;
+	size_t length;
+};
 
 enum class ValueType
 {
@@ -40,3 +55,5 @@ public:
 };
 
 }
+
+std::ostream& operator<< (std::ostream& os, Lang::Value value);

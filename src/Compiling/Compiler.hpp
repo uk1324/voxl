@@ -2,7 +2,7 @@
 
 #include <Ast.hpp>
 #include <Allocator.hpp>
-#include <Program.hpp>
+#include <ByteCode.hpp>
 #include <ErrorPrinter.hpp>
 #include <unordered_map>
 
@@ -21,7 +21,7 @@ public:
 	{
 	public:
 		bool hadError;
-		Program program;
+		ByteCode byteCode;
 	};
 
 private:
@@ -84,10 +84,14 @@ private:
 
 	std::vector<Scope> m_scopes;
 
+	// Stores the line numbers of the currently compiled things. Because expressions might be on a different lines
+	// the the statements they are in a stack has to be used. 
+	std::vector<size_t> m_lineNumberStack;
+
 	bool m_hadError;
 	ErrorPrinter* m_errorPrinter;
 
-	Program m_program;
+	ByteCode m_bytecode;
 };
 
 }

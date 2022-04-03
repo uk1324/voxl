@@ -23,6 +23,7 @@ namespace Lang
 		static std::string_view trimLine(std::string_view line);
 
 		std::ostream& outStream();
+		const SourceInfo& sourceInfo();
 
 	private:
 		const SourceInfo& m_sourceInfo;
