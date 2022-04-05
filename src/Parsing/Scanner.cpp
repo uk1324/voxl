@@ -26,6 +26,9 @@ Scanner::Result Scanner::parse(SourceInfo& sourceInfoToComplete, ErrorPrinter& e
 
 	while (isAtEnd() == false)
 	{
+		skipWhitespace();
+		if (isAtEnd())
+			break;
 		m_tokens.push_back(token());
 	}
 
@@ -36,8 +39,6 @@ Scanner::Result Scanner::parse(SourceInfo& sourceInfoToComplete, ErrorPrinter& e
 
 Token Scanner::token()
 {
-	skipWhitespace();
-
 	char c = peek();
 	advance();
 
@@ -51,6 +52,7 @@ Token Scanner::token()
 		case '{': return makeToken(TokenType::LeftBrace);
 		case '}': return makeToken(TokenType::RightBrace);
 		case ':': return makeToken(TokenType::Colon);
+		case ',': return makeToken(TokenType::Comma);
 		case '"': return string();
 
 		default:
@@ -86,9 +88,11 @@ Token Scanner::keywordOrIdentifier()
 	static const std::unordered_map<std::string_view, TokenType> keywords = {
 		{ "print", TokenType::Print },
 		{ "let", TokenType::Let },
+		{ "fn", TokenType::Fn },
+		{ "ret", TokenType::Ret },
 	};
 
-	while (isAlnum(peek()))
+	while (isAlnum(peek()) || (peek() == '_'))
 		advance();
 
 	auto identifier = m_sourceInfo->source.substr(m_tokenStartIndex, m_currentCharIndex - m_tokenStartIndex);

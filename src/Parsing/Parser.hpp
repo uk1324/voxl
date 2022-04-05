@@ -35,11 +35,14 @@ namespace Lang
 		std::unique_ptr<Stmt> printStmt();
 		std::unique_ptr<Stmt> letStmt();
 		std::unique_ptr<Stmt> blockStmt();
+		std::unique_ptr<Stmt> fnStmt();
+		std::unique_ptr<Stmt> retStmt();
 
 		std::vector<std::unique_ptr<Stmt>> block();
 
 		std::unique_ptr<Expr> expr();
 		std::unique_ptr<Expr> factor();
+		std::unique_ptr<Expr> call();
 		std::unique_ptr<Expr> primary();
 
 		const Token& peek() const;

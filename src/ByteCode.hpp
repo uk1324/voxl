@@ -1,13 +1,14 @@
 #pragma once
 
 #include <Op.hpp>
-#include <Value.hpp>
 
 #include <stdint.h>
 #include <vector>
 
 namespace Lang
 {
+
+class Value;
 
 class ByteCode
 {

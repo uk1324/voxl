@@ -1,4 +1,5 @@
 #include <Debug/Disassembler.hpp>
+#include <Value.hpp>
 #include <Asserts.hpp>
 
 #include <iostream>
@@ -111,6 +112,7 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)
 		case Op::LoadConstant: return opConstant("loadConstant", byteCode, offset);
 		case Op::LoadLocal: return opNumber("loadLocal", byteCode, offset);
 		case Op::SetLocal: return opNumber("loadLocal", byteCode, offset);
+		case Op::Call: return opNumber("call", byteCode, offset);
 		case Op::LoadGlobal: return justOp("loadGlobal");
 		case Op::SetGlobal: return justOp("setGlobal");
 		case Op::CreateGlobal: return justOp("createGlobal");

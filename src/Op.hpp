@@ -15,6 +15,7 @@ namespace Lang
 		LoadGlobal, // [name]
 		SetGlobal, // [value, name]
 		CreateGlobal, // [initializer, name]
+		Call, // argCount [function, args...]
 		Print, // [value]
 		LoadNull,
 		PopStack,

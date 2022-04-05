@@ -23,10 +23,13 @@ enum class TokenType
 	RightParen,
 	LeftBrace,
 	RightBrace,
+	Comma,
 
 	// Keywords
 	Print,
 	Let,
+	Fn,
+	Ret,
 
 	// Other
 	Identifier,

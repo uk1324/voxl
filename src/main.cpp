@@ -8,7 +8,6 @@
 using namespace Lang;
 
 #include <iostream>
-
 #include <fstream>
 
 std::string stringFromFile(std::string_view path)
@@ -52,11 +51,13 @@ std::string stringFromFile(std::string_view path)
 
 // TODO Make a test for accessing a variable with the same name from outer in initializer.
 
+#include <filesystem>
+
 int main()
 {
 	bool shouldCompile = true;
 
-	std::string filename = "src/test.voxl";
+	std::string filename = "../../../src/test.voxl";
 	std::string source = stringFromFile(filename);
 	SourceInfo sourceInfo;
 	sourceInfo.source = source;
@@ -83,12 +84,13 @@ int main()
 	auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
 
 	// TODO look at objdump style
-	disassembleByteCode(compilerResult.byteCode);
+	std::cout << "---- <script>\n";
+	disassembleByteCode(compilerResult.program->byteCode);
 
 	if (compilerResult.hadError == false)
 	{
 		Vm vm;
-		vm.run(compilerResult.byteCode, allocator, errorPrinter);
+		vm.execute(compilerResult.program, allocator, errorPrinter);
 	}
 	
 }

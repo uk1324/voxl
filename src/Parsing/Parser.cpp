@@ -1,3 +1,7 @@
+#include "Parser.hpp"
+#include "Parser.hpp"
+#include "Parser.hpp"
+#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -53,6 +57,10 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return letStmt();
 	if (match(TokenType::LeftBrace))
 		return blockStmt();
+	if (match(TokenType::Fn))
+		return fnStmt();
+	if (match(TokenType::Ret))
+		return retStmt();
 	else
 		return exprStmt();
 
@@ -106,6 +114,45 @@ std::unique_ptr<Stmt> Parser::blockStmt()
 	return std::make_unique<BlockStmt>(std::move(stmts), start, end);
 }
 
+std::unique_ptr<Stmt> Parser::fnStmt()
+{
+	auto start = peekPrevious().end;
+
+	expect(TokenType::Identifier, "expected function name");
+	auto name = peekPrevious().identifier;
+
+	std::vector<std::string_view> arguments;
+	expect(TokenType::LeftParen, "expected '('");
+	if (peek().type != TokenType::RightParen)
+	{
+		do
+		{
+			expect(TokenType::Identifier, "expected function argument name");
+			arguments.push_back(peekPrevious().identifier);
+		} while (match(TokenType::Comma));
+	}
+	expect(TokenType::RightParen, "expected ')'");
+
+	expect(TokenType::LeftBrace, "expected '{'");
+	auto stmts = block();
+
+	return std::make_unique<FnStmt>(name, std::move(arguments), std::move(stmts), start, peekPrevious().end);
+}
+
+std::unique_ptr<Stmt> Parser::retStmt()
+{
+	auto start = peekPrevious().start;
+
+	std::optional<std::unique_ptr<Expr>> returnValue = std::nullopt;
+	if (peek().type != TokenType::Semicolon)
+	{
+		returnValue = expr();
+	}
+	expect(TokenType::Semicolon, "expected ';'");
+
+	return std::make_unique<RetStmt>(std::move(returnValue), start, peekPrevious().end);
+}
+
 std::vector<std::unique_ptr<Stmt>> Parser::block()
 {
 	std::vector<std::unique_ptr<Stmt>> stmts;
@@ -125,18 +172,42 @@ std::unique_ptr<Expr> Parser::expr()
 std::unique_ptr<Expr> Parser::factor()
 {
 	size_t start = peek().start;
-	auto expr = primary();
+	auto expr = call();
 
 	while (match(TokenType::Plus) && (isAtEnd() == false))
 	{
 		TokenType op = peekPrevious().type;
-		auto rhs = primary();
+		auto rhs = call();
 		size_t end = peekPrevious().end;
 		expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(rhs), start, end);
 	}
 
 	return expr;
 }
+
+std::unique_ptr<Expr> Parser::call()
+{
+	size_t start = peek().start;
+	auto calle = primary();
+
+	while (match(TokenType::LeftParen))
+	{
+		std::vector<std::unique_ptr<Expr>> arguments;
+		if (peek().type != TokenType::RightParen)
+		{
+			do
+			{
+				arguments.push_back(expr());
+			} while (match(TokenType::Comma));
+		}
+		expect(TokenType::RightParen, "expected ')'");
+
+		calle = std::make_unique<CallExpr>(std::move(calle), std::move(arguments), start, peekPrevious().end);
+	}
+
+	return calle;
+}
+
 
 std::unique_ptr<Expr> Parser::primary()
 {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ByteCode.hpp>
 #include <ostream>
 
 namespace Lang
@@ -7,7 +8,8 @@ namespace Lang
 
 enum class ObjType
 {
-	String
+	String,
+	Function,
 };
 
 struct Obj
@@ -20,6 +22,14 @@ struct ObjString
 	Obj obj;
 	const char* chars;
 	size_t length;
+};
+
+struct ObjFunction
+{
+	Obj obj;
+	ObjString* name;
+	int argumentCount;
+	ByteCode byteCode;
 };
 
 enum class ValueType

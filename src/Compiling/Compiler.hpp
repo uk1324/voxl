@@ -21,7 +21,7 @@ public:
 	{
 	public:
 		bool hadError;
-		ByteCode byteCode;
+		ObjFunction* program;
 	};
 
 private:
@@ -55,15 +55,17 @@ private:
 	Status printStmt(const PrintStmt& stmt);
 	Status letStmt(const LetStmt& stmt);
 	Status blockStmt(const BlockStmt& stmt);
+	Status fnStmt(const FnStmt& stmt);
+	Status retStmt(const RetStmt& stmt);
 
 	Status compile(const std::unique_ptr<Expr>& expr);
 	// TODO: perform constant folding
 	Status intConstantExpr(const IntConstantExpr& expr);
 	Status binaryExpr(const BinaryExpr& expr);
 	Status identifierExpr(const IdentifierExpr& expr);
+	Status callExpr(const CallExpr& expr);
 
-	Status declareVariable(std::string_view name);
-	Status loadVariable(std::string_view name);
+	Status declareVariable(std::string_view name, size_t start, size_t end);
 	// Could make a RAII class
 	void beginScope();
 	void endScope();
@@ -71,6 +73,7 @@ private:
 	uint32_t createConstant(Value value);
 	uint32_t createIdentifierConstant(const Token& name);
 	void loadConstant(uint32_t index);
+	ByteCode& currentByteCode();
 	void emitOp(Op op);
 	void emitUint32(uint32_t value);
 
@@ -88,10 +91,10 @@ private:
 	// the the statements they are in a stack has to be used. 
 	std::vector<size_t> m_lineNumberStack;
 
+	std::vector<ByteCode*> m_functionByteCodeStack;
+
 	bool m_hadError;
 	ErrorPrinter* m_errorPrinter;
-
-	ByteCode m_bytecode;
 };
 
 }

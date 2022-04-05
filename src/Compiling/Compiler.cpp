@@ -1,3 +1,5 @@
+#include "Compiler.hpp"
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -23,8 +25,11 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 {
 	m_hadError = false;
 	m_errorPrinter = &errorPrinter;
-	m_bytecode = ByteCode{};
 	m_allocator = &allocator;
+
+	auto scriptName = m_allocator->allocateString("script");
+	auto scriptFunction = m_allocator->allocateFunction(scriptName, 0);
+	m_functionByteCodeStack.push_back(&scriptFunction->byteCode);
 
 	for (const auto& stmt : ast)
 	{
@@ -36,10 +41,13 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 
 	// The return from program is on the last line of the file.
 	m_lineNumberStack.push_back(m_errorPrinter->sourceInfo().lineStartOffsets.size());
+	emitOp(Op::LoadNull);
 	emitOp(Op::Return);
 	m_lineNumberStack.pop_back();
 
-	return Result{ m_hadError, std::move(m_bytecode) };
+	m_functionByteCodeStack.pop_back();
+
+	return Result{ m_hadError, reinterpret_cast<ObjFunction*>(scriptFunction) };
 }
 
 Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
@@ -54,6 +62,8 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 		CASE_STMT_TYPE(Print, printStmt)
 		CASE_STMT_TYPE(Let, letStmt)
 		CASE_STMT_TYPE(Block, blockStmt)
+		CASE_STMT_TYPE(Fn, fnStmt)
+		CASE_STMT_TYPE(Ret, retStmt)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -88,26 +98,18 @@ Compiler::Status Compiler::letStmt(const LetStmt& stmt)
 		emitOp(Op::LoadNull);
 	}
 	// The initializer is evaluated before declaring the variable so a variable from an oter scope with the same name can be used.
-	//declareVariable()
-
+	TRY(declareVariable(stmt.identifier, stmt.start, stmt.end()));
 	if (m_scopes.size() == 0)
 	{
-		auto constant = createConstant(Value(m_allocator->allocateString(stmt.identifier)));
+		auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(stmt.identifier))));
 		loadConstant(constant);
 		emitOp(Op::CreateGlobal);
 	}
-	else
-	{
-		auto& locals = m_scopes.back().localVariables;
-		auto variable = locals.find(stmt.identifier);
-		if (variable != locals.end())
-		{
-			return errorAt(stmt, "redeclaration of variable '%.*s'", stmt.identifier.size(), stmt.identifier.data());
-		}
-		locals[stmt.identifier] = Local{ static_cast<uint32_t>(locals.size()) };
-	}
+
 	return Status::Ok;
 }
+
+#include <Debug/Disassembler.hpp>
 
 Compiler::Status Compiler::blockStmt(const BlockStmt& stmt)
 {
@@ -118,6 +120,61 @@ Compiler::Status Compiler::blockStmt(const BlockStmt& stmt)
 	}
 	endScope();
 
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
+{
+	if ((m_scopes.size() > 0) && (m_scopes.back().functionDepth > 0))
+		return errorAt(stmt, "nested functions not allowed"); // declareVariable(stmt.name, stmt.start, stmt.end());
+
+	TRY(declareVariable(stmt.name, stmt.start, stmt.end()));
+
+	auto name = m_allocator->allocateString(stmt.name);
+	auto function = m_allocator->allocateFunction(name, static_cast<int>(stmt.arguments.size()));
+	auto functionConstant = createConstant(Value(reinterpret_cast<Obj*>(function)));
+	loadConstant(functionConstant);
+	auto nameConstant = createConstant(Value(reinterpret_cast<Obj*>(name)));
+	loadConstant(nameConstant);
+	emitOp(Op::CreateGlobal);
+	m_functionByteCodeStack.push_back(&function->byteCode);
+
+	beginScope();
+	m_scopes.back().functionDepth++;
+
+	for (const auto& argument : stmt.arguments)
+	{
+		// Could store the token for better error messages about redeclaration.
+		TRY(declareVariable(argument, stmt.start, stmt.end()));
+	}
+
+	for (const auto& s : stmt.stmts)
+	{
+		TRY(compile(s));
+	}
+	emitOp(Op::LoadNull);
+	emitOp(Op::Return);
+
+	std::cout << "----" << stmt.name << '\n';
+	disassembleByteCode(function->byteCode);
+
+	m_functionByteCodeStack.pop_back();
+
+	endScope();
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::retStmt(const RetStmt& stmt)
+{
+	if (stmt.returnValue == std::nullopt)
+	{
+		emitOp(Op::LoadNull);
+	}
+	else
+	{
+		TRY(compile(*stmt.returnValue));
+	}
+	emitOp(Op::Return);
 	return Status::Ok;
 }
 
@@ -132,6 +189,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 		CASE_EXPR_TYPE(IntConstant, intConstantExpr)
 		CASE_EXPR_TYPE(Binary, binaryExpr)
 		CASE_EXPR_TYPE(Identifier, identifierExpr)
+		CASE_EXPR_TYPE(Call, callExpr)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -159,9 +217,39 @@ Compiler::Status Compiler::identifierExpr(const IdentifierExpr& expr)
 		}
 	}
 
-	auto constant = createConstant(Value(m_allocator->allocateString(expr.identifier)));
+	auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(expr.identifier))));
 	loadConstant(constant);
 	emitOp(Op::LoadGlobal);
+
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::callExpr(const CallExpr& expr)
+{
+	TRY(compile(expr.calle));
+
+	for (const auto& argument : expr.arguments)
+	{
+		TRY(compile(argument));
+	}
+	emitOp(Op::Call);
+	emitUint32(static_cast<uint32_t>(expr.arguments.size()));
+
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::declareVariable(std::string_view name, size_t start, size_t end)
+{
+	if (m_scopes.size() == 0)
+		return Status::Ok;
+
+	auto& locals = m_scopes.back().localVariables;
+	auto variable = locals.find(name);
+	if (variable != locals.end())
+	{
+		return errorAt(start, end, "redeclaration of variable '%.*s'", name.size(), name.data());
+	}
+	locals[name] = Local{ static_cast<uint32_t>(locals.size()) };
 
 	return Status::Ok;
 }
@@ -183,8 +271,8 @@ Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
 
 uint32_t Compiler::createConstant(Value value)
 {
-	m_bytecode.constants.push_back(value);
-	return static_cast<uint32_t>(m_bytecode.constants.size() - 1);
+	currentByteCode().constants.push_back(value);
+	return static_cast<uint32_t>(currentByteCode().constants.size() - 1);
 }
 
 void Compiler::loadConstant(uint32_t index)
@@ -193,24 +281,36 @@ void Compiler::loadConstant(uint32_t index)
 	emitUint32(index);
 }
 
+ByteCode& Compiler::currentByteCode()
+{
+	return *m_functionByteCodeStack.back();
+}
+
 void Compiler::emitOp(Op op)
 {
-	m_bytecode.emitOp(op);
-	m_bytecode.lineNumberAtOffset.push_back(m_lineNumberStack.back());
+	currentByteCode().emitOp(op);
+	currentByteCode().lineNumberAtOffset.push_back(m_lineNumberStack.back());
 }
 
 void Compiler::emitUint32(uint32_t value)
 {
-	m_bytecode.emitUint32(value);
+	currentByteCode().emitUint32(value);
 	for (int i = 0; i < 4; i++)
 	{
-		m_bytecode.lineNumberAtOffset.push_back(m_lineNumberStack.back());
+		currentByteCode().lineNumberAtOffset.push_back(m_lineNumberStack.back());
 	}
 }
 
 void Compiler::beginScope()
 {
-	m_scopes.push_back(Scope{ {}, 0 });
+	if (m_scopes.size() == 0)
+	{
+		m_scopes.push_back(Scope{ {}, 0 });
+	}
+	else
+	{
+		m_scopes.push_back(Scope{ {}, m_scopes.back().functionDepth });
+	}
 }
 
 void Compiler::endScope()
@@ -234,7 +334,7 @@ Compiler::Status Compiler::errorAt(const Stmt& stmt, const char* format, ...)
 	m_hadError = true;
 	va_list args;
 	va_start(args, format);
-	m_errorPrinter->at(stmt.start, stmt.start + stmt.length, format, args);
+	m_errorPrinter->at(stmt.start, stmt.end(), format, args);
 	va_end(args);
 	return Status::Error;
 }
@@ -244,7 +344,7 @@ Compiler::Status Compiler::errorAt(const Expr& expr, const char* format, ...)
 	m_hadError = true;
 	va_list args;
 	va_start(args, format);
-	m_errorPrinter->at(expr.start, expr.start + expr.length, format, args);
+	m_errorPrinter->at(expr.start, expr.end(), format, args);
 	va_end(args);
 	return Status::Error;
 }

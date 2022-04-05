@@ -1,3 +1,4 @@
+#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -5,175 +6,225 @@
 using namespace Lang;
 
 Vm::Vm()
-	: m_instructionPointer(nullptr)
-	, m_allocator(nullptr)
+	: m_allocator(nullptr)
 	, m_errorPrinter(nullptr)
+	, m_stackTop(nullptr)
+	, m_callStackSize(0)
 {}
 
-Vm::Result Vm::run(const ByteCode& program, Allocator& allocator, ErrorPrinter& errorPrinter)
+Vm::Result Vm::execute(ObjFunction* program, Allocator& allocator, ErrorPrinter& errorPrinter)
 {
-	m_instructionPointer = program.code.data();
 	m_allocator = &allocator;
 	m_errorPrinter = &errorPrinter;
+	m_stackTop = m_stack.data();
+	m_callStack[0] = CallFrame{ program->byteCode.code.data(), m_stack.data(), program };
+	m_callStackSize = 1;
+	pushStack(Value(reinterpret_cast<Obj*>(program)));
 
+	return run();
+}
+
+#include <Debug/Disassembler.hpp>
+
+Vm::Result Vm::run()
+{
+	std::cout << '\n';
 	for (;;)
 	{
-		Op op = static_cast<Op>(*m_instructionPointer);
-		m_instructionPointer++;
+		//std::cout << "[ ";
+		//for (Value* value = m_stack.data(); value != m_stackTop; value++)
+		//{
+		//	std::cout << *value << ' ';
+		//}
+		//std::cout << "]\n";
+		//disassembleInstruction(
+		//	callStackTop().function->byteCode,
+		//	callStackTop().instructionPointer - callStackTop().function->byteCode.code.data());
+		//std::cout << '\n';
+
+		Op op = static_cast<Op>(*callStackTop().instructionPointer);
+		callStackTop().instructionPointer++;
 
 		switch (op)
 		{
-			case Op::Add:
-			{
-				Value a = peekStack(1);
-				Value b = peekStack(0);
-				if (a.type == ValueType::Int && b.type == ValueType::Int)
-				{
-					popStack();
-					popStack();
-					pushStack(Value(a.as.intNumber + b.as.intNumber));
-				}
-				else
-				{
-					return Result::RuntimeError;
-				}
-				break;
-			}
-
-			case Op::LoadConstant:
-			{
-				const auto constantIndex = readUint32();
-				m_stack.push_back(program.constants[constantIndex]);
-				break;
-			}
-
-			case Op::LoadLocal:
-			{
-				size_t stackOffset = (size_t)readUint32();
-				pushStack(m_stack[stackOffset]);
-				break;
-			}
-
-			case Op::SetLocal:
-			{
-				size_t stackOffset = (size_t)readUint32();
-				m_stack[stackOffset] = peekStack(0);
-				popStack();
-				break;
-			}
-
-			case Op::CreateGlobal:
-			{
-				// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
-				ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
-				Value value = peekStack(1);
-				bool doesNotAlreadyExist = m_globals.insert_or_assign(name, value).second;
-				if (doesNotAlreadyExist == false)
-				{
-					errorPrinter.outStream() << "redeclaration of '" << name->chars << '\'';
-					return Result::RuntimeError;
-				}
-				popStack();
-				popStack();
-				break;
-			}
-
-			case Op::LoadGlobal:
-			{
-				ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
-				auto value = m_globals.find(name);
-				if (value == m_globals.end())
-				{
-					errorPrinter.outStream() << '\'' << name->chars << "' is not defined\n";
-					return Result::RuntimeError;
-				}
-				popStack();
-				pushStack(value->second);
-				break;
-			}
-
-			case Op::SetGlobal:
-			{
-				// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
-				ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
-				Value value = peekStack(1);
-				bool doesNotAlreadyExist = m_globals.insert_or_assign(name, value).second;
-				if (doesNotAlreadyExist)
-				{
-					errorPrinter.outStream() << '\'' << name->chars << "' is not defined\n";
-					return Result::RuntimeError;
-				}
-				popStack();
-				popStack();
-				break;
-			}
-
-			case Op::Print:
-			{
-				printValue(peekStack());
-				break;
-			}
-
-			case Op::PopStack:
+		case Op::Add:
+		{
+			Value a = peekStack(1);
+			Value b = peekStack(0);
+			if (a.type == ValueType::Int && b.type == ValueType::Int)
 			{
 				popStack();
-				break;
+				popStack();
+				pushStack(Value(a.as.intNumber + b.as.intNumber));
 			}
+			else
+			{
+				return Result::RuntimeError;
+			}
+			break;
+		}
 
-			case Op::Return:
+		case Op::LoadConstant:
+		{
+			const auto constantIndex = readUint32();
+			pushStack(callStackTop().function->byteCode.constants[constantIndex]);
+			break;
+		}
+
+		case Op::LoadLocal:
+		{
+			size_t stackOffset = (size_t)readUint32();
+			pushStack(callStackTop().values[stackOffset + 1]);
+			break;
+		}
+
+		case Op::SetLocal:
+		{
+			size_t stackOffset = (size_t)readUint32();
+			callStackTop().values[stackOffset + 1] = peekStack(0);
+			popStack();
+			break;
+		}
+
+		case Op::CreateGlobal:
+		{
+			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
+			ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
+			Value value = peekStack(1);
+			bool doesNotAlreadyExist = m_globals.insert_or_assign(name, value).second;
+			if (doesNotAlreadyExist == false)
+			{
+				m_errorPrinter->outStream() << "redeclaration of '" << name->chars << '\'';
+				return Result::RuntimeError;
+			}
+			popStack();
+			popStack();
+			break;
+		}
+
+		case Op::LoadGlobal:
+		{
+			ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
+			auto value = m_globals.find(name);
+			if (value == m_globals.end())
+			{
+				m_errorPrinter->outStream() << '\'' << name->chars << "' is not defined\n";
+				return Result::RuntimeError;
+			}
+			popStack();
+			pushStack(value->second);
+			break;
+		}
+
+		case Op::SetGlobal:
+		{
+			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
+			ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
+			Value value = peekStack(1);
+			bool doesNotAlreadyExist = m_globals.insert_or_assign(name, value).second;
+			if (doesNotAlreadyExist)
+			{
+				m_errorPrinter->outStream() << '\'' << name->chars << "' is not defined\n";
+				return Result::RuntimeError;
+			}
+			popStack();
+			popStack();
+			break;
+		}
+
+		case Op::LoadNull:
+			pushStack(Value::null());
+			break;
+
+		case Op::Call:
+		{
+			auto argCount = readUint32();
+			auto calleValue = peekStack(argCount);
+			if ((calleValue.type != ValueType::Obj) || (calleValue.as.obj->type != ObjType::Function))
+			{
+				m_errorPrinter->outStream() << "cannot call object that isn't function\n";
+				return Result::RuntimeError;
+			}
+			auto calle = reinterpret_cast<ObjFunction*>(calleValue.as.obj);
+
+			m_callStack[m_callStackSize] = CallFrame{ calle->byteCode.code.data(), m_stackTop - 1 - argCount, calle };
+			m_callStackSize++;
+
+			break;
+		}
+
+		case Op::Print:
+		{
+			std::cout << peekStack() << '\n';
+			break;
+		}
+
+		case Op::PopStack:
+		{
+			popStack();
+			break;
+		}
+
+		case Op::Return:
+		{
+			if (m_callStackSize == 1)
 			{
 				return Result::Success;
 			}
+			else
+			{
+				Value result = peekStack();
+				m_stackTop = callStackTop().values + callStackTop().function->argumentCount + 1;
+				m_stackTop -= 2;
+				m_callStackSize--;
+				pushStack(result);
+			}
+			break;
+		}
 
-			default:
-				ASSERT_NOT_REACHED();
-				return Result::RuntimeError;
+		default:
+			ASSERT_NOT_REACHED();
+			return Result::RuntimeError;
 		}
 	}
 }
 
 uint8_t Vm::readUint8()
 {
-	uint8_t value = *m_instructionPointer;
-	m_instructionPointer++;
+	uint8_t value = *m_callStack[m_callStackSize - 1].instructionPointer;
+	m_callStack[m_callStackSize - 1].instructionPointer++;
 	return value;
-}
-
-void Vm::printValue(const Value& value)
-{
-	switch (value.type)
-	{
-		case ValueType::Int:
-			std::cout << value.as.intNumber;
-			break;
-
-		case ValueType::Float:
-			std::cout << value.as.floatNumber;
-			break;
-
-		default:
-			ASSERT_NOT_REACHED();
-	}
 }
 
 const Value& Vm::peekStack(size_t depth) const
 {
-	return m_stack[m_stack.size() - depth];
+	return *(m_stackTop - depth - 1);
 }
 
 Value& Vm::peekStack(size_t depth)
 {
-	return m_stack[m_stack.size() - 1 - depth];
+	return *(m_stackTop - depth - 1);
 }
 
 void Vm::popStack()
 {
-	m_stack.pop_back();
+	m_stackTop--;
 }
 
 void Vm::pushStack(Value value)
 {
-	m_stack.push_back(value);
+	*m_stackTop = value;
+	m_stackTop++;
+}
+
+const Vm::CallFrame& Vm::callStackTop() const
+{
+	return m_callStack[m_callStackSize - 1];
+}
+
+Vm::CallFrame& Vm::callStackTop()
+{
+	return m_callStack[m_callStackSize - 1];
 }
 
 uint32_t Vm::readUint32()

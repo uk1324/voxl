@@ -1,5 +1,5 @@
 #include <Allocator.hpp>
-
+#include <new>
 #include <stdlib.h>
 
 using namespace Lang;
@@ -14,7 +14,7 @@ void Allocator::free(void* ptr)
 	::free(ptr);
 }
 
-Obj* Allocator::allocateString(std::string_view chars)
+ObjString* Allocator::allocateString(std::string_view chars)
 {
 	auto obj = reinterpret_cast<ObjString*>(allocate(sizeof(ObjString)));
 	obj->obj.type = ObjType::String;
@@ -25,5 +25,16 @@ Obj* Allocator::allocateString(std::string_view chars)
 	// It would be simpler to just store everything as not null terminated then but I would still have to somehow maintain the gc roots.
 	data[obj->length] = '\0';
 	obj->chars = data;
-	return reinterpret_cast<Obj*>(obj);
+	return obj;
+}
+
+ObjFunction* Allocator::allocateFunction(ObjString* name, int argumentCount)
+{
+	auto obj = reinterpret_cast<ObjFunction*>(allocate(sizeof(ObjFunction)));
+	obj->obj.type = ObjType::Function;
+
+	obj->argumentCount = argumentCount;
+	obj->name = name;
+	new (&obj->byteCode) ByteCode();
+	return obj;
 }

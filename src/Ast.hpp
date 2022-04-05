@@ -18,7 +18,8 @@ enum class ExprType
 	IntConstant,
 	FloatConstant,
 	Binary,
-	Identifier
+	Identifier,
+	Call
 };
 
 class Expr
@@ -26,6 +27,8 @@ class Expr
 public:
 	Expr(size_t start, size_t end, ExprType type);
 	virtual ~Expr() = default;
+
+	size_t end() const;
 
 	const size_t start;
 	const size_t length;
@@ -71,12 +74,24 @@ public:
 	std::string_view identifier;
 };
 
+class CallExpr final : public Expr
+{
+public:
+	CallExpr(std::unique_ptr<Expr> calle, std::vector<std::unique_ptr<Expr>> arguments, size_t start, size_t end);
+	~CallExpr() = default;
+
+	std::unique_ptr<Expr> calle;
+	std::vector<std::unique_ptr<Expr>> arguments;
+};
+
 enum class StmtType
 {
 	Expr,
 	Print,
 	Let,
 	Block,
+	Fn,
+	Ret,
 };
 
 class Stmt
@@ -84,6 +99,7 @@ class Stmt
 public:
 	Stmt(size_t start, size_t end, StmtType type);
 	virtual ~Stmt() = default;
+	size_t end() const;
 
 	const size_t start;
 	const size_t length;
@@ -126,6 +142,29 @@ public:
 	~BlockStmt() = default;
 
 	std::vector<std::unique_ptr<Stmt>> stmts;
+};
+
+class FnStmt final : public Stmt
+{
+public:
+	FnStmt(
+		std::string_view name,
+		std::vector<std::string_view> arguments,
+		std::vector<std::unique_ptr<Stmt>> stmts,
+		size_t start,
+		size_t end);
+
+	std::string_view name;
+	std::vector<std::string_view> arguments;
+	std::vector<std::unique_ptr<Stmt>> stmts;
+};
+
+class RetStmt final : public Stmt
+{
+public:
+	RetStmt(std::optional<std::unique_ptr<Expr>> returnValue, size_t start, size_t end);
+
+	std::optional<std::unique_ptr<Expr>> returnValue;
 };
 
 }
