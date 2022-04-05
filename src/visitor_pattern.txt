@@ -1,0 +1,13 @@
+I don't really see a use safe for the visitor pattern in c++. Both the visitor and the visitee have to know about eachother.
+You also can't use templates to change the return value for the visit function because vtables have to be known at compile time.
+They only way to do it is create a special visitor for each return type and every value has to know about that visitor.
+One way to emulate the return values is by storing a return value inside the visitor then setting and getting it as needed.
+It also isn't very fast. It requires double virtual dispatch. A simpler and faster alternative is to store an enum representing the type.
+And use either tagged unions or a virtual destructor and then cast the value to the right typed based on the enum.
+This is faster because the compiler can generate a lookup table for the switch over the enum. This is also easier to write than
+writing visitors. Compilers can check for non exhaustive swtiches over enums. One could also use dynamic_cast but it can't be checked
+for non exhaustiveness and is slower because the compiler has to go over the inheritance hierarchy stored in the runtime information.
+
+Also in java there are switch statements for matching types.
+
+I am not sure but there might be some use case for the visitor pattern for virtual hierarchies with a depth bigger than one.

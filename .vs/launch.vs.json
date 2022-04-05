@@ -1,0 +1,13 @@
+{
+  "version": "0.2.1",
+  "defaults": {},
+  "configurations": [
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "voxl-run.exe",
+      "name": "voxl-run.exe",
+      "currentDir": "${projectDir}"
+    }
+  ]
+}

@@ -57,7 +57,7 @@ int main()
 {
 	bool shouldCompile = true;
 
-	std::string filename = "../../../src/test.voxl";
+	std::string filename = "src/test.voxl";
 	std::string source = stringFromFile(filename);
 	SourceInfo sourceInfo;
 	sourceInfo.source = source;

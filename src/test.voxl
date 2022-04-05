@@ -8,9 +8,14 @@ fn add(a, b)
 	ret a + b;
 }
 
+fn call(f, x, y)
+{
+	ret f(x, y);
+}
+
 print_add(2, 3);
 print(add(2, 3));
-
+print(call(add, 2, 3));
 
 fn test(i)
 {

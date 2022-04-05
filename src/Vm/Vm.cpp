@@ -1,4 +1,6 @@
 #include "Vm.hpp"
+#include "Vm.hpp"
+#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -147,6 +149,11 @@ Vm::Result Vm::run()
 			}
 			auto calle = reinterpret_cast<ObjFunction*>(calleValue.as.obj);
 
+			if ((m_callStackSize + 1) == m_callStack.size())
+			{
+				return fatalError("call stack overflow");
+			}
+
 			m_callStack[m_callStackSize] = CallFrame{ calle->byteCode.code.data(), m_stackTop - 1 - argCount, calle };
 			m_callStackSize++;
 
@@ -221,6 +228,24 @@ const Vm::CallFrame& Vm::callStackTop() const
 {
 	return m_callStack[m_callStackSize - 1];
 }
+
+Vm::Result Vm::fatalError(const char* format, ...)
+{
+	char errorBuffer[256];
+	va_list args;
+	va_start(args, format);
+	vsnprintf(errorBuffer, sizeof(errorBuffer), format, args);
+	va_end(args);
+	m_errorPrinter->outStream() << "fatal runtime error: " << errorBuffer << '\n';
+	for (CallFrame* callFrame = &callStackTop(); callFrame != m_callStack.data(); callFrame--)
+	{
+		size_t instructionOffset = callFrame->instructionPointer - callFrame->function->byteCode.code.data();
+		auto lineNumber = callFrame->function->byteCode.lineNumberAtOffset[instructionOffset];
+		m_errorPrinter->outStream() << "line " << lineNumber << " in " << callFrame->function->name->chars << "()\n";
+	}
+	return Result::RuntimeError;
+}
+
 
 Vm::CallFrame& Vm::callStackTop()
 {

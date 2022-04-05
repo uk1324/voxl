@@ -12,7 +12,7 @@ namespace Lang
 class Vm
 {
 public:
-	enum class Result
+	enum class [[nodiscard]] Result
 	{
 		Success,
 		RuntimeError,
@@ -59,13 +59,14 @@ private:
 	void pushStack(Value value);
 	CallFrame& callStackTop();
 	const CallFrame& callStackTop() const;
+	Result fatalError(const char* format, ...);
 
 private:
 	//// Storing a direct pointer should probably be faster than storing and index.
 	//const uint8_t* m_instructionPointer;
 	std::unordered_map<ObjString*, Value, ObjStringHasher, ObjStringComparator> m_globals;
 	
-	std::array<Value, 100> m_stack;
+	std::array<Value, 1024> m_stack;
 	Value* m_stackTop;
 
 	std::array<CallFrame, 100> m_callStack;
