@@ -38,6 +38,7 @@ private:
 	std::unique_ptr<Stmt> blockStmt();
 	std::unique_ptr<Stmt> fnStmt();
 	std::unique_ptr<Stmt> retStmt();
+	std::unique_ptr<Stmt> ifStmt();
 
 	std::vector<std::unique_ptr<Stmt>> block();
 
@@ -54,6 +55,7 @@ private:
 	void advance();
 	bool isAtEnd();
 	bool match(TokenType type);
+	bool check(TokenType type);
 	void expect(TokenType type, const char* format, ...);
 	void synchronize();
 	ParsingError errorAt(size_t start, size_t end, const char* format, ...);

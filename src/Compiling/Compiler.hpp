@@ -57,6 +57,7 @@ private:
 	Status blockStmt(const BlockStmt& stmt);
 	Status fnStmt(const FnStmt& stmt);
 	Status retStmt(const RetStmt& stmt);
+	Status ifStmt(const IfStmt& stmt);
 
 	Status compile(const std::unique_ptr<Expr>& expr);
 	// TODO: perform constant folding

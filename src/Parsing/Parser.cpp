@@ -1,6 +1,8 @@
 #include "Parser.hpp"
 #include "Parser.hpp"
 #include "Parser.hpp"
+#include "Parser.hpp"
+#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -50,6 +52,8 @@ Parser::Result Parser::parse(const std::vector<Token>& tokens, const SourceInfo&
 
 std::unique_ptr<Stmt> Parser::stmt()
 {
+	// Could shorten this by first advancing the token then switching over the previous token and 
+	// going back one token on default and returning exprStmt();
 	if (match(TokenType::Print))
 		return printStmt();
 	if (match(TokenType::Let))
@@ -60,6 +64,8 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return fnStmt();
 	if (match(TokenType::Ret))
 		return retStmt();
+	if (match(TokenType::If))
+		return ifStmt();
 	else
 		return exprStmt();
 
@@ -150,6 +156,32 @@ std::unique_ptr<Stmt> Parser::retStmt()
 	expect(TokenType::Semicolon, "expected ';'");
 
 	return std::make_unique<RetStmt>(std::move(returnValue), start, peekPrevious().end);
+}
+
+std::unique_ptr<Stmt> Parser::ifStmt()
+{
+	auto start = peekPrevious().start;
+	auto condition = expr();
+
+	expect(TokenType::LeftBrace, "expected '{'");
+	auto ifThen = block();
+
+	if (match(TokenType::Else) == false)
+	{
+		return std::make_unique<IfStmt>(std::move(condition), std::move(ifThen), std::nullopt, start, peekPrevious().end);
+	}
+
+	if (match(TokenType::If))
+	{
+		auto elseThen = ifStmt();
+		return std::make_unique<IfStmt>(std::move(condition), std::move(ifThen), std::move(elseThen), start, peekPrevious().end);
+	}
+	else
+	{
+		expect(TokenType::LeftBrace, "expected '{'");
+		auto elseThen = blockStmt();
+		return std::make_unique<IfStmt>(std::move(condition), std::move(ifThen), std::move(elseThen), start, peekPrevious().end);
+	}
 }
 
 std::vector<std::unique_ptr<Stmt>> Parser::block()
@@ -285,6 +317,11 @@ bool Parser::match(TokenType type)
 		return true;
 	}
 	return false;
+}
+
+bool Parser::check(TokenType type)
+{
+	return (peek().type == type);
 }
 
 void Parser::expect(TokenType type, const char* format, ...)

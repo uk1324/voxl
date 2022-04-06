@@ -101,6 +101,8 @@ Token Scanner::keywordOrIdentifier()
 		{ "true", TokenType::True },
 		{ "false", TokenType::False },
 		{ "null", TokenType::Null },
+		{ "if", TokenType::If },
+		{ "else", TokenType::Else },
 	};
 
 	while (isAlnum(peek()) || (peek() == '_'))

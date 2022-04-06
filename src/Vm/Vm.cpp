@@ -227,6 +227,10 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::Jump:
+			callStackTop().instructionPointer += readUint32();
+			break;
+
 		case Op::JumpIfFalse:
 		{
 			auto jump = readUint32();

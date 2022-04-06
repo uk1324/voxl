@@ -100,3 +100,15 @@ RetStmt::RetStmt(std::optional<std::unique_ptr<Expr>> returnValue, size_t start,
 	: Stmt(start, end, StmtType::Ret)
 	, returnValue(std::move(returnValue))
 {}
+
+IfStmt::IfStmt(
+	std::unique_ptr<Expr> condition,
+	std::vector<std::unique_ptr<Stmt>> ifThen,
+	std::optional<std::unique_ptr<Stmt>> elseThen,
+	size_t start,
+	size_t end)
+	: Stmt(start, end, StmtType::If)
+	, condition(std::move(condition))
+	, ifThen(std::move(ifThen))
+	, elseThen(std::move(elseThen))
+{}

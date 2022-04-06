@@ -1,11 +1,18 @@
-print(false || true);
-print(true || false);
-print(true || true);
-print(false || false);
+fn bool_as_number(b) {
+	if b {
+		ret 1;
+	} else {
+		ret 0;
+	}
+}
 
-print(false && true);
-print(true && false);
-print(true && true);
-print(false && false);
+print(bool_as_number(true || false));
+print(bool_as_number(false && true));
 
-print(true || false && false || false);
+if true && false {
+	print(1);
+} else if true || false {
+	print(2);
+} else {
+	print(3);
+}

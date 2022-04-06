@@ -111,6 +111,7 @@ enum class StmtType
 	Block,
 	Fn,
 	Ret,
+	If,
 };
 
 class Stmt
@@ -184,6 +185,21 @@ public:
 	RetStmt(std::optional<std::unique_ptr<Expr>> returnValue, size_t start, size_t end);
 
 	std::optional<std::unique_ptr<Expr>> returnValue;
+};
+
+class IfStmt final : public Stmt
+{
+public:
+	IfStmt(
+		std::unique_ptr<Expr> condition,
+		std::vector<std::unique_ptr<Stmt>> ifThen,
+		std::optional<std::unique_ptr<Stmt>> elseThen,
+		size_t start,
+		size_t end);
+
+	std::unique_ptr<Expr> condition;
+	std::vector<std::unique_ptr<Stmt>> ifThen;
+	std::optional<std::unique_ptr<Stmt>> elseThen;
 };
 
 }

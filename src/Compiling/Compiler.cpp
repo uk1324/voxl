@@ -4,6 +4,7 @@
 #include "Compiler.hpp"
 #include "Compiler.hpp"
 #include "Compiler.hpp"
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -68,6 +69,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 		CASE_STMT_TYPE(Block, blockStmt)
 		CASE_STMT_TYPE(Fn, fnStmt)
 		CASE_STMT_TYPE(Ret, retStmt)
+		CASE_STMT_TYPE(If, ifStmt)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -179,6 +181,33 @@ Compiler::Status Compiler::retStmt(const RetStmt& stmt)
 		TRY(compile(*stmt.returnValue));
 	}
 	emitOp(Op::Return);
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::ifStmt(const IfStmt& stmt)
+{
+	TRY(compile(stmt.condition));
+
+	auto jumpToElse = emitJump(Op::JumpIfFalse);
+
+	for (const auto& s : stmt.ifThen)
+	{
+		TRY(compile(s));
+	}
+
+	auto jumpToEndOfElse = emitJump(Op::Jump);
+
+	patchJump(jumpToElse);
+
+	if (stmt.elseThen.has_value())
+	{
+		TRY(compile(*stmt.elseThen));
+	}
+
+	patchJump(jumpToEndOfElse);
+
+	emitOp(Op::PopStack); // Pop the condition.
+
 	return Status::Ok;
 }
 
@@ -321,7 +350,7 @@ Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
 
 	TRY(compile(expr.lhs));
 	TRY(compile(expr.rhs));
-	// Can't pop here beacause I have to keep the result at the top. The pops will in the vm.
+	// Can't pop here beacause I have to keep the result at the top. The pops will happen in the vm.
 	switch (expr.op)
 	{
 		case TokenType::Plus: emitOp(Op::Add); break;

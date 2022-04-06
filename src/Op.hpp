@@ -25,6 +25,7 @@ namespace Lang
 		LoadTrue,
 		LoadFalse,
 		JumpIfFalse, // 32bit - bytes to jump forward
-		JumpIfTrue
+		JumpIfTrue,
+		Jump
 	};
 }

@@ -39,6 +39,8 @@ enum class TokenType
 	True,
 	False,
 	Null,
+	If,
+	Else,
 
 	// Other
 	Identifier,
