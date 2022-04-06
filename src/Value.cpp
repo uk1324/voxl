@@ -15,6 +15,12 @@ Value::Value(Obj* obj)
 	as.obj = obj;
 }
 
+Value::Value(bool boolean)
+	: type(ValueType::Bool)
+{
+	as.boolean = boolean;
+}
+
 Value Value::null()
 {
 	Value value;
@@ -38,6 +44,10 @@ std::ostream& operator<<(std::ostream& os, Value value)
 
 		case ValueType::Null:
 			os << "null";
+			break;
+
+		case ValueType::Bool:
+			os << (value.as.boolean ? "true" : "false");
 			break;
 
 		case ValueType::Obj:

@@ -38,6 +38,7 @@ enum class ValueType
 	Float,
 	Obj,
 	Null,
+	Bool,
 };
 
 using Int = int64_t;
@@ -49,6 +50,7 @@ public:
 	Value() {};
 	explicit Value(Int value);
 	explicit Value(Obj* obj);
+	explicit Value(bool boolean);
 		
 public:
 	static Value null();
@@ -61,6 +63,7 @@ public:
 		Int intNumber;
 		Float floatNumber;
 		Obj* obj;
+		bool boolean;
 	} as;
 };
 

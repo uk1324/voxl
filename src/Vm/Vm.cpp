@@ -138,6 +138,42 @@ Vm::Result Vm::run()
 			pushStack(Value::null());
 			break;
 
+		case Op::LoadTrue:
+			pushStack(Value(true));
+			break;
+
+		case Op::LoadFalse:
+			pushStack(Value(false));
+			break;
+
+		case Op::Negate:
+		{
+			auto& value = peekStack(0);
+			if (value.type == ValueType::Int)
+			{
+				value.as.intNumber = -value.as.intNumber;
+			}
+			else
+			{
+				return fatalError("can only negate numers");
+			}
+			break;
+		}
+
+		case Op::Not:
+		{
+			auto& value = peekStack(0);
+			if (value.type == ValueType::Bool)
+			{
+				value.as.boolean = !value.as.boolean;
+			}
+			else
+			{
+				return fatalError("can use not on bools");
+			}
+			break;
+		}
+
 		case Op::Call:
 		{
 			auto argCount = readUint32();

@@ -45,6 +45,8 @@ Token Scanner::token()
 	switch (c)
 	{
 		case '+': return makeToken(TokenType::Plus);
+		case '-': return makeToken(TokenType::Minus);
+		case '!': return makeToken(TokenType::Not);
 		case ';': return makeToken(TokenType::Semicolon);
 		case '=': return makeToken(TokenType::Equals);
 		case '(': return makeToken(TokenType::LeftParen);
@@ -90,6 +92,9 @@ Token Scanner::keywordOrIdentifier()
 		{ "let", TokenType::Let },
 		{ "fn", TokenType::Fn },
 		{ "ret", TokenType::Ret },
+		{ "true", TokenType::True },
+		{ "false", TokenType::False },
+		{ "null", TokenType::Null },
 	};
 
 	while (isAlnum(peek()) || (peek() == '_'))

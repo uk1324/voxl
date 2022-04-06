@@ -1,5 +1,7 @@
 #include "Compiler.hpp"
 #include "Compiler.hpp"
+#include "Compiler.hpp"
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -187,7 +189,9 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 	switch (expr.get()->type)
 	{
 		CASE_EXPR_TYPE(IntConstant, intConstantExpr)
+		CASE_EXPR_TYPE(BoolConstant, boolConstantExpr)
 		CASE_EXPR_TYPE(Binary, binaryExpr)
+		CASE_EXPR_TYPE(Unary, unaryExpr)
 		CASE_EXPR_TYPE(Identifier, identifierExpr)
 		CASE_EXPR_TYPE(Call, callExpr)
 	}
@@ -201,6 +205,41 @@ Compiler::Status Compiler::intConstantExpr(const IntConstantExpr& expr)
 	// TODO: Search if constant already exists.
 	auto constant = createConstant(Value(expr.value));
 	loadConstant(constant);
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::boolConstantExpr(const BoolConstantExpr& expr)
+{
+	if (expr.value)
+	{
+		emitOp(Op::LoadTrue);
+	}
+	else
+	{
+		emitOp(Op::LoadFalse);
+	}
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::unaryExpr(const UnaryExpr& expr)
+{
+	switch (expr.op)
+	{
+		case TokenType::Minus:
+			TRY(compile(expr.expr));
+			emitOp(Op::Negate);
+			break;
+
+		case TokenType::Not:
+			TRY(compile(expr.expr));
+			emitOp(Op::Not);
+			break;
+
+		default:
+			ASSERT_NOT_REACHED();
+			return Status::Error;
+	}
+
 	return Status::Ok;
 }
 

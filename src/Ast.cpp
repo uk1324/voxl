@@ -23,11 +23,22 @@ FloatConstantExpr::FloatConstantExpr(Float value, size_t start, size_t end)
 	, value(value)
 {}
 
+BoolConstantExpr::BoolConstantExpr(bool value, size_t start, size_t end)
+	: Expr(start, end, ExprType::BoolConstant)
+	, value(value)
+{}
+
 BinaryExpr::BinaryExpr(std::unique_ptr<Expr> lhs, TokenType op, std::unique_ptr<Expr> rhs, size_t start, size_t end)
 	: Expr(start, end, ExprType::Binary)
 	, lhs(std::move(lhs))
 	, op(op)
 	, rhs(std::move(rhs))
+{}
+
+UnaryExpr::UnaryExpr(std::unique_ptr<Expr> expr, TokenType op, size_t start, size_t end)
+	: Expr(start, end, ExprType::Unary)
+	, expr(std::move(expr))
+	, op(op)
 {}
 
 IdentifierExpr::IdentifierExpr(std::string_view identifier, size_t start, size_t end)

@@ -14,6 +14,8 @@ enum class TokenType
 
 	// Operators
 	Plus,
+	Minus,
+	Not,
 	Equals,
 
 	// Symbols
@@ -30,6 +32,9 @@ enum class TokenType
 	Let,
 	Fn,
 	Ret,
+	True,
+	False,
+	Null,
 
 	// Other
 	Identifier,

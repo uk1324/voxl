@@ -19,6 +19,10 @@ namespace Lang
 		Print, // [value]
 		LoadNull,
 		PopStack,
-		Return
+		Return,
+		Negate,
+		Not,
+		LoadTrue,
+		LoadFalse,
 	};
 }

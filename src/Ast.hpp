@@ -17,7 +17,9 @@ enum class ExprType
 {
 	IntConstant,
 	FloatConstant,
+	BoolConstant,
 	Binary,
+	Unary,
 	Identifier,
 	Call
 };
@@ -54,6 +56,14 @@ public:
 	Float value;
 };
 
+class BoolConstantExpr final : public Expr
+{
+public:
+	BoolConstantExpr(bool value, size_t start, size_t end);
+
+	bool value;
+};
+
 class BinaryExpr final : public Expr
 {
 public:
@@ -63,6 +73,15 @@ public:
 	TokenType op;
 	std::unique_ptr<Expr> lhs;
 	std::unique_ptr<Expr> rhs;
+};
+
+class UnaryExpr final : public Expr
+{
+public:
+	UnaryExpr(std::unique_ptr<Expr> expr, TokenType op, size_t start, size_t end);
+	
+	TokenType op;
+	std::unique_ptr<Expr> expr;
 };
 
 class IdentifierExpr final : public Expr

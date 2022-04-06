@@ -1,7 +1,4 @@
 #include "Parser.hpp"
-#include "Parser.hpp"
-#include "Parser.hpp"
-#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -172,17 +169,31 @@ std::unique_ptr<Expr> Parser::expr()
 std::unique_ptr<Expr> Parser::factor()
 {
 	size_t start = peek().start;
-	auto expr = call();
+	auto expr = unary();
 
 	while (match(TokenType::Plus) && (isAtEnd() == false))
 	{
 		TokenType op = peekPrevious().type;
-		auto rhs = call();
+		auto rhs = unary();
 		size_t end = peekPrevious().end;
 		expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(rhs), start, end);
 	}
 
 	return expr;
+}
+
+std::unique_ptr<Expr> Parser::unary()
+{
+	size_t start = peek().start;
+
+	if (match(TokenType::Minus) || match(TokenType::Not))
+	{
+		auto op = peekPrevious().type;
+		auto expr = call();
+		return std::make_unique<UnaryExpr>(std::move(expr), op, start, peekPrevious().end);
+	}
+
+	return call();
 }
 
 std::unique_ptr<Expr> Parser::call()
@@ -218,6 +229,14 @@ std::unique_ptr<Expr> Parser::primary()
 	if (match(TokenType::Identifier))
 	{
 		return std::make_unique<IdentifierExpr>(peekPrevious().identifier, peekPrevious().start, peekPrevious().end);
+	}
+	if (match(TokenType::True))
+	{
+		return std::make_unique<BoolConstantExpr>(true, peekPrevious().start, peekPrevious().end);
+	}
+	if (match(TokenType::False))
+	{
+		return std::make_unique<BoolConstantExpr>(false, peekPrevious().start, peekPrevious().end);
 	}
 
 	// TODO: Check if this error location is good or should it maybe be token.

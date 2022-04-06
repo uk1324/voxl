@@ -5,9 +5,15 @@
     {
       "type": "default",
       "project": "CMakeLists.txt",
-      "projectTarget": "voxl-run.exe",
-      "name": "voxl-run.exe",
+      "projectTarget": "voxel-game-run.exe",
+      "name": "voxel-game-run.exe",
       "currentDir": "${projectDir}"
+    },
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "voxl-run.exe",
+      "name": "voxl-run.exe"
     }
   ]
 }
