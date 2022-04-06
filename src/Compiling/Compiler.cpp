@@ -2,6 +2,8 @@
 #include "Compiler.hpp"
 #include "Compiler.hpp"
 #include "Compiler.hpp"
+#include "Compiler.hpp"
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -295,6 +297,28 @@ Compiler::Status Compiler::declareVariable(std::string_view name, size_t start, 
 
 Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
 {
+	if (expr.op == TokenType::AndAnd)
+	{
+		TRY(compile(expr.lhs));
+		auto placeToPatch = emitJump(Op::JumpIfFalse);
+		emitOp(Op::PopStack);
+		TRY(compile(expr.rhs));
+		patchJump(placeToPatch);
+
+		return Status::Ok;
+	}
+	if (expr.op == TokenType::OrOr)
+	{
+		TRY(compile(expr.lhs));
+		auto placeToPatch = emitJump(Op::JumpIfTrue);
+		emitOp(Op::PopStack);
+		TRY(compile(expr.rhs));
+		patchJump(placeToPatch);
+
+		return Status::Ok;
+	}
+
+
 	TRY(compile(expr.lhs));
 	TRY(compile(expr.rhs));
 	// Can't pop here beacause I have to keep the result at the top. The pops will in the vm.
@@ -338,6 +362,26 @@ void Compiler::emitUint32(uint32_t value)
 	{
 		currentByteCode().lineNumberAtOffset.push_back(m_lineNumberStack.back());
 	}
+}
+
+size_t Compiler::emitJump(Op op)
+{
+	emitOp(op);
+	auto placeToPatch = currentByteCode().code.size();
+	emitUint32(0);
+	return placeToPatch;
+}
+
+void Compiler::patchJump(size_t placeToPatch)
+{
+	auto jumpSize = static_cast<uint32_t>(currentByteCode().code.size() - placeToPatch) - sizeof(uint32_t);
+
+	uint8_t* jumpLocation = &currentByteCode().code[placeToPatch];
+
+	jumpLocation[0] = static_cast<uint8_t>((jumpSize >> 24) & 0xFF);
+	jumpLocation[1] = static_cast<uint8_t>((jumpSize >> 16) & 0xFF);
+	jumpLocation[2] = static_cast<uint8_t>((jumpSize >> 8) & 0xFF);
+	jumpLocation[3] = static_cast<uint8_t>(jumpSize & 0xFF);
 }
 
 void Compiler::beginScope()

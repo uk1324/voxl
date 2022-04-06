@@ -1,4 +1,6 @@
 #include "Parser.hpp"
+#include "Parser.hpp"
+#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -163,7 +165,29 @@ std::vector<std::unique_ptr<Stmt>> Parser::block()
 
 std::unique_ptr<Expr> Parser::expr()
 {
-	return factor();
+	return and();
+}
+
+#define PARSE_LEFT_RECURSIVE_BINARY_EXPR(matches, lowerPrecedenceFunction) \
+	size_t start = peek().start; \
+	auto expr = lowerPrecedenceFunction(); \
+	while ((matches) && (isAtEnd() == false)) \
+	{ \
+		TokenType op = peekPrevious().type; \
+		auto rhs = lowerPrecedenceFunction(); \
+		size_t end = peekPrevious().end; \
+		expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(rhs), start, end); \
+	} \
+	return expr;
+
+std::unique_ptr<Expr> Parser::and()
+{
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::AndAnd), or)
+}
+
+std::unique_ptr<Expr> Parser:: or()
+{
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::OrOr), factor)
 }
 
 std::unique_ptr<Expr> Parser::factor()

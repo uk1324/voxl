@@ -1,9 +1,12 @@
-#include "Vm.hpp"
-#include "Vm.hpp"
-#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Asserts.hpp>
 #include <iostream>
+
+//#define DEBUG_PRINT_EXECUTION_TRACE
+#ifdef DEBUG_PRINT_EXECUTION_TRACE
+	#include <Debug/Disassembler.hpp>
+#endif
+
 
 using namespace Lang;
 
@@ -26,24 +29,23 @@ Vm::Result Vm::execute(ObjFunction* program, Allocator& allocator, ErrorPrinter&
 	return run();
 }
 
-#include <Debug/Disassembler.hpp>
-
 Vm::Result Vm::run()
 {
 	std::cout << '\n';
 	for (;;)
 	{
-		//std::cout << "[ ";
-		//for (Value* value = m_stack.data(); value != m_stackTop; value++)
-		//{
-		//	std::cout << *value << ' ';
-		//}
-		//std::cout << "]\n";
-		//disassembleInstruction(
-		//	callStackTop().function->byteCode,
-		//	callStackTop().instructionPointer - callStackTop().function->byteCode.code.data());
-		//std::cout << '\n';
-
+	#ifdef DEBUG_PRINT_EXECUTION_TRACE
+		std::cout << "[ ";
+		for (Value* value = m_stack.data(); value != m_stackTop; value++)
+		{
+			std::cout << *value << ' ';
+		}
+		std::cout << "]\n";
+		disassembleInstruction(
+			callStackTop().function->byteCode,
+			callStackTop().instructionPointer - callStackTop().function->byteCode.code.data());
+		std::cout << '\n';
+	#endif
 		Op op = static_cast<Op>(*callStackTop().instructionPointer);
 		callStackTop().instructionPointer++;
 
@@ -221,6 +223,36 @@ Vm::Result Vm::run()
 				m_stackTop -= 2;
 				m_callStackSize--;
 				pushStack(result);
+			}
+			break;
+		}
+
+		case Op::JumpIfFalse:
+		{
+			auto jump = readUint32();
+			auto& value = peekStack(0);
+			if ((value.type != ValueType::Bool))
+			{
+				return fatalError("must be bool");
+			}
+			if (value.as.boolean == false)
+			{
+				callStackTop().instructionPointer += jump;
+			}
+			break;
+		}
+
+		case Op::JumpIfTrue:
+		{
+			auto jump = readUint32();
+			auto& value = peekStack(0);
+			if ((value.type != ValueType::Bool))
+			{
+				return fatalError("must be bool");
+			}
+			if (value.as.boolean)
+			{
+				callStackTop().instructionPointer += jump;
 			}
 			break;
 		}

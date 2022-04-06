@@ -78,6 +78,8 @@ private:
 	ByteCode& currentByteCode();
 	void emitOp(Op op);
 	void emitUint32(uint32_t value);
+	size_t emitJump(Op op);
+	void patchJump(size_t placeToPatch);
 
 	Status errorAt(size_t start, size_t end, const char* format, ...);
 	Status errorAt(const Stmt& stmt, const char* format, ...);

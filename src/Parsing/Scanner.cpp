@@ -45,6 +45,12 @@ Token Scanner::token()
 	switch (c)
 	{
 		case '+': return makeToken(TokenType::Plus);
+		case '&': return match('&')
+			? makeToken(TokenType::AndAnd)
+			: makeToken(TokenType::And);
+		case '|': return match('|')
+			? makeToken(TokenType::OrOr)
+			: makeToken(TokenType::Or);
 		case '-': return makeToken(TokenType::Minus);
 		case '!': return makeToken(TokenType::Not);
 		case ';': return makeToken(TokenType::Semicolon);

@@ -116,6 +116,8 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)
 		case Op::LoadGlobal: return justOp("loadGlobal");
 		case Op::SetGlobal: return justOp("setGlobal");
 		case Op::CreateGlobal: return justOp("createGlobal");
+		case Op::JumpIfFalse: return opNumber("jumpIfFalse", byteCode, offset);
+		case Op::JumpIfTrue: return opNumber("jumpIfTrue", byteCode, offset);
 		case Op::Print: return justOp("print");
 		case Op::LoadNull: return justOp("loadNull");
 		case Op::LoadTrue: return justOp("loadTrue");

@@ -17,6 +17,10 @@ enum class TokenType
 	Minus,
 	Not,
 	Equals,
+	And,
+	AndAnd,
+	Or,
+	OrOr,
 
 	// Symbols
 	Semicolon,

@@ -42,6 +42,8 @@ private:
 	std::vector<std::unique_ptr<Stmt>> block();
 
 	std::unique_ptr<Expr> expr();
+	std::unique_ptr<Expr> and();
+	std::unique_ptr<Expr> or();
 	std::unique_ptr<Expr> factor();
 	std::unique_ptr<Expr> unary();
 	std::unique_ptr<Expr> call();
