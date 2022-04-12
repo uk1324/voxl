@@ -17,6 +17,7 @@ enum class TokenType
 	Minus,
 	Not,
 	Equals,
+	EqualsEquals,
 	And,
 	AndAnd,
 	Or,
@@ -41,6 +42,11 @@ enum class TokenType
 	Null,
 	If,
 	Else,
+	Loop,
+	While,
+	For,
+	Break,
+	Continue,
 
 	// Other
 	Identifier,

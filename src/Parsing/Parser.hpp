@@ -39,12 +39,16 @@ private:
 	std::unique_ptr<Stmt> fnStmt();
 	std::unique_ptr<Stmt> retStmt();
 	std::unique_ptr<Stmt> ifStmt();
+	std::unique_ptr<Stmt> loopStmt();
+	std::unique_ptr<Stmt> breakStmt();
 
 	std::vector<std::unique_ptr<Stmt>> block();
 
 	std::unique_ptr<Expr> expr();
+	std::unique_ptr<Expr> assignment();
 	std::unique_ptr<Expr> and();
 	std::unique_ptr<Expr> or();
+	std::unique_ptr<Expr> equality();
 	std::unique_ptr<Expr> factor();
 	std::unique_ptr<Expr> unary();
 	std::unique_ptr<Expr> call();

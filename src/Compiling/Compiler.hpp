@@ -38,6 +38,14 @@ private:
 		int functionDepth;
 	};
 
+	struct Loop
+	{
+	public:
+		size_t loopStartLocation;
+		std::vector<size_t> breakJumpLocations;
+		std::vector<size_t> continueJumpLocations;
+	};
+
 	enum class [[nodiscard]] Status
 	{
 		Ok,
@@ -51,6 +59,7 @@ public:
 
 private:
 	Status compile(const std::unique_ptr<Stmt>& stmt);
+	Status compile(const std::vector<std::unique_ptr<Stmt>>& stmts);
 	Status exprStmt(const ExprStmt& stmt);
 	Status printStmt(const PrintStmt& stmt);
 	Status letStmt(const LetStmt& stmt);
@@ -58,6 +67,8 @@ private:
 	Status fnStmt(const FnStmt& stmt);
 	Status retStmt(const RetStmt& stmt);
 	Status ifStmt(const IfStmt& stmt);
+	Status loopStmt(const LoopStmt& stmt);
+	Status breakStmt(const BreakStmt& stmt);
 
 	Status compile(const std::unique_ptr<Expr>& expr);
 	// TODO: perform constant folding
@@ -67,6 +78,7 @@ private:
 	Status unaryExpr(const UnaryExpr& expr);
 	Status identifierExpr(const IdentifierExpr& expr);
 	Status callExpr(const CallExpr& expr);
+	Status assignmentExpr(const AssignmentExpr& expr);
 
 	Status declareVariable(std::string_view name, size_t start, size_t end);
 	// Could make a RAII class
@@ -80,7 +92,9 @@ private:
 	void emitOp(Op op);
 	void emitUint32(uint32_t value);
 	size_t emitJump(Op op);
-	void patchJump(size_t placeToPatch);
+	void emitJump(Op op, size_t location);
+	void setJumpToHere(size_t placeToPatch);
+	size_t currentLocation();
 
 	Status errorAt(size_t start, size_t end, const char* format, ...);
 	Status errorAt(const Stmt& stmt, const char* format, ...);
@@ -91,12 +105,14 @@ private:
 	Allocator* m_allocator;
 
 	std::vector<Scope> m_scopes;
+	std::vector<Loop> m_loops;
 
 	// Stores the line numbers of the currently compiled things. Because expressions might be on a different lines
 	// the the statements they are in a stack has to be used. 
 	std::vector<size_t> m_lineNumberStack;
 
 	std::vector<ByteCode*> m_functionByteCodeStack;
+
 
 	bool m_hadError;
 	ErrorPrinter* m_errorPrinter;

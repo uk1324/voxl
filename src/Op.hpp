@@ -22,10 +22,12 @@ namespace Lang
 		Return,
 		Negate,
 		Not,
+		Equals,
 		LoadTrue,
 		LoadFalse,
 		JumpIfFalse, // 32bit - bytes to jump forward
 		JumpIfTrue,
-		Jump
+		Jump,
+		JumpBack, // 
 	};
 }

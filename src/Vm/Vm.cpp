@@ -176,6 +176,14 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::Equals:
+		{
+			auto& lhs = peekStack(1);
+			auto& rhs = peekStack(0);
+			pushStack(Value(lhs == rhs));
+			break;
+		}
+
 		case Op::Call:
 		{
 			auto argCount = readUint32();
@@ -229,6 +237,10 @@ Vm::Result Vm::run()
 
 		case Op::Jump:
 			callStackTop().instructionPointer += readUint32();
+			break;
+
+		case Op::JumpBack:
+			callStackTop().instructionPointer -= readUint32();
 			break;
 
 		case Op::JumpIfFalse:

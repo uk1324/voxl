@@ -54,7 +54,9 @@ Token Scanner::token()
 		case '-': return makeToken(TokenType::Minus);
 		case '!': return makeToken(TokenType::Not);
 		case ';': return makeToken(TokenType::Semicolon);
-		case '=': return makeToken(TokenType::Equals);
+		case '=': return match('=')
+			? makeToken(TokenType::EqualsEquals)
+			: makeToken(TokenType::Equals);
 		case '(': return makeToken(TokenType::LeftParen);
 		case ')': return makeToken(TokenType::RightParen);
 		case '{': return makeToken(TokenType::LeftBrace);
@@ -103,6 +105,12 @@ Token Scanner::keywordOrIdentifier()
 		{ "null", TokenType::Null },
 		{ "if", TokenType::If },
 		{ "else", TokenType::Else },
+		{ "loop", TokenType::Loop },
+		{ "while", TokenType::While },
+		{ "for", TokenType::For },
+		// Could rename break to stop and continue to next.
+		{ "break", TokenType::Break },
+		{ "continue", TokenType::Continue },
 	};
 
 	while (isAlnum(peek()) || (peek() == '_'))

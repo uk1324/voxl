@@ -52,6 +52,12 @@ CallExpr::CallExpr(std::unique_ptr<Expr> calle, std::vector<std::unique_ptr<Expr
 	, arguments(std::move(arguments))
 {}
 
+AssignmentExpr::AssignmentExpr(std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs, size_t start, size_t end)
+	: Expr(start, end, ExprType::Assignment)
+	, lhs(std::move(lhs))
+	, rhs(std::move(rhs))
+{}
+
 Stmt::Stmt(size_t start, size_t end, StmtType type)
 	: start(start)
 	, length(end - start)
@@ -111,4 +117,22 @@ IfStmt::IfStmt(
 	, condition(std::move(condition))
 	, ifThen(std::move(ifThen))
 	, elseThen(std::move(elseThen))
+{}
+
+LoopStmt::LoopStmt(
+	std::optional<std::unique_ptr<Stmt>> initStmt,
+	std::optional<std::unique_ptr<Expr>> condition,
+	std::optional<std::unique_ptr<Expr>> iterationExpr,
+	std::vector<std::unique_ptr<Stmt>> block,
+	size_t start,
+	size_t end)
+	: Stmt(start, end, StmtType::Loop)
+	, initStmt(std::move(initStmt))
+	, condition(std::move(condition))
+	, iterationExpr(std::move(iterationExpr))
+	, block(std::move(block))
+{}
+
+BreakStmt::BreakStmt(size_t start, size_t end)
+	: Stmt(start, end, StmtType::Break)
 {}

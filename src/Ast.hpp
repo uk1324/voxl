@@ -21,7 +21,8 @@ enum class ExprType
 	Binary,
 	Unary,
 	Identifier,
-	Call
+	Call,
+	Assignment
 };
 
 class Expr
@@ -103,6 +104,15 @@ public:
 	std::vector<std::unique_ptr<Expr>> arguments;
 };
 
+class AssignmentExpr final : public Expr
+{
+public:
+	AssignmentExpr(std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs, size_t start, size_t end);
+
+	std::unique_ptr<Expr> lhs;
+	std::unique_ptr<Expr> rhs;
+};
+
 enum class StmtType
 {
 	Expr,
@@ -112,6 +122,8 @@ enum class StmtType
 	Fn,
 	Ret,
 	If,
+	Loop,
+	Break
 };
 
 class Stmt
@@ -200,6 +212,29 @@ public:
 	std::unique_ptr<Expr> condition;
 	std::vector<std::unique_ptr<Stmt>> ifThen;
 	std::optional<std::unique_ptr<Stmt>> elseThen;
+};
+
+class LoopStmt final : public Stmt
+{
+public:
+	LoopStmt(
+		std::optional<std::unique_ptr<Stmt>> initStmt,
+		std::optional<std::unique_ptr<Expr>> condition,
+		std::optional<std::unique_ptr<Expr>> iterationExpr,
+		std::vector<std::unique_ptr<Stmt>> block,
+		size_t start,
+		size_t end);
+
+	std::optional<std::unique_ptr<Stmt>> initStmt;
+	std::optional<std::unique_ptr<Expr>> condition;
+	std::optional<std::unique_ptr<Expr>> iterationExpr;
+	std::vector<std::unique_ptr<Stmt>> block;
+};
+
+class BreakStmt final : public Stmt
+{
+public:
+	BreakStmt(size_t start, size_t end);
 };
 
 }

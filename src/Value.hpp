@@ -70,3 +70,4 @@ public:
 }
 
 std::ostream& operator<< (std::ostream& os, Lang::Value value);
+bool operator== (const Lang::Value& lhs, const Lang::Value& rhs);

@@ -83,8 +83,7 @@ int main()
 	Compiler compiler;
 	auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
 
-	// TODO look at objdump style
-	std::cout << "---- <script>\n";
+	std::cout << "----<script>\n";
 	disassembleByteCode(compilerResult.program->byteCode);
 
 	if (compilerResult.hadError == false)

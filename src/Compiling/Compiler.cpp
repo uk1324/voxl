@@ -1,10 +1,3 @@
-#include "Compiler.hpp"
-#include "Compiler.hpp"
-#include "Compiler.hpp"
-#include "Compiler.hpp"
-#include "Compiler.hpp"
-#include "Compiler.hpp"
-#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -70,9 +63,20 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 		CASE_STMT_TYPE(Fn, fnStmt)
 		CASE_STMT_TYPE(Ret, retStmt)
 		CASE_STMT_TYPE(If, ifStmt)
+		CASE_STMT_TYPE(Loop, loopStmt)
+		CASE_STMT_TYPE(Break, breakStmt)
 	}
 	m_lineNumberStack.pop_back();
 
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& stmts)
+{
+	for (const auto& stmt : stmts)
+	{
+		TRY(compile(stmt));
+	}
 	return Status::Ok;
 }
 
@@ -120,10 +124,7 @@ Compiler::Status Compiler::letStmt(const LetStmt& stmt)
 Compiler::Status Compiler::blockStmt(const BlockStmt& stmt)
 {
 	beginScope();
-	for (const auto& s : stmt.stmts)
-	{
-		TRY(compile(s));
-	}
+	compile(stmt.stmts);
 	endScope();
 
 	return Status::Ok;
@@ -154,10 +155,7 @@ Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 		TRY(declareVariable(argument, stmt.start, stmt.end()));
 	}
 
-	for (const auto& s : stmt.stmts)
-	{
-		TRY(compile(s));
-	}
+	TRY(compile(stmt.stmts));
 	emitOp(Op::LoadNull);
 	emitOp(Op::Return);
 
@@ -190,24 +188,66 @@ Compiler::Status Compiler::ifStmt(const IfStmt& stmt)
 
 	auto jumpToElse = emitJump(Op::JumpIfFalse);
 
-	for (const auto& s : stmt.ifThen)
+	TRY(compile(stmt.ifThen));
+
+	size_t jumpToEndOfElse = 0;
+	if (stmt.elseThen.has_value())
 	{
-		TRY(compile(s));
+		jumpToEndOfElse = emitJump(Op::Jump);
 	}
 
-	auto jumpToEndOfElse = emitJump(Op::Jump);
-
-	patchJump(jumpToElse);
+	setJumpToHere(jumpToElse);
 
 	if (stmt.elseThen.has_value())
 	{
 		TRY(compile(*stmt.elseThen));
+		setJumpToHere(jumpToEndOfElse);
 	}
-
-	patchJump(jumpToEndOfElse);
 
 	emitOp(Op::PopStack); // Pop the condition.
 
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::loopStmt(const LoopStmt& stmt)
+{
+	auto beginning = currentLocation();
+	m_loops.push_back(Loop{ beginning });
+	size_t jumpToEnd = -1; // Won't be used if there is no condition.
+	if (stmt.condition.has_value())
+	{
+		TRY(compile(*stmt.condition));
+		jumpToEnd = emitJump(Op::JumpIfFalse);
+	}
+
+	TRY(compile(stmt.block));
+
+	emitJump(Op::JumpBack, beginning);
+
+	if (stmt.condition.has_value())
+	{
+		setJumpToHere(jumpToEnd);
+	}
+
+	const auto& loop = m_loops.back();
+	for (const auto& location : loop.breakJumpLocations)
+	{
+		setJumpToHere(location);
+	}
+
+	m_loops.pop_back();
+
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
+{
+	if (m_loops.empty())
+	{
+		return errorAt(stmt, "cannot use break outside of a loop");
+	}
+	auto jump = emitJump(Op::Jump);
+	m_loops.back().breakJumpLocations.push_back(jump);
 	return Status::Ok;
 }
 
@@ -225,6 +265,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 		CASE_EXPR_TYPE(Unary, unaryExpr)
 		CASE_EXPR_TYPE(Identifier, identifierExpr)
 		CASE_EXPR_TYPE(Call, callExpr)
+		CASE_EXPR_TYPE(Assignment, assignmentExpr)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -276,8 +317,9 @@ Compiler::Status Compiler::unaryExpr(const UnaryExpr& expr)
 
 Compiler::Status Compiler::identifierExpr(const IdentifierExpr& expr)
 {
-	for (const auto& scope : m_scopes)
+	for (auto it = m_scopes.crbegin(); it != m_scopes.crend(); it++)
 	{
+		const auto& scope = *it;
 		auto local = scope.localVariables.find(expr.identifier);
 		if (local != scope.localVariables.end())
 		{
@@ -290,6 +332,35 @@ Compiler::Status Compiler::identifierExpr(const IdentifierExpr& expr)
 	auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(expr.identifier))));
 	loadConstant(constant);
 	emitOp(Op::LoadGlobal);
+
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
+{
+	TRY(compile(expr.rhs));
+
+	if (expr.lhs->type != ExprType::Identifier)
+	{
+		return errorAt(expr, "left hand side of assignment must be an identifier");
+	}
+	const auto lhs = static_cast<IdentifierExpr&>(*expr.lhs.get()).identifier;
+
+	for (auto it = m_scopes.crbegin(); it != m_scopes.crend(); it++)
+	{
+		const auto& scope = *it;
+		auto local = scope.localVariables.find(lhs);
+		if (local != scope.localVariables.end())
+		{
+			emitOp(Op::SetLocal);
+			emitUint32(local->second.index);
+			return Status::Ok;
+		}
+	}
+
+	auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(lhs))));
+	loadConstant(constant);
+	emitOp(Op::SetGlobal);
 
 	return Status::Ok;
 }
@@ -332,7 +403,7 @@ Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
 		auto placeToPatch = emitJump(Op::JumpIfFalse);
 		emitOp(Op::PopStack);
 		TRY(compile(expr.rhs));
-		patchJump(placeToPatch);
+		setJumpToHere(placeToPatch);
 
 		return Status::Ok;
 	}
@@ -342,11 +413,10 @@ Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
 		auto placeToPatch = emitJump(Op::JumpIfTrue);
 		emitOp(Op::PopStack);
 		TRY(compile(expr.rhs));
-		patchJump(placeToPatch);
+		setJumpToHere(placeToPatch);
 
 		return Status::Ok;
 	}
-
 
 	TRY(compile(expr.lhs));
 	TRY(compile(expr.rhs));
@@ -354,6 +424,7 @@ Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
 	switch (expr.op)
 	{
 		case TokenType::Plus: emitOp(Op::Add); break;
+		case TokenType::EqualsEquals: emitOp(Op::Equals); break;
 		default:
 			ASSERT_NOT_REACHED();
 	}
@@ -401,7 +472,14 @@ size_t Compiler::emitJump(Op op)
 	return placeToPatch;
 }
 
-void Compiler::patchJump(size_t placeToPatch)
+void Compiler::emitJump(Op op, size_t location)
+{
+	emitOp(op);
+	auto jumpSize = static_cast<uint32_t>(currentLocation() - location + sizeof(uint32_t));
+	emitUint32(jumpSize);
+}
+
+void Compiler::setJumpToHere(size_t placeToPatch)
 {
 	auto jumpSize = static_cast<uint32_t>(currentByteCode().code.size() - placeToPatch) - sizeof(uint32_t);
 
@@ -411,6 +489,11 @@ void Compiler::patchJump(size_t placeToPatch)
 	jumpLocation[1] = static_cast<uint8_t>((jumpSize >> 16) & 0xFF);
 	jumpLocation[2] = static_cast<uint8_t>((jumpSize >> 8) & 0xFF);
 	jumpLocation[3] = static_cast<uint8_t>(jumpSize & 0xFF);
+}
+
+size_t Compiler::currentLocation()
+{
+	return currentByteCode().code.size();
 }
 
 void Compiler::beginScope()

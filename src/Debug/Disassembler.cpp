@@ -36,12 +36,26 @@ static size_t opConstant(std::string_view name, const ByteCode& byteCode, size_t
 		index |= byteCode.code[offset + 1 + i];
 	}
 	// Justify left later
-	std::cout << ' ' << index << ' ' << byteCode.constants[index];
+	std::cout << " c[" << index << "] = " << byteCode.constants[index];
+	return 5;
+}
+
+static size_t jump(std::string_view name, const ByteCode& byteCode, size_t offset, int sign)
+{
+	std::cout << name;
+	uint32_t jumpSize = 0;
+	for (size_t i = 0; i < 4; i++)
+	{
+		jumpSize <<= 8;
+		jumpSize |= byteCode.code[offset + 1 + i];
+	}
+	std::cout << ' ' << offset << " -> " << ((sign == 1) ? (offset + jumpSize) : (offset - jumpSize));
 	return 5;
 }
 
 size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)
 {
+	std::cout << std::left << std::setw(5) << offset;
 	if ((offset > 0) && (byteCode.lineNumberAtOffset[offset] == byteCode.lineNumberAtOffset[offset - 1]))
 	{
 		//std::cout << std::setw(6) << " | ";
@@ -62,9 +76,10 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)
 		case Op::LoadGlobal: return justOp("loadGlobal");
 		case Op::SetGlobal: return justOp("setGlobal");
 		case Op::CreateGlobal: return justOp("createGlobal");
-		case Op::JumpIfFalse: return opNumber("jumpIfFalse", byteCode, offset);
-		case Op::JumpIfTrue: return opNumber("jumpIfTrue", byteCode, offset);
-		case Op::Jump: return opNumber("jump", byteCode, offset);
+		case Op::JumpIfFalse: return jump("jumpIfFalse", byteCode, offset, 1);
+		case Op::JumpIfTrue: return jump("jumpIfTrue", byteCode, offset, 1);
+		case Op::Jump: return jump("jump", byteCode, offset, 1);
+		case Op::JumpBack: return jump("jumpBack", byteCode, offset, -1);
 		case Op::Print: return justOp("print");
 		case Op::LoadNull: return justOp("loadNull");
 		case Op::LoadTrue: return justOp("loadTrue");

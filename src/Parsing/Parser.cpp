@@ -1,8 +1,3 @@
-#include "Parser.hpp"
-#include "Parser.hpp"
-#include "Parser.hpp"
-#include "Parser.hpp"
-#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -66,6 +61,10 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return retStmt();
 	if (match(TokenType::If))
 		return ifStmt();
+	if (match(TokenType::Loop))
+		return loopStmt();
+	if (match(TokenType::Break))
+		return breakStmt();
 	else
 		return exprStmt();
 
@@ -184,6 +183,22 @@ std::unique_ptr<Stmt> Parser::ifStmt()
 	}
 }
 
+std::unique_ptr<Stmt> Parser::loopStmt()
+{
+	size_t start = peekPrevious().start;
+	expect(TokenType::LeftBrace, "expected '{'");
+	auto stmts = block();
+	// loop is just syntax for a while loop without condition.
+	return std::make_unique<LoopStmt>(std::nullopt, std::nullopt, std::nullopt, std::move(stmts), start, peekPrevious().end);
+}
+
+std::unique_ptr<Stmt> Parser::breakStmt()
+{
+	size_t start = peekPrevious().start;
+	expect(TokenType::Semicolon, "expected ';'");
+	return std::make_unique<BreakStmt>(start, peekPrevious().end);
+}
+
 std::vector<std::unique_ptr<Stmt>> Parser::block()
 {
 	std::vector<std::unique_ptr<Stmt>> stmts;
@@ -197,7 +212,21 @@ std::vector<std::unique_ptr<Stmt>> Parser::block()
 
 std::unique_ptr<Expr> Parser::expr()
 {
-	return and();
+	return assignment();
+}
+
+std::unique_ptr<Expr> Parser::assignment()
+{
+	size_t start = peek().start;
+	auto lhs = and();
+
+	if (match(TokenType::Equals))
+	{
+		auto rhs = assignment();
+		return std::make_unique<AssignmentExpr>(std::move(lhs), std::move(rhs), start, peekPrevious().end);
+	}
+
+	return lhs;
 }
 
 #define PARSE_LEFT_RECURSIVE_BINARY_EXPR(matches, lowerPrecedenceFunction) \
@@ -219,7 +248,12 @@ std::unique_ptr<Expr> Parser::and()
 
 std::unique_ptr<Expr> Parser:: or()
 {
-	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::OrOr), factor)
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::OrOr), equality)
+}
+
+std::unique_ptr<Expr> Parser::equality()
+{
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::EqualsEquals), factor)
 }
 
 std::unique_ptr<Expr> Parser::factor()

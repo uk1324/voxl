@@ -78,3 +78,22 @@ std::ostream& operator<<(std::ostream& os, Value value)
 
 	return os;
 }
+
+bool operator==(const Value& lhs, const Value& rhs)
+{
+	if (lhs.type != rhs.type)
+		return false;
+
+	switch (lhs.type)
+	{
+		case ValueType::Int: return lhs.as.intNumber == rhs.as.intNumber;
+		case ValueType::Float: return lhs.as.floatNumber == rhs.as.floatNumber;
+		//case ValueType::Obj: return lhs.as.floatNumber == rhs.as.ob;
+		case ValueType::Null: return true;
+		case ValueType::Bool: return lhs.as.boolean == rhs.as.boolean;
+
+		default:
+			ASSERT_NOT_REACHED();
+			return false;
+	}
+}
