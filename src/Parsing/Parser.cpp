@@ -15,6 +15,7 @@ Parser::Result Parser::parse(const std::vector<Token>& tokens, const SourceInfo&
 	m_errorPrinter = &errorPrinter;
 	m_tokens = &tokens;
 	m_sourceInfo = &sourceInfo;
+	m_currentTokenIndex = 0;
 
 	std::vector<std::unique_ptr<Stmt>> ast;
 

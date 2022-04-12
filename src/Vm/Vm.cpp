@@ -24,6 +24,7 @@ Vm::Result Vm::execute(ObjFunction* program, Allocator& allocator, ErrorPrinter&
 	m_stackTop = m_stack.data();
 	m_callStack[0] = CallFrame{ program->byteCode.code.data(), m_stack.data(), program };
 	m_callStackSize = 1;
+	m_globals.clear();
 	pushStack(Value(reinterpret_cast<Obj*>(program)));
 
 	return run();
@@ -31,7 +32,6 @@ Vm::Result Vm::execute(ObjFunction* program, Allocator& allocator, ErrorPrinter&
 
 Vm::Result Vm::run()
 {
-	std::cout << '\n';
 	for (;;)
 	{
 	#ifdef DEBUG_PRINT_EXECUTION_TRACE
@@ -190,7 +190,7 @@ Vm::Result Vm::run()
 			auto calleValue = peekStack(argCount);
 			if ((calleValue.type != ValueType::Obj) || (calleValue.as.obj->type != ObjType::Function))
 			{
-				m_errorPrinter->outStream() << "cannot call object that isn't function\n";
+				m_errorPrinter->outStream() << "cannot call object that isn't a function\n";
 				return Result::RuntimeError;
 			}
 			auto calle = reinterpret_cast<ObjFunction*>(calleValue.as.obj);
@@ -208,7 +208,7 @@ Vm::Result Vm::run()
 
 		case Op::Print:
 		{
-			std::cout << peekStack() << '\n';
+			std::cout << peekStack();
 			break;
 		}
 
@@ -227,8 +227,7 @@ Vm::Result Vm::run()
 			else
 			{
 				Value result = peekStack();
-				m_stackTop = callStackTop().values + callStackTop().function->argumentCount + 1;
-				m_stackTop -= 2;
+				m_stackTop = callStackTop().values;
 				m_callStackSize--;
 				pushStack(result);
 			}

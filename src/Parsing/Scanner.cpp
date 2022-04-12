@@ -33,7 +33,8 @@ Scanner::Result Scanner::parse(SourceInfo& sourceInfoToComplete, ErrorPrinter& e
 	}
 
 	m_tokens.push_back(Token(TokenType::Eof, m_currentCharIndex, m_currentCharIndex));
-
+	
+	// TODO: Could return just a reference to the tokens so the scanner can reuse the memory instead of allocating new every time.
 	return Result{ m_hadError, std::move(m_tokens) };
 }
 

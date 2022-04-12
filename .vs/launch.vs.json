@@ -14,6 +14,13 @@
       "project": "CMakeLists.txt",
       "projectTarget": "voxl-run.exe",
       "name": "voxl-run.exe"
+    },
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "voxl-test.exe (test\\voxl-test.exe)",
+      "name": "voxl-test.exe (test\\voxl-test.exe)",
+      "currentDir": "${projectDir}"
     }
   ]
 }
