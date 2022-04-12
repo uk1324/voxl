@@ -44,14 +44,28 @@ std::string stringFromFile(std::string_view path)
 // If I wanted to I could implement things like scopes and lineNumberStack as a linked list on the call stack though I don't see what
 // would be the point.
 
-// TODO: Rewrite the disassembler and change program to something like a function.
-// Constants can't be modified at runtime.
-
-// TODO: Think is whileIsAt end usefull or could advance synchronize on out of range.
-
 // TODO Make a test for accessing a variable with the same name from outer in initializer.
 
 #include <filesystem>
+
+Value print2(Value* args, int argCount)
+{
+	if (argCount != 0)
+	{
+		std::cout << args[0] << '\n';
+	}
+
+	return Value::null();
+}
+
+Value add(Value* args, int argCount)
+{
+	if ((argCount < 2) || (args[0].type != ValueType::Int) || (args[1].type != ValueType::Int))
+	{
+		return Value::integer(5);
+	}
+	return Value(args[0].as.intNumber + args[1].as.intNumber);
+}
 
 int main()
 {
@@ -88,8 +102,9 @@ int main()
 
 	if (compilerResult.hadError == false)
 	{
-		Vm vm;
-		vm.execute(compilerResult.program, allocator, errorPrinter);
+		auto vm = std::make_unique<Vm>(allocator);
+		vm->createForeignFunction("print2", print2);
+		vm->createForeignFunction("add", add);
+		auto result = vm->execute(compilerResult.program, errorPrinter);
 	}
-	
 }

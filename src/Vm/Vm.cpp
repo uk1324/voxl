@@ -1,3 +1,6 @@
+#include "Vm.hpp"
+#include "Vm.hpp"
+#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -10,24 +13,27 @@
 
 using namespace Lang;
 
-Vm::Vm()
-	: m_allocator(nullptr)
+Vm::Vm(Allocator& allocator)
+	: m_allocator(&allocator)
 	, m_errorPrinter(nullptr)
 	, m_stackTop(nullptr)
 	, m_callStackSize(0)
 {}
 
-Vm::Result Vm::execute(ObjFunction* program, Allocator& allocator, ErrorPrinter& errorPrinter)
+Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 {
-	m_allocator = &allocator;
 	m_errorPrinter = &errorPrinter;
 	m_stackTop = m_stack.data();
 	m_callStack[0] = CallFrame{ program->byteCode.code.data(), m_stack.data(), program };
 	m_callStackSize = 1;
-	m_globals.clear();
 	pushStack(Value(reinterpret_cast<Obj*>(program)));
 
 	return run();
+}
+
+void Vm::reset()
+{
+	m_globals.clear();
 }
 
 Vm::Result Vm::run()
@@ -188,20 +194,34 @@ Vm::Result Vm::run()
 		{
 			auto argCount = readUint32();
 			auto calleValue = peekStack(argCount);
-			if ((calleValue.type != ValueType::Obj) || (calleValue.as.obj->type != ObjType::Function))
+			if ((calleValue.type != ValueType::Obj))
 			{
-				m_errorPrinter->outStream() << "cannot call object that isn't a function\n";
+				m_errorPrinter->outStream() << "cannot call an object that isn't a function\n";
 				return Result::RuntimeError;
 			}
-			auto calle = reinterpret_cast<ObjFunction*>(calleValue.as.obj);
 
-			if ((m_callStackSize + 1) == m_callStack.size())
+			if (calleValue.as.obj->type == ObjType::Function)
 			{
-				return fatalError("call stack overflow");
+				auto calle = reinterpret_cast<ObjFunction*>(calleValue.as.obj);
+				if ((m_callStackSize + 1) == m_callStack.size())
+				{
+					return fatalError("call stack overflow");
+				}
+				m_callStack[m_callStackSize] = CallFrame{ calle->byteCode.code.data(), m_stackTop - 1 - argCount, calle };
+				m_callStackSize++;
 			}
-
-			m_callStack[m_callStackSize] = CallFrame{ calle->byteCode.code.data(), m_stackTop - 1 - argCount, calle };
-			m_callStackSize++;
+			else if (calleValue.as.obj->type == ObjType::ForeignFunction)
+			{
+				auto calle = reinterpret_cast<ObjForeignFunction*>(calleValue.as.obj);
+				auto result = calle->function(m_stackTop - argCount, argCount);
+				m_stackTop -= 1 + static_cast<size_t>(argCount); // Pop the function and arguments.
+				pushStack(result);
+			}
+			else
+			{
+				m_errorPrinter->outStream() << "cannot call an object that isn't a function\n";
+				return Result::RuntimeError;
+			}
 
 			break;
 		}
@@ -279,6 +299,13 @@ Vm::Result Vm::run()
 	}
 }
 
+void Vm::createForeignFunction(std::string_view name, ForeignFunction function)
+{
+	auto nameObj = m_allocator->allocateString(name);
+	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function);
+	m_globals[nameObj] = Value(reinterpret_cast<Obj*>(functionObj));
+}
+
 uint8_t Vm::readUint8()
 {
 	uint8_t value = *m_callStack[m_callStackSize - 1].instructionPointer;
@@ -328,7 +355,6 @@ Vm::Result Vm::fatalError(const char* format, ...)
 	}
 	return Result::RuntimeError;
 }
-
 
 Vm::CallFrame& Vm::callStackTop()
 {

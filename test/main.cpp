@@ -59,11 +59,11 @@ int main()
 	Scanner scanner;
 	Parser parser;
 	Compiler compiler;
-	auto vm = std::make_unique<Vm>();
+	Allocator allocator;
+	auto vm = std::make_unique<Vm>(allocator);
 
 	std::stringstream output;
 	std::cout.set_rdbuf(output.rdbuf());
-
 
 	for (const auto& [name, expectedResult] : tests)
 	{
@@ -86,7 +86,6 @@ int main()
 			continue;
 		}
 
-		Allocator allocator;
 		auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
 		if (compilerResult.hadError)
 		{
@@ -95,7 +94,8 @@ int main()
 		}
 
 		output.str(std::string());
-		auto vmResult = vm->execute(compilerResult.program, allocator, errorPrinter);
+		vm->reset();
+		auto vmResult = vm->execute(compilerResult.program, errorPrinter);
 		if (vmResult == Vm::Result::RuntimeError)
 		{
 			testFailed(name);

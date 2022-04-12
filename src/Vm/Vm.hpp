@@ -39,10 +39,13 @@ private:
 
 
 public:
-	Vm();
+	Vm(Allocator& allocator);
 
 public:
-	Result execute(ObjFunction* program, Allocator& allocator, ErrorPrinter& errorPrinter);
+	Result execute(ObjFunction* program, ErrorPrinter& errorPrinter);
+	void reset();
+
+	void createForeignFunction(std::string_view name, ForeignFunction function);
 
 private:
 	Result run();

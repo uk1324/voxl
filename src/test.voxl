@@ -1,4 +1,8 @@
-fn add(a, b) {
-	ret a + b;
+let x = 5;
+loop {
+	if x == 10 {
+		break;
+	}
+	print2(x);
+	x = add(x, 1);
 }
-print(add(1, add(2, 3)));

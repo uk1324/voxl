@@ -21,6 +21,7 @@ public:
 
 	ObjString* allocateString(std::string_view chars);
 	ObjFunction* allocateFunction(ObjString* name, int argumentCount);
+	ObjForeignFunction* allocateForeignFunction(ObjString* name, ForeignFunction function);
 
 private:
 

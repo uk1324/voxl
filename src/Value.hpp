@@ -5,11 +5,13 @@
 
 namespace Lang
 {
+class Value;
 
 enum class ObjType
 {
 	String,
 	Function,
+	ForeignFunction
 };
 
 struct Obj
@@ -30,6 +32,15 @@ struct ObjFunction
 	ObjString* name;
 	int argumentCount;
 	ByteCode byteCode;
+};
+
+using ForeignFunction = Value (*)(Value*/*arguments*/, int/*argumentCount*/);
+
+struct ObjForeignFunction
+{
+	Obj obj;
+	ObjString* name;
+	ForeignFunction function;
 };
 
 enum class ValueType
@@ -54,6 +65,7 @@ public:
 		
 public:
 	static Value null();
+	static Value integer(Int value);
 
 public:
 	ValueType type;

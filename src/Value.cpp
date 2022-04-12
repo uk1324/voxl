@@ -28,6 +28,11 @@ Value Value::null()
 	return value;
 }
 
+Value Value::integer(Int value)
+{
+	return Value(value);
+}
+
 std::ostream& operator<<(std::ostream& os, Value value)
 {
 	using namespace Lang;

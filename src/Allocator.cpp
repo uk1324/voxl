@@ -38,3 +38,13 @@ ObjFunction* Allocator::allocateFunction(ObjString* name, int argumentCount)
 	new (&obj->byteCode) ByteCode();
 	return obj;
 }
+
+ObjForeignFunction* Allocator::allocateForeignFunction(ObjString* name, ForeignFunction function)
+{
+	auto obj = reinterpret_cast<ObjForeignFunction*>(allocate(sizeof(ObjForeignFunction)));
+	obj->obj.type = ObjType::ForeignFunction;
+	obj->name = name;
+	obj->function = function;
+	return obj;
+}
+
