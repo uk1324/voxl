@@ -13,6 +13,8 @@ class GcNode
 
 };
 
+// Maybe store a public bool that would make it so constants are allocated in a different place making them not needed to be compressed.
+// Could just store the constant pool inside the allocator.
 class Allocator
 {
 public:

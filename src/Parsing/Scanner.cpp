@@ -136,15 +136,25 @@ Token Scanner::string()
 	{
 		if (match('"'))
 		{
-			return makeToken(TokenType::String);
+			// Because makeToken returns a Token it calls the copy or move constructor. 
+			// When the copy constructor is called with a value of TokenType::StringConstant
+			// it tries to create a copy of the other string but that string is invalid because it hasn't been intialized by 
+			// makeToken.
+			auto token = makeToken(TokenType::Error);
+			token.type = TokenType::StringConstant;
+			new (&token.string.text) std::string(m_sourceInfo->source.substr(token.start + 1, token.end - (token.start + 1) - 1));
+			token.string.length = token.string.text.length();
+			return token;
 		}
 		
 		if (match('\n'))
 		{
 			advanceLine();
 		}
-
-		advance();
+		else
+		{
+			advance();
+		}
 	}
 	const auto token = makeToken(TokenType::Error);
 	errorAt(token, "unterminated string");

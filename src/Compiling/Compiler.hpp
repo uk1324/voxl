@@ -74,6 +74,7 @@ private:
 	// TODO: perform constant folding
 	Status intConstantExpr(const IntConstantExpr& expr);
 	Status boolConstantExpr(const BoolConstantExpr& expr);
+	Status stringConstantExpr(const StringConstantExpr& expr);
 	Status binaryExpr(const BinaryExpr& expr);
 	Status unaryExpr(const UnaryExpr& expr);
 	Status identifierExpr(const IdentifierExpr& expr);
@@ -104,6 +105,8 @@ private:
 private:
 	Allocator* m_allocator;
 
+	// If I needed to reduce allocation I could flatten these data structures. 
+	// For example converting m_loops into multiple arrays. Each entry would store a depth.
 	std::vector<Scope> m_scopes;
 	std::vector<Loop> m_loops;
 

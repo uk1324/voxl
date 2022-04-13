@@ -50,7 +50,7 @@ enum class TokenType
 
 	// Other
 	Identifier,
-	String,
+	StringConstant,
 
 	// Special
 	Error,
@@ -61,9 +61,9 @@ struct Token
 {
 public:
 	Token(TokenType type, size_t start, size_t end);
-
-	//bool operator== (const Token& token) const;
-	//bool operator!= (const Token& token) const;
+	Token(const Token& other);
+	Token(Token&& other) noexcept;
+	~Token();
 
 public:
 	TokenType type;
@@ -76,6 +76,12 @@ public:
 		std::string_view identifier;
 		Int intValue;
 		Float floatValue;
+		struct
+		{
+			std::string text;
+			// Number of UTF-8 chars
+			size_t length;
+		} string;
 	};
 };
 

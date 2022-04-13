@@ -1,3 +1,4 @@
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -124,7 +125,7 @@ Compiler::Status Compiler::letStmt(const LetStmt& stmt)
 Compiler::Status Compiler::blockStmt(const BlockStmt& stmt)
 {
 	beginScope();
-	compile(stmt.stmts);
+	TRY(compile(stmt.stmts));
 	endScope();
 
 	return Status::Ok;
@@ -213,7 +214,7 @@ Compiler::Status Compiler::loopStmt(const LoopStmt& stmt)
 {
 	auto beginning = currentLocation();
 	m_loops.push_back(Loop{ beginning });
-	size_t jumpToEnd = -1; // Won't be used if there is no condition.
+	size_t jumpToEnd = 0; // Won't be used if there is no condition.
 	if (stmt.condition.has_value())
 	{
 		TRY(compile(*stmt.condition));
@@ -262,6 +263,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 		CASE_EXPR_TYPE(IntConstant, intConstantExpr)
 		CASE_EXPR_TYPE(BoolConstant, boolConstantExpr)
 		CASE_EXPR_TYPE(Binary, binaryExpr)
+		CASE_EXPR_TYPE(StringConstant, stringConstantExpr)
 		CASE_EXPR_TYPE(Unary, unaryExpr)
 		CASE_EXPR_TYPE(Identifier, identifierExpr)
 		CASE_EXPR_TYPE(Call, callExpr)
@@ -290,6 +292,13 @@ Compiler::Status Compiler::boolConstantExpr(const BoolConstantExpr& expr)
 	{
 		emitOp(Op::LoadFalse);
 	}
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::stringConstantExpr(const StringConstantExpr& expr)
+{
+	auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(expr.text))));
+	loadConstant(constant);
 	return Status::Ok;
 }
 

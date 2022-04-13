@@ -18,6 +18,7 @@ enum class ExprType
 	IntConstant,
 	FloatConstant,
 	BoolConstant,
+	StringConstant,
 	Binary,
 	Unary,
 	Identifier,
@@ -63,6 +64,15 @@ public:
 	BoolConstantExpr(bool value, size_t start, size_t end);
 
 	bool value;
+};
+
+class StringConstantExpr final : public Expr
+{
+public:
+	StringConstantExpr(std::string_view text, size_t length, size_t start, size_t end);
+
+	std::string_view text;
+	size_t length;
 };
 
 class BinaryExpr final : public Expr

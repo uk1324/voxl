@@ -28,6 +28,12 @@ BoolConstantExpr::BoolConstantExpr(bool value, size_t start, size_t end)
 	, value(value)
 {}
 
+StringConstantExpr::StringConstantExpr(std::string_view text, size_t length, size_t start, size_t end)
+	: Expr(start, end, ExprType::StringConstant)
+	, text(text)
+	, length(length)
+{}
+
 BinaryExpr::BinaryExpr(std::unique_ptr<Expr> lhs, TokenType op, std::unique_ptr<Expr> rhs, size_t start, size_t end)
 	: Expr(start, end, ExprType::Binary)
 	, lhs(std::move(lhs))

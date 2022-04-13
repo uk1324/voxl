@@ -36,7 +36,7 @@ static size_t opConstant(std::string_view name, const ByteCode& byteCode, size_t
 		index |= byteCode.code[offset + 1 + i];
 	}
 	// Justify left later
-	std::cout << " c[" << index << "] = " << byteCode.constants[index];
+	std::cout << " c[" << index << "] -> " << byteCode.constants[index];
 	return 5;
 }
 

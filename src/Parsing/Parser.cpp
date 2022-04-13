@@ -321,6 +321,10 @@ std::unique_ptr<Expr> Parser::primary()
 	{
 		return std::make_unique<IdentifierExpr>(peekPrevious().identifier, peekPrevious().start, peekPrevious().end);
 	}
+	if (match(TokenType::StringConstant))
+	{
+		return std::make_unique<StringConstantExpr>(peekPrevious().string.text, peekPrevious().string.length, peekPrevious().start, peekPrevious().end);
+	}
 	if (match(TokenType::True))
 	{
 		return std::make_unique<BoolConstantExpr>(true, peekPrevious().start, peekPrevious().end);
