@@ -1,4 +1,4 @@
-#include <iostream>
+﻿#include <iostream>
 #include <fstream>
 #include <sstream>
 #include <Parsing/Scanner.hpp>
@@ -42,6 +42,7 @@ std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "variable_scoping", "0010" },
 	{ "numbers_loop", "0123456789" },
 	{ "ret", "6" },
+	{ "utf-8_strings", u8"Hello 🌎 world" },
 };
 
 void testFailed(std::string_view name)

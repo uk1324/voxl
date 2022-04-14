@@ -23,6 +23,8 @@ struct ObjString
 {
 	Obj obj;
 	const char* chars;
+	size_t size;
+	// UTF-8 char count.
 	size_t length;
 };
 
@@ -34,7 +36,7 @@ struct ObjFunction
 	ByteCode byteCode;
 };
 
-using ForeignFunction = Value (*)(Value*/*arguments*/, int/*argumentCount*/);
+using ForeignFunction = Value (*)(Value* /*arguments*/, int /*argumentCount*/);
 
 struct ObjForeignFunction
 {

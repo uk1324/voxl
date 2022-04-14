@@ -18,6 +18,7 @@ namespace Lang
 		// Doesn't print the lines that the error occured on.
 		void printErrorStart(size_t line, size_t charInLine, const char* format, va_list args);
 		void printLine(std::string_view line);
+		void printRedTildes(size_t count);
 
 	public:
 		static std::string_view trimLine(std::string_view line);

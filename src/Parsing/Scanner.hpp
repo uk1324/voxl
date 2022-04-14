@@ -33,21 +33,22 @@ private:
 
 	void skipWhitespace();
 
-	//Token errorToken(const char* message);
-	void errorAt(const Token& token, const char* format, ...);
+	[[nodiscard]] Token errorToken(const char* format, ...);
+	[[nodiscard]] Token errorTokenAt(size_t start, size_t end, const char* format, ...);
+	void errorAt(size_t start, size_t end, const char* format, va_list args);
 	char peek();
 	char peekPrevious();
 	bool isAtEnd();
 	void advance();
 	void advanceLine();
+	bool match(char c);
 
 	// Making my own functions because the c functions from ctype.h use int as input the results are also based on the current C locale.
 	// Negative values might trigger asserts. Negative values happen because of conversion from the default on most compilers
 	// signed char. UTF-8 text could trigger the asserts.
-	bool isDigit(char c);
-	bool isAlpha(char c);
-	bool isAlnum(char c);
-	bool match(char c);
+	static bool isDigit(char c);
+	static bool isAlpha(char c);
+	static bool isAlnum(char c);
 
 private:
 	std::vector<Token> m_tokens;

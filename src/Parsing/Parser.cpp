@@ -335,7 +335,7 @@ std::unique_ptr<Expr> Parser::primary()
 	}
 
 	// TODO: Check if this error location is good or should it maybe be token.
-	throw errorAt(peek(), "expected primary expression");
+	throw errorAt(peek(), "expected expression");
 }
 
 const Token& Parser::peek() const

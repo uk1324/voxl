@@ -54,7 +54,17 @@ void ErrorPrinter::printLine(std::string_view line)
 {
 	m_out << line << '\n';
 	m_out << TERM_COL_RED;
-	for (size_t i = 0; i < line.size(); i++)
+	for (size_t _ = 0; _ < line.size(); _++)
+	{
+		m_out << '~';
+	}
+	m_out << TERM_COL_RESET "\n";
+}
+
+void ErrorPrinter::printRedTildes(size_t count)
+{
+	m_out << TERM_COL_RED;
+	for (size_t _ = 0; _ < count; _++)
 	{
 		m_out << '~';
 	}
@@ -82,7 +92,7 @@ std::string_view ErrorPrinter::trimLine(std::string_view line)
 	return line;
 }
 
-std::ostream& Lang::ErrorPrinter::outStream()
+std::ostream& ErrorPrinter::outStream()
 {
 	return m_out;
 }

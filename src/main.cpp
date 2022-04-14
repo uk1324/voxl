@@ -1,4 +1,4 @@
-#include <Parsing/Scanner.hpp>
+﻿#include <Parsing/Scanner.hpp>
 #include <Parsing/Parser.hpp>
 #include <ErrorPrinter.hpp>
 #include <Compiling/Compiler.hpp>

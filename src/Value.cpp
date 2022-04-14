@@ -61,14 +61,22 @@ std::ostream& operator<<(std::ostream& os, Value value)
 				case ObjType::String:
 				{
 					const auto string = reinterpret_cast<ObjString*>(value.as.obj);
-					os << std::string_view(string->chars, string->length);
+					for (size_t i = 0; i < string->size; i++)
+					{
+						os << string->chars[i];
+					}
 					break;
 				}
 
 				case ObjType::Function:
 				{
 					const auto function = reinterpret_cast<ObjFunction*>(value.as.obj);
-					os << '<' << std::string_view(function->name->chars, function->name->length) << '>';
+					os << '<';
+					for (size_t i = 0; i < function->name->size; i++)
+					{
+						os << function->name->chars[i];
+					}
+					os << '>';
 					break;
 				}
 

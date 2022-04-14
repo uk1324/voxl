@@ -1,3 +1,5 @@
+#include "Scanner.hpp"
+#include "Scanner.hpp"
 #include <Parsing/Scanner.hpp>
 
 #include <unordered_map>
@@ -72,9 +74,7 @@ Token Scanner::token()
 			if (isAlpha(c))
 				return keywordOrIdentifier();
 
-			const auto token = makeToken(TokenType::Error);
-			errorAt(token, "illegal character");
-			return token;
+			return errorToken("illegal character");
 	}
 }
 
@@ -132,6 +132,18 @@ Token Scanner::keywordOrIdentifier()
 
 Token Scanner::string()
 {
+	std::string result;
+	size_t length = 0;
+
+	// Could try to synchronize to the next valid UTF-8 character.
+	auto synrchronize = [this]
+	{
+		// This doesn't handle unterminated strings.
+		while ((isAtEnd() == false) && (peek() != '"'))
+			advance();
+		advance();
+	};
+
 	while (isAtEnd() == false)
 	{
 		if (match('"'))
@@ -142,23 +154,99 @@ Token Scanner::string()
 			// makeToken.
 			auto token = makeToken(TokenType::Error);
 			token.type = TokenType::StringConstant;
-			new (&token.string.text) std::string(m_sourceInfo->source.substr(token.start + 1, token.end - (token.start + 1) - 1));
-			token.string.length = token.string.text.length();
+			new (&token.string.text) std::string(std::move(result));
 			return token;
 		}
 		
-		if (match('\n'))
+		if (match('\\'))
 		{
-			advanceLine();
+			// Probably shouldn't allow escaping invalid UTF-8 characters beacuse then calculating length wouldn't work.
+			if (match('\\'))
+			{
+				result += '\\';
+			}
+			else if (match('\"'))
+			{
+				result += '"';
+			}
+			else if (match('n'))
+			{
+				result += '\n';
+			}
+			else if (match('t'))
+			{
+				result += '\t';
+			}
+			length++;
 		}
 		else
 		{
+			char c = peek();
 			advance();
+
+			if (c == '\n')
+			{
+				advanceLine();
+			}
+
+			result += c;
+
+			size_t octets;
+			uint32_t codePoint;
+			if ((c & 0b1111'1000) == 0b1111'0000)
+			{
+				codePoint = c & 0b0000'0111;
+				octets = 3;
+			}
+			else if ((c & 0b1111'0000) == 0b1110'0000)
+			{
+				codePoint = c & 0b0000'1111;
+				octets = 2;
+			}
+			else if ((c & 0b1110'0000) == 0b1100'0000)
+			{
+				codePoint = c & 0b0001'1111;
+				octets = 1;
+			}
+			else if ((c & 0b1000'0000) == 0b0000'0000)
+			{
+				codePoint = c;
+				octets = 0;
+			}
+			else
+			{
+				const auto charStart = m_currentCharIndex - 1;
+				synrchronize();
+				return errorTokenAt(charStart, charStart + 1, "illegal character");
+			}
+
+			for (size_t i = 0; i < octets; i++)
+			{
+				if ((peek() & 0b1100'0000) != 0b1000'0000)
+				{
+					size_t charStart = m_currentCharIndex - i - 1;
+					synrchronize();
+					return errorTokenAt(charStart, charStart + 1 + i, "illegal character");
+				}
+				codePoint <<= 6;
+				codePoint |= peek() & 0b0011'1111;
+				result += peek();
+				advance();
+			}
+
+			if ((codePoint >= 0xD800) && (codePoint <= 0xDFFF))
+			{
+				size_t charStart = m_currentCharIndex - octets - 1;
+				synrchronize();
+				return errorTokenAt(charStart, charStart + 1 + octets, "illegal character");
+			}
+
+			length++;
 		}
 	}
-	const auto token = makeToken(TokenType::Error);
-	errorAt(token, "unterminated string");
-	return token;
+
+	const auto startingQuoteLocation = m_tokenStartIndex;
+	return errorTokenAt(startingQuoteLocation, startingQuoteLocation + 1, "unterminated string");
 }
 
 Token Scanner::makeToken(TokenType type)
@@ -195,41 +283,53 @@ void Scanner::skipWhitespace()
 	}
 }
 
-void Scanner::errorAt(const Token& token, const char* format, ...)
+Token Scanner::errorToken(const char* format, ...)
+{
+	const auto token = makeToken(TokenType::Error);
+	va_list args;
+	va_start(args, format);
+	errorAt(token.start, token.end, format, args);
+	va_end(args);
+	return token;
+}
+
+Token Scanner::errorTokenAt(size_t start, size_t end, const char* format, ...)
+{
+	const auto token = makeToken(TokenType::Error);
+	va_list args;
+	va_start(args, format);
+	errorAt(start, end, format, args);
+	va_end(args);
+	return token;
+}
+
+void Scanner::errorAt(size_t start, size_t end, const char* format, va_list args)
 {
 	m_hadError = true;
 
-	va_list args;
-	va_start(args, format);
-	const auto tokenStartLine = m_sourceInfo->getLine(token.start);
-	m_errorPrinter->printErrorStart(tokenStartLine, m_currentCharIndex - m_sourceInfo->lineStartOffsets.back(), format, args);
-	va_end(args);
+	const auto startLine = m_sourceInfo->getLine(start);
+	m_errorPrinter->printErrorStart(startLine, m_currentCharIndex - m_sourceInfo->lineStartOffsets.back(), format, args);
 
-	// Because the sourceInfo isn't completed yet this needs special handling.
-	for (auto currentLine = tokenStartLine; currentLine + 1 < m_sourceInfo->lineStartOffsets.size(); currentLine++)
+	const auto endLine = m_sourceInfo->getLine(end);
+	auto endLineEnd = m_sourceInfo->lineStartOffsets[endLine];
+	for (; (endLineEnd < m_sourceInfo->source.size()) && (m_sourceInfo->source[endLineEnd] != '\n'); endLineEnd++)
+		;
+
+	const auto startLineStart = m_sourceInfo->lineStartOffsets[startLine];
+	auto current = startLineStart;
+	while (current < endLineEnd)
 	{
-		auto lineText = m_sourceInfo->source.substr(m_sourceInfo->lineStartOffsets[currentLine], m_sourceInfo->lineStartOffsets[currentLine + 1] - m_sourceInfo->lineStartOffsets[currentLine]);
-		lineText = ErrorPrinter::trimLine(lineText);
-
-		if (lineText.length() == 0)
+		while ((current < m_sourceInfo->source.size()) && (m_sourceInfo->source[current] != '\n'))
 		{
-			continue;
+			m_errorPrinter->outStream() << m_sourceInfo->source[current];
+			current++;
 		}
-		m_errorPrinter->printLine(lineText);
-	}
-
-	auto currentLineStart = m_sourceInfo->lineStartOffsets.back();
-	auto currentLineEnd = m_currentCharIndex;
-	while ((currentLineEnd < m_sourceInfo->source.length()) && (m_sourceInfo->source[currentLineEnd + 1] != '\n'))
-	{
-		currentLineEnd++;
-	}
-	
-	auto lastLineText = m_sourceInfo->source.substr(currentLineStart, currentLineEnd - currentLineStart);
-	lastLineText = ErrorPrinter::trimLine(lastLineText);
-	if (lastLineText.length() != 0)
-	{
-		m_errorPrinter->printLine(lastLineText);
+		m_errorPrinter->outStream() << '\n';
+		for (size_t i = 0; i < (start - startLineStart); i++)
+		{
+			m_errorPrinter->outStream() << ' ';
+		}
+		m_errorPrinter->printRedTildes(end - start);
 	}
 }
 
@@ -248,7 +348,6 @@ bool Scanner::isAtEnd()
 	return m_currentCharIndex >= m_sourceInfo->source.size();
 }
 
-// TODO: Support UTF-8
 void Scanner::advance()
 {
 	if (isAtEnd() == false)
@@ -258,6 +357,16 @@ void Scanner::advance()
 void Scanner::advanceLine()
 {
 	m_sourceInfo->lineStartOffsets.push_back(m_currentCharIndex);
+}
+
+bool Scanner::match(char c)
+{
+	if (peek() == c)
+	{
+		advance();
+		return true;
+	}
+	return false;
 }
 
 bool Scanner::isDigit(char c)
@@ -273,14 +382,4 @@ bool Scanner::isAlpha(char c)
 bool Scanner::isAlnum(char c)
 {
 	return isAlpha(c) || isDigit(c);
-}
-
-bool Scanner::match(char c)
-{
-	if (peek() == c)
-	{
-		advance();
-		return true;
-	}
-	return false;
 }

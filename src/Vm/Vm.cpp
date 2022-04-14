@@ -1,6 +1,3 @@
-#include "Vm.hpp"
-#include "Vm.hpp"
-#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -374,10 +371,10 @@ uint32_t Vm::readUint32()
 
 size_t Vm::ObjStringHasher::operator()(const ObjString* string) const
 {
-	return std::hash<std::string_view>()(std::string_view(string->chars, string->length));
+	return std::hash<std::string_view>()(std::string_view(string->chars, string->size));
 }
 
 size_t Vm::ObjStringComparator::operator()(const ObjString* a, const ObjString* b) const
 {
-	return (a->length == b->length) && (memcmp(a->chars, b->chars, a->length) == 0);
+	return (a->size == b->size) && (memcmp(a->chars, b->chars, a->size) == 0);
 }

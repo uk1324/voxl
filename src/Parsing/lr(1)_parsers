@@ -1,7 +1,0 @@
-LR stands for left to right reverse rightmost deriviation.
-1 means one symbol of lookahead.
-Even though LR(k) where k > 1 parsers can parse more grammars than LR(1) parsers. They can only parse the same set of languages.
-
-LR parsers are based on two main actions shift and reduce.
-Shifting moves to the next symbol and changes the current state.
-Reducing pops items of the stack and pushes a new nonterminal and moves to a new state.
