@@ -1,6 +1,7 @@
 #include <Vm/Vm.hpp>
 #include <Asserts.hpp>
 #include <iostream>
+#include <sstream>
 
 //#define DEBUG_PRINT_EXECUTION_TRACE
 #ifdef DEBUG_PRINT_EXECUTION_TRACE
@@ -56,18 +57,31 @@ Vm::Result Vm::run()
 		{
 		case Op::Add:
 		{
-			Value a = peekStack(1);
-			Value b = peekStack(0);
-			if (a.type == ValueType::Int && b.type == ValueType::Int)
+			Value lhs = peekStack(1);
+			Value rhs = peekStack(0);
+			if (lhs.type == ValueType::Int && rhs.type == ValueType::Int)
 			{
 				popStack();
 				popStack();
-				pushStack(Value(a.as.intNumber + b.as.intNumber));
+				pushStack(Value(lhs.as.intNumber + rhs.as.intNumber));
 			}
 			else
 			{
 				return Result::RuntimeError;
 			}
+			break;
+		}
+
+		case Op::Concat:
+		{
+			Value lhs = peekStack(1);
+			Value rhs = peekStack(0);
+			std::stringstream result;
+			// Could optmize this by not recalculating the length using Utf8::strlen every time.
+			// Could also create an stream for ObjString* objects to avoid pointless allocatin in std::stringstream.
+			result << lhs << rhs;
+			ObjString* string = m_allocator->allocateString(result.str());
+			pushStack(Value(reinterpret_cast<Obj*>(string)));
 			break;
 		}
 

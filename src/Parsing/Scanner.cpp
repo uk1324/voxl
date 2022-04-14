@@ -47,7 +47,17 @@ Token Scanner::token()
 
 	switch (c)
 	{
-		case '+': return makeToken(TokenType::Plus);
+		case '+':
+		{
+			if (match('+'))
+			{
+				return makeToken(TokenType::PlusPlus);
+			}
+			else
+			{
+				return makeToken(TokenType::Plus);
+			}
+		}
 		case '&': return match('&')
 			? makeToken(TokenType::AndAnd)
 			: makeToken(TokenType::And);

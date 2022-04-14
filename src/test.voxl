@@ -1,1 +1,10 @@
-print("😀abc😀");
+let x = "";
+let i = 0;
+loop {
+	if i == 10 {
+		break;
+	}
+	x = x ++ i;
+	i = i + 1;
+}
+print(x);

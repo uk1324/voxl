@@ -9,6 +9,7 @@ namespace Lang
 	enum class Op : uint8_t
 	{
 		Add, // [lhs, rhs]
+		Concat, // [lhs, rhs]
 		LoadConstant,
 		LoadLocal,
 		SetLocal,

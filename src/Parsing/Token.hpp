@@ -22,6 +22,7 @@ enum class TokenType
 	AndAnd,
 	Or,
 	OrOr,
+	PlusPlus,
 
 	// Symbols
 	Semicolon,

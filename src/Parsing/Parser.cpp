@@ -259,18 +259,7 @@ std::unique_ptr<Expr> Parser::equality()
 
 std::unique_ptr<Expr> Parser::factor()
 {
-	size_t start = peek().start;
-	auto expr = unary();
-
-	while (match(TokenType::Plus) && (isAtEnd() == false))
-	{
-		TokenType op = peekPrevious().type;
-		auto rhs = unary();
-		size_t end = peekPrevious().end;
-		expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(rhs), start, end);
-	}
-
-	return expr;
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::Plus) || match(TokenType::PlusPlus), unary)
 }
 
 std::unique_ptr<Expr> Parser::unary()

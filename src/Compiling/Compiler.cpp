@@ -433,6 +433,7 @@ Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
 	switch (expr.op)
 	{
 		case TokenType::Plus: emitOp(Op::Add); break;
+		case TokenType::PlusPlus: emitOp(Op::Concat); break;
 		case TokenType::EqualsEquals: emitOp(Op::Equals); break;
 		default:
 			ASSERT_NOT_REACHED();

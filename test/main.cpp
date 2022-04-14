@@ -43,6 +43,7 @@ std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "numbers_loop", "0123456789" },
 	{ "ret", "6" },
 	{ "utf-8_strings", u8"Hello 🌎 world" },
+	{ "concatenation", "abctrue2false" },
 };
 
 void testFailed(std::string_view name)
@@ -52,7 +53,7 @@ void testFailed(std::string_view name)
 
 void testFailed(std::string_view name, std::string_view got, std::string_view expected)
 {
-	std::cerr << "[FAILED] " << name << " | expected \"" << expected << "\" got \"" << got << "\"";
+	std::cerr << "[FAILED] " << name << " | expected \"" << expected << "\" got \"" << got << "\"\n";
 }
 
 int main()
