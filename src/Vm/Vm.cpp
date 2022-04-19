@@ -1,3 +1,7 @@
+#include "Vm.hpp"
+#include "Vm.hpp"
+#include "Vm.hpp"
+#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -16,7 +20,12 @@ Vm::Vm(Allocator& allocator)
 	, m_errorPrinter(nullptr)
 	, m_stackTop(nullptr)
 	, m_callStackSize(0)
-{}
+{
+	m_allocator->registerRootMarkingFunction(this, markGlobals);
+	m_allocator->registerRootMarkingFunction(this, markStack);
+	m_allocator->registerUpdateFunction(this, updateStack);
+	m_allocator->registerUpdateFunction(this, updateGlobals);
+}
 
 Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 {
@@ -42,7 +51,15 @@ Vm::Result Vm::run()
 		std::cout << "[ ";
 		for (Value* value = m_stack.data(); value != m_stackTop; value++)
 		{
-			std::cout << *value << ' ';
+			if ((value->type == ValueType::Obj) && (value->as.obj->type == ObjType::String))
+			{
+				std::cout << '"' << *value << '"';
+			}
+			else
+			{
+				std::cout << *value;
+			}
+			std::cout << ' ';
 		}
 		std::cout << "]\n";
 		disassembleInstruction(
@@ -81,6 +98,8 @@ Vm::Result Vm::run()
 			// Could also create an stream for ObjString* objects to avoid pointless allocatin in std::stringstream.
 			result << lhs << rhs;
 			ObjString* string = m_allocator->allocateString(result.str());
+			popStack();
+			popStack();
 			pushStack(Value(reinterpret_cast<Obj*>(string)));
 			break;
 		}
@@ -103,7 +122,6 @@ Vm::Result Vm::run()
 		{
 			size_t stackOffset = (size_t)readUint32();
 			callStackTop().values[stackOffset + 1] = peekStack(0);
-			popStack();
 			break;
 		}
 
@@ -197,7 +215,10 @@ Vm::Result Vm::run()
 		{
 			auto& lhs = peekStack(1);
 			auto& rhs = peekStack(0);
-			pushStack(Value(lhs == rhs));
+			Value result(lhs == rhs);
+			popStack();
+			popStack();
+			pushStack(result);
 			break;
 		}
 
@@ -266,12 +287,18 @@ Vm::Result Vm::run()
 		}
 
 		case Op::Jump:
-			callStackTop().instructionPointer += readUint32();
+		{
+			size_t jump = readUint32();
+			callStackTop().instructionPointer += jump;
 			break;
+		}
 
 		case Op::JumpBack:
-			callStackTop().instructionPointer -= readUint32();
+		{
+			size_t jump = readUint32();
+			callStackTop().instructionPointer -= jump;
 			break;
+		}
 
 		case Op::JumpIfFalse:
 		{
@@ -285,6 +312,7 @@ Vm::Result Vm::run()
 			{
 				callStackTop().instructionPointer += jump;
 			}
+			popStack();
 			break;
 		}
 
@@ -300,6 +328,7 @@ Vm::Result Vm::run()
 			{
 				callStackTop().instructionPointer += jump;
 			}
+			popStack();
 			break;
 		}
 
@@ -341,6 +370,10 @@ void Vm::popStack()
 
 void Vm::pushStack(Value value)
 {
+	if (m_stackTop == m_stack.data() + m_stack.size())
+	{
+		ASSERT_NOT_REACHED();
+	}
 	*m_stackTop = value;
 	m_stackTop++;
 }
@@ -365,6 +398,51 @@ Vm::Result Vm::fatalError(const char* format, ...)
 		m_errorPrinter->outStream() << "line " << lineNumber << " in " << callFrame->function->name->chars << "()\n";
 	}
 	return Result::RuntimeError;
+}
+
+void Vm::markStack(void* data, Allocator& allocator)
+{
+	const auto vm = reinterpret_cast<Vm*>(data);
+	for (auto value = vm->m_stack.data(); value != vm->m_stackTop; value++)
+	{
+		allocator.addValue(*value);
+	}
+}
+
+void Vm::markGlobals(void* data, Allocator& allocator)
+{
+	const auto vm = reinterpret_cast<Vm*>(data);
+	for (auto& [key, value] : vm->m_globals)
+	{
+		allocator.addObj(reinterpret_cast<Obj*>(key));
+		allocator.addValue(value);
+	}
+}
+
+void Vm::updateStack(void* data)
+{
+	const auto vm = reinterpret_cast<Vm*>(data);
+	for (auto value = vm->m_stack.data(); value != vm->m_stackTop; value++)
+	{
+		Allocator::updateValue(*value);
+	}
+}
+
+void Vm::updateGlobals(void* data)
+{
+	auto vm = reinterpret_cast<Vm*>(data);
+	decltype (vm->m_globals) newGlobals;
+	for (auto& [key, value] : vm->m_globals)
+	{
+		Allocator::updateValue(value);
+		newGlobals[reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(key)))] = value;
+	}
+	vm->m_globals = std::move(newGlobals);
+
+	for (auto frame = vm->m_callStack.data(); frame != &vm->callStackTop() + 1; frame++)
+	{
+		frame->function = reinterpret_cast<ObjFunction*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(frame->function)));
+	}
 }
 
 Vm::CallFrame& Vm::callStackTop()

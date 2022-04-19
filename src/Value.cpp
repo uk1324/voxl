@@ -80,6 +80,18 @@ std::ostream& operator<<(std::ostream& os, Value value)
 					break;
 				}
 
+				case ObjType::ForeignFunction:
+				{
+					const auto function = reinterpret_cast<ObjForeignFunction*>(value.as.obj);
+					os << '<';
+					for (size_t i = 0; i < function->name->size; i++)
+					{
+						os << function->name->chars[i];
+					}
+					os << '>';
+					break;
+				}
+
 				default:
 					ASSERT_NOT_REACHED();
 			}

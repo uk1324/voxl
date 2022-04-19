@@ -1,10 +1,12 @@
-let x = "";
-let i = 0;
 loop {
-	if i == 10 {
-		break;
+	let x = "";
+	let i = 0;
+	loop {
+		if i == 10 {
+			break;
+		}
+		x = x ++ i;
+		i = i + 1;
 	}
-	x = x ++ i;
-	i = i + 1;
+	print2(x);
 }
-print(x);

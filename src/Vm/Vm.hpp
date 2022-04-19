@@ -22,6 +22,8 @@ public:
 	{
 		const uint8_t* instructionPointer;
 		Value* values;
+		// this is pointless the executing function is always at the bottom of the call stack
+		// thogh it does use one level of indirection less
 		ObjFunction* function;
 	};
 
@@ -65,6 +67,12 @@ private:
 	Result fatalError(const char* format, ...);
 
 private:
+	static void markStack(void* data, Allocator& allocator);
+	static void markGlobals(void* data, Allocator& allocator);
+	static void updateStack(void* data);
+	static void updateGlobals(void* data);
+
+public:
 	//// Storing a direct pointer should probably be faster than storing and index.
 	//const uint8_t* m_instructionPointer;
 	std::unordered_map<ObjString*, Value, ObjStringHasher, ObjStringComparator> m_globals;

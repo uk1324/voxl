@@ -36,7 +36,16 @@ static size_t opConstant(std::string_view name, const ByteCode& byteCode, size_t
 		index |= byteCode.code[offset + 1 + i];
 	}
 	// Justify left later
-	std::cout << " c[" << index << "] -> " << byteCode.constants[index];
+	std::cout << " c[" << index << "] -> ";
+	const auto& constant = byteCode.constants[index];
+	if ((constant.type == ValueType::Obj) && (constant.as.obj->type == ObjType::String))
+	{
+		std::cout << '"' << constant << '"';
+	}
+	else
+	{
+		std::cout << constant;
+	}
 	return 5;
 }
 
@@ -49,7 +58,8 @@ static size_t jump(std::string_view name, const ByteCode& byteCode, size_t offse
 		jumpSize <<= 8;
 		jumpSize |= byteCode.code[offset + 1 + i];
 	}
-	std::cout << ' ' << offset << " -> " << ((sign == 1) ? (offset + jumpSize) : (offset - jumpSize));
+	auto offsetAfterDecoding = offset + 5;
+	std::cout << ' ' << offset << " -> " << ((sign == 1) ? (offsetAfterDecoding + jumpSize) : (offsetAfterDecoding - jumpSize));
 	return 5;
 }
 
@@ -69,9 +79,11 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)
 	switch (static_cast<Op>(byteCode.code[offset]))
 	{
 		case Op::Add: return justOp("add");
+		case Op::Concat: return justOp("concat");
+		case Op::Equals: return justOp("equals");
 		case Op::LoadConstant: return opConstant("loadConstant", byteCode, offset);
 		case Op::LoadLocal: return opNumber("loadLocal", byteCode, offset);
-		case Op::SetLocal: return opNumber("loadLocal", byteCode, offset);
+		case Op::SetLocal: return opNumber("setLocal", byteCode, offset);
 		case Op::Call: return opNumber("call", byteCode, offset);
 		case Op::LoadGlobal: return justOp("loadGlobal");
 		case Op::SetGlobal: return justOp("setGlobal");

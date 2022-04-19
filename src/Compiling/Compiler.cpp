@@ -205,8 +205,6 @@ Compiler::Status Compiler::ifStmt(const IfStmt& stmt)
 		setJumpToHere(jumpToEndOfElse);
 	}
 
-	emitOp(Op::PopStack); // Pop the condition.
-
 	return Status::Ok;
 }
 
@@ -221,12 +219,15 @@ Compiler::Status Compiler::loopStmt(const LoopStmt& stmt)
 		jumpToEnd = emitJump(Op::JumpIfFalse);
 	}
 
+	beginScope();
 	TRY(compile(stmt.block));
+	endScope();
 
 	emitJump(Op::JumpBack, beginning);
 
 	if (stmt.condition.has_value())
 	{
+		ASSERT_NOT_REACHED();
 		setJumpToHere(jumpToEnd);
 	}
 
@@ -485,13 +486,13 @@ size_t Compiler::emitJump(Op op)
 void Compiler::emitJump(Op op, size_t location)
 {
 	emitOp(op);
-	auto jumpSize = static_cast<uint32_t>(currentLocation() - location + sizeof(uint32_t));
+	auto jumpSize = static_cast<uint32_t>((currentLocation() + sizeof(uint32_t)) - location);
 	emitUint32(jumpSize);
 }
 
 void Compiler::setJumpToHere(size_t placeToPatch)
 {
-	auto jumpSize = static_cast<uint32_t>(currentByteCode().code.size() - placeToPatch) - sizeof(uint32_t);
+	auto jumpSize = static_cast<uint32_t>(currentLocation() - (placeToPatch + sizeof(uint32_t))) ;
 
 	uint8_t* jumpLocation = &currentByteCode().code[placeToPatch];
 
@@ -521,6 +522,10 @@ void Compiler::beginScope()
 void Compiler::endScope()
 {
 	ASSERT(m_scopes.size() > 0);
+	for (size_t _ = 0; _ < m_scopes.back().localVariables.size(); _++)
+	{
+		emitOp(Op::PopStack);
+	}
 	m_scopes.pop_back();
 }
 
