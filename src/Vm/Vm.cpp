@@ -1,7 +1,3 @@
-#include "Vm.hpp"
-#include "Vm.hpp"
-#include "Vm.hpp"
-#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -166,7 +162,6 @@ Vm::Result Vm::run()
 				m_errorPrinter->outStream() << '\'' << name->chars << "' is not defined\n";
 				return Result::RuntimeError;
 			}
-			popStack();
 			popStack();
 			break;
 		}

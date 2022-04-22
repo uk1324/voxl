@@ -19,14 +19,14 @@ Allocator::Allocator()
 
 Allocator::~Allocator()
 {
-	std::cout << '\n';
+	/*std::cout << '\n';
 	auto node = m_head;
 	while (node != nullptr) 
 	{
 		Value v(reinterpret_cast<Obj*>(reinterpret_cast<char*>(node) + sizeof(Node)));
  		std::cout << v << '\n';
 		node = node->next;
-	}
+	}*/
 }
 
 void Allocator::registerRootMarkingFunction(void* data, RootMarkingFunction function)
@@ -70,6 +70,14 @@ void* Allocator::allocate(size_t size)
 	
 	m_nextAllocation = allocation + sizeof(Node) + size;
 	return allocation + sizeof(Node);
+}
+
+ObjAllocation* Allocator::allocateRawMemory(size_t size)
+{
+	auto data = reinterpret_cast<ObjAllocation*>(allocate(sizeof(ObjAllocation) + size));
+	data->obj.type = ObjType::Allocation;
+	data->size = size;
+	return data;
 }
 
 ObjString* Allocator::allocateString(std::string_view chars)

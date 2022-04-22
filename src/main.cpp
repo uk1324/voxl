@@ -67,8 +67,70 @@ Value add(Value* args, int argCount)
 	return Value(args[0].as.intNumber + args[1].as.intNumber);
 }
 
+#include <HashMap.hpp>
+
+struct ObjStringKeyTraits
+{
+	static bool compareKeys(const ObjString* a, const ObjString* b)
+	{
+		return (a->size == b->size) && (memcmp(a->chars, b->chars, a->size) == 0);
+	}
+
+	static size_t hashKey(const ObjString* key)
+	{
+		return std::hash<std::string_view>()(std::string_view(key->chars, key->size));
+	}
+
+	static void setKeyNull(ObjString*& key)
+	{
+		key = nullptr;
+	}
+
+	static void setKeyTombstone(ObjString*& key)
+	{
+		key = reinterpret_cast<ObjString*>(1);
+	}
+
+	static bool isKeyNull(const ObjString* key)
+	{
+		return key == nullptr;
+	}
+
+	static bool isKeyTombstone(const ObjString* key)
+	{
+		return key == reinterpret_cast<ObjString*>(1);
+	}
+};
+
 int main()
 {
+#define put(k, v) map.insert(a, a.allocateString(k), v);
+#define get(k) (map.get(a.allocateString(k)));
+#define del(k) (map.remove(a.allocateString(k)));
+
+	//Allocator a;
+
+	//HashMap<ObjString*, int, ObjStringKeyTraits> map;
+	//map.init(map, a);
+
+	//for (size_t i = 0; i < 10; i++)
+	//{
+	//	char c[] = { 'a' + i, '\0' };
+	//	put(c, i);
+	//}
+	//map.print();
+	//
+	//for (size_t i = 0; i < 10; i += 2)
+	//{
+	//	char c[] = { 'a' + i, '\0' };
+	//	del(c);
+	//}
+
+	//std::cout << '\n';
+	//map.print();
+
+	//return 0;
+
 	bool shouldCompile = true;
 
 	std::string filename = "../../../src/test.voxl";
@@ -104,7 +166,7 @@ int main()
 	{
 		auto vm = std::make_unique<Vm>(allocator);
 		vm->createForeignFunction("print2", print2);
-		vm->createForeignFunction("add", add);
+		//vm->createForeignFunction("add", add);
 		auto result = vm->execute(compilerResult.program, errorPrinter);
 	}
 }

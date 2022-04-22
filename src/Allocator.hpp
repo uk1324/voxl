@@ -39,6 +39,7 @@ public:
 
 	void* allocate(size_t size);
 
+	ObjAllocation* allocateRawMemory(size_t size);
 	ObjString* allocateString(std::string_view chars);
 	ObjString* allocateString(std::string_view chars, size_t length);
 	ObjFunction* allocateFunction(ObjString* name, int argumentCount);

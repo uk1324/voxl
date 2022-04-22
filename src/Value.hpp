@@ -11,7 +11,8 @@ enum class ObjType
 {
 	String,
 	Function,
-	ForeignFunction
+	ForeignFunction,
+	Allocation,
 };
 
 struct Obj
@@ -43,6 +44,13 @@ struct ObjForeignFunction
 	Obj obj;
 	ObjString* name;
 	ForeignFunction function;
+};
+
+struct ObjAllocation
+{
+	Obj obj;
+	size_t size;
+	void* data();
 };
 
 enum class ValueType

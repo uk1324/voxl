@@ -122,3 +122,8 @@ bool operator==(const Value& lhs, const Value& rhs)
 			return false;
 	}
 }
+
+void* ObjAllocation::data()
+{
+	return reinterpret_cast<char*>(this) + sizeof(ObjAllocation);
+}

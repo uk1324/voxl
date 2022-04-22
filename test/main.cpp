@@ -1,10 +1,10 @@
-﻿#include <iostream>
-#include <fstream>
-#include <sstream>
+﻿#include <../test/tests.hpp>
 #include <Parsing/Scanner.hpp>
 #include <Parsing/Parser.hpp>
 #include <Compiling/Compiler.hpp>
 #include <Vm/Vm.hpp>
+#include <fstream>
+#include <sstream>
 
 using namespace Lang;
 
@@ -58,6 +58,9 @@ void testFailed(std::string_view name, std::string_view got, std::string_view ex
 
 int main()
 {
+	hashMapTests();
+
+	std::cout << "Language tests\n";
 	Scanner scanner;
 	Parser parser;
 	Compiler compiler;

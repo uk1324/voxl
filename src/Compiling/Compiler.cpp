@@ -163,9 +163,9 @@ Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 	std::cout << "----" << stmt.name << '\n';
 	disassembleByteCode(function->byteCode);
 
+	endScope();
 	m_functionByteCodeStack.pop_back();
 
-	endScope();
 	return Status::Ok;
 }
 

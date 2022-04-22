@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(src)
 add_subdirectory(src)
 # Working directory can be set by clicking debug > debug and launch settings for <target> and settings "currentDir": "${projectDir}"
-add_executable(voxl-run "src/main.cpp")
+add_executable(voxl-run "src/main.cpp" "src/HashMap.hpp" )
 target_link_libraries(voxl-run voxl-lib)
 
 add_subdirectory(test)
