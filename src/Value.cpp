@@ -92,6 +92,10 @@ std::ostream& operator<<(std::ostream& os, Value value)
 					break;
 				}
 
+				case ObjType::Allocation:
+					os << "<memory*>";
+					break;
+
 				default:
 					ASSERT_NOT_REACHED();
 			}

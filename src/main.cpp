@@ -69,68 +69,26 @@ Value add(Value* args, int argCount)
 
 #include <HashMap.hpp>
 
-struct ObjStringKeyTraits
-{
-	static bool compareKeys(const ObjString* a, const ObjString* b)
-	{
-		return (a->size == b->size) && (memcmp(a->chars, b->chars, a->size) == 0);
-	}
+// TODO: Function shouldn't call end scope because it pops all the values off the stack. This is pointless
+// because the function return will pop them anyway.
+// Could optimize also be creating an instruction to pop n values of the stack.
 
-	static size_t hashKey(const ObjString* key)
-	{
-		return std::hash<std::string_view>()(std::string_view(key->chars, key->size));
-	}
+// TODO: Add function like asString to Obj.
 
-	static void setKeyNull(ObjString*& key)
-	{
-		key = nullptr;
-	}
+// TODO: Make static vector class
 
-	static void setKeyTombstone(ObjString*& key)
-	{
-		key = reinterpret_cast<ObjString*>(1);
-	}
+// How to synchronize this without semicolons
+// function(
+//		1 +,
+//		2
+// )
 
-	static bool isKeyNull(const ObjString* key)
-	{
-		return key == nullptr;
-	}
+// When storing marking function in the GC store them in a vector instead of a set because iteration is much more common
+// than removal
 
-	static bool isKeyTombstone(const ObjString* key)
-	{
-		return key == reinterpret_cast<ObjString*>(1);
-	}
-};
 
 int main()
 {
-#define put(k, v) map.insert(a, a.allocateString(k), v);
-#define get(k) (map.get(a.allocateString(k)));
-#define del(k) (map.remove(a.allocateString(k)));
-
-	//Allocator a;
-
-	//HashMap<ObjString*, int, ObjStringKeyTraits> map;
-	//map.init(map, a);
-
-	//for (size_t i = 0; i < 10; i++)
-	//{
-	//	char c[] = { 'a' + i, '\0' };
-	//	put(c, i);
-	//}
-	//map.print();
-	//
-	//for (size_t i = 0; i < 10; i += 2)
-	//{
-	//	char c[] = { 'a' + i, '\0' };
-	//	del(c);
-	//}
-
-	//std::cout << '\n';
-	//map.print();
-
-	//return 0;
-
 	bool shouldCompile = true;
 
 	std::string filename = "../../../src/test.voxl";

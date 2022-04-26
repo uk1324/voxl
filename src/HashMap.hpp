@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Allocator.hpp>
 #include <Asserts.hpp>
 #include <optional>
 
@@ -15,8 +14,12 @@ struct KeyTraits
 	static bool isKeyTombstone(const Key& key);
 }
 */
+
 namespace Lang
 {
+
+class Allocator;
+struct ObjAllocation;
 
 template<typename Key, typename Value, typename KeyTraits>
 class HashMap
@@ -35,39 +38,44 @@ public:
 	std::optional<Value*> get(const Key& key);
 	Bucket& findBucket(const Key& key);
 
+	static bool isBucketEmpty(const Bucket& bucket);
 	void print();
+	size_t capacity() const;
+	Bucket* data();
+	void clear();
 
 	static constexpr size_t INITIAL_SIZE = 8;
 	static constexpr float MAX_LOAD_FACTOR = 0.75f;
 
 private:
-	Bucket* data();
-	size_t capacity() const;
 	void setAllKeysToNull();
 
+public:
+	ObjAllocation* allocation;
 private:
 	size_t m_size;
-	ObjAllocation* m_data;
 };
 
 }
 
+#include <Allocator.hpp>
+
 template<typename Key, typename Value, typename KeyTraits>
 void Lang::HashMap<Key, Value, KeyTraits>::init(HashMap& map, Lang::Allocator& allocator)
 {
-	map.m_data = allocator.allocateRawMemory(sizeof(Bucket) * INITIAL_SIZE);
+	map.allocation = allocator.allocateRawMemory(sizeof(Bucket) * INITIAL_SIZE);
 	map.setAllKeysToNull();
 	map.m_size = 0;
 }
 
 template<typename Key, typename Value, typename KeyTraits>
-bool Lang::HashMap<Key, Value, KeyTraits>::insert(Allocator& allocator, const Key& key, Value value)
+bool Lang::HashMap<Key, Value, KeyTraits>::insert(Allocator& allocator, const Key& newKey, Value newValue)
 {
 	if ((static_cast<float>(m_size + 1) / static_cast<float>(capacity())) > MAX_LOAD_FACTOR)
 	{
 		const auto oldData = data();
 		const auto oldCapacity = capacity();
-		m_data = allocator.allocateRawMemory(sizeof(Bucket) * oldCapacity * 2);
+		allocation = allocator.allocateRawMemory(sizeof(Bucket) * oldCapacity * 2);
 		setAllKeysToNull();
 
 		for (size_t i = 0; i < oldCapacity; i++)
@@ -80,12 +88,14 @@ bool Lang::HashMap<Key, Value, KeyTraits>::insert(Allocator& allocator, const Ke
 		}
 	}
 
-	auto& bucket = findBucket(key);
-	bucket.key = key;
-	bucket.value = value;
-	m_size += 1;
+	auto& bucket = findBucket(newKey);
+	bool wasNotAlreadySet = isBucketEmpty(bucket);
 
-	return true;
+	bucket.key = newKey;
+	bucket.value = newValue;
+	m_size++;
+
+	return wasNotAlreadySet;
 }
 
 template<typename Key, typename Value, typename KeyTraits>
@@ -136,8 +146,14 @@ typename Lang::HashMap<Key, Value, KeyTraits>::Bucket& Lang::HashMap<Key, Value,
 			return bucket;
 		}
 
-		index = (index + 1) % m_data->size;
+		index = (index + 1) % capacity();
 	}
+}
+
+template<typename Key, typename Value, typename KeyTraits>
+bool Lang::HashMap<Key, Value, KeyTraits>::isBucketEmpty(const Bucket& bucket)
+{
+	return KeyTraits::isKeyNull(bucket.key) || KeyTraits::isKeyTombstone(bucket.key);
 }
 
 template<typename Key, typename Value, typename KeyTraits>
@@ -156,13 +172,23 @@ void Lang::HashMap<Key, Value, KeyTraits>::print()
 template<typename Key, typename Value, typename KeyTraits>
 typename Lang::HashMap<Key, Value, KeyTraits>::Bucket* Lang::HashMap<Key, Value, KeyTraits>::data()
 {
-	return reinterpret_cast<Bucket*>(m_data->data());
+	return reinterpret_cast<Bucket*>(allocation->data());
+}
+
+template<typename Key, typename Value, typename KeyTraits>
+void Lang::HashMap<Key, Value, KeyTraits>::clear()
+{
+	m_size = 0;
+	for (size_t i = 0; i < capacity(); i++)
+	{
+		KeyTraits::setKeyNull(data()[i].key);
+	}
 }
 
 template<typename Key, typename Value, typename KeyTraits>
 size_t Lang::HashMap<Key, Value, KeyTraits>::capacity() const
 {
-	return m_data->size / sizeof(Bucket);
+	return allocation->size / sizeof(Bucket);
 }
 
 template<typename Key, typename Value, typename KeyTraits>

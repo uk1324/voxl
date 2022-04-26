@@ -3,39 +3,6 @@
 
 using namespace Lang;
 
-struct ObjStringKeyTraits
-{
-	static bool compareKeys(const ObjString* a, const ObjString* b)
-	{
-		return (a->size == b->size) && (memcmp(a->chars, b->chars, a->size) == 0);
-	}
-
-	static size_t hashKey(const ObjString* key)
-	{
-		return std::hash<std::string_view>()(std::string_view(key->chars, key->size));
-	}
-
-	static void setKeyNull(ObjString*& key)
-	{
-		key = nullptr;
-	}
-
-	static void setKeyTombstone(ObjString*& key)
-	{
-		key = reinterpret_cast<ObjString*>(1);
-	}
-
-	static bool isKeyNull(const ObjString* key)
-	{
-		return key == nullptr;
-	}
-
-	static bool isKeyTombstone(const ObjString* key)
-	{
-		return key == reinterpret_cast<ObjString*>(1);
-	}
-};
-
 #define INIT() \
 	Allocator _a; \
 	HashMap<ObjString*, int, ObjStringKeyTraits> _m;  \

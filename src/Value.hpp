@@ -5,7 +5,6 @@
 
 namespace Lang
 {
-class Value;
 
 enum class ObjType
 {
@@ -18,6 +17,8 @@ enum class ObjType
 struct Obj
 {
 	ObjType type;
+	Obj* next; // nullptr if it is the newest allocation
+	Obj* newLocation; // nullptr if value hasn't been copied to the other region.
 };
 
 struct ObjString
@@ -90,6 +91,49 @@ public:
 };
 
 }
+
+#include <HashMap.hpp>
+
+namespace Lang
+{
+
+struct ObjStringKeyTraits
+{
+	inline static bool compareKeys(const ObjString* a, const ObjString* b)
+	{
+		return (a->size == b->size) && (memcmp(a->chars, b->chars, a->size) == 0);
+	}
+
+	inline static size_t hashKey(const ObjString* key)
+	{
+		return std::hash<std::string_view>()(std::string_view(key->chars, key->size));
+	}
+
+	inline static void setKeyNull(ObjString*& key)
+	{
+		key = nullptr;
+	}
+
+	inline static void setKeyTombstone(ObjString*& key)
+	{
+		key = reinterpret_cast<ObjString*>(1);
+	}
+
+	inline static bool isKeyNull(const ObjString* key)
+	{
+		return key == nullptr;
+	}
+
+	inline static bool isKeyTombstone(const ObjString* key)
+	{
+		return key == reinterpret_cast<ObjString*>(1);
+	}
+};
+
+using HashTable = HashMap<ObjString*, Value, ObjStringKeyTraits>;
+
+}
+
 
 std::ostream& operator<< (std::ostream& os, Lang::Value value);
 bool operator== (const Lang::Value& lhs, const Lang::Value& rhs);

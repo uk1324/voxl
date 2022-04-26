@@ -16,11 +16,10 @@ Vm::Vm(Allocator& allocator)
 	, m_errorPrinter(nullptr)
 	, m_stackTop(nullptr)
 	, m_callStackSize(0)
+	, m_rootMarkingFunctionHandle(allocator.registerRootMarkingFunction(this, mark))
+	, m_updateFunctionHandle(allocator.registerUpdateFunction(this, update))
 {
-	m_allocator->registerRootMarkingFunction(this, markGlobals);
-	m_allocator->registerRootMarkingFunction(this, markStack);
-	m_allocator->registerUpdateFunction(this, updateStack);
-	m_allocator->registerUpdateFunction(this, updateGlobals);
+	HashTable::init(m_globals, *m_allocator);
 }
 
 Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
@@ -126,7 +125,7 @@ Vm::Result Vm::run()
 			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
 			ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
 			Value value = peekStack(1);
-			bool doesNotAlreadyExist = m_globals.insert_or_assign(name, value).second;
+			bool doesNotAlreadyExist = m_globals.insert(*m_allocator, name, value);
 			if (doesNotAlreadyExist == false)
 			{
 				m_errorPrinter->outStream() << "redeclaration of '" << name->chars << '\'';
@@ -140,14 +139,14 @@ Vm::Result Vm::run()
 		case Op::LoadGlobal:
 		{
 			ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
-			auto value = m_globals.find(name);
-			if (value == m_globals.end())
+			auto& value = m_globals.findBucket(name);
+			if (m_globals.isBucketEmpty(value))
 			{
 				m_errorPrinter->outStream() << '\'' << name->chars << "' is not defined\n";
 				return Result::RuntimeError;
 			}
 			popStack();
-			pushStack(value->second);
+			pushStack(value.value);
 			break;
 		}
 
@@ -156,7 +155,7 @@ Vm::Result Vm::run()
 			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
 			ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
 			Value value = peekStack(1);
-			bool doesNotAlreadyExist = m_globals.insert_or_assign(name, value).second;
+			bool doesNotAlreadyExist = m_globals.insert(*m_allocator, name, value);
 			if (doesNotAlreadyExist)
 			{
 				m_errorPrinter->outStream() << '\'' << name->chars << "' is not defined\n";
@@ -338,7 +337,7 @@ void Vm::createForeignFunction(std::string_view name, ForeignFunction function)
 {
 	auto nameObj = m_allocator->allocateString(name);
 	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function);
-	m_globals[nameObj] = Value(reinterpret_cast<Obj*>(functionObj));
+	m_globals.insert(*m_allocator, nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
 }
 
 uint8_t Vm::readUint8()
@@ -395,44 +394,46 @@ Vm::Result Vm::fatalError(const char* format, ...)
 	return Result::RuntimeError;
 }
 
-void Vm::markStack(void* data, Allocator& allocator)
+void Vm::mark(Vm* vm, Allocator& allocator)
 {
-	const auto vm = reinterpret_cast<Vm*>(data);
 	for (auto value = vm->m_stack.data(); value != vm->m_stackTop; value++)
 	{
 		allocator.addValue(*value);
 	}
-}
 
-void Vm::markGlobals(void* data, Allocator& allocator)
-{
-	const auto vm = reinterpret_cast<Vm*>(data);
-	for (auto& [key, value] : vm->m_globals)
+	for (size_t i = 0; i < vm->m_globals.capacity(); i++)
 	{
-		allocator.addObj(reinterpret_cast<Obj*>(key));
-		allocator.addValue(value);
+		auto& bucket = vm->m_globals.data()[i];
+
+		if (vm->m_globals.isBucketEmpty(bucket) == false)
+		{
+			allocator.addObj(reinterpret_cast<Obj*>((bucket.key)));
+			allocator.addValue(bucket.value);
+		}
 	}
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_globals.allocation));
 }
 
-void Vm::updateStack(void* data)
+void Vm::update(Vm* vm)
 {
-	const auto vm = reinterpret_cast<Vm*>(data);
 	for (auto value = vm->m_stack.data(); value != vm->m_stackTop; value++)
 	{
 		Allocator::updateValue(*value);
 	}
-}
 
-void Vm::updateGlobals(void* data)
-{
-	auto vm = reinterpret_cast<Vm*>(data);
-	decltype (vm->m_globals) newGlobals;
-	for (auto& [key, value] : vm->m_globals)
+	vm->m_globals.allocation = reinterpret_cast<ObjAllocation*>(
+		Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_globals.allocation)));
+	for (size_t i = 0; i < vm->m_globals.capacity(); i++)
 	{
-		Allocator::updateValue(value);
-		newGlobals[reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(key)))] = value;
+		auto& bucket = vm->m_globals.data()[i];
+
+		if (vm->m_globals.isBucketEmpty(bucket) == false)
+		{
+			bucket.key = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(bucket.key)));
+			Allocator::updateValue(bucket.value);
+		}
 	}
-	vm->m_globals = std::move(newGlobals);
+
 
 	for (auto frame = vm->m_callStack.data(); frame != &vm->callStackTop() + 1; frame++)
 	{

@@ -39,7 +39,6 @@ private:
 		size_t operator()(const ObjString* a, const ObjString* b) const;
 	};
 
-
 public:
 	Vm(Allocator& allocator);
 
@@ -51,7 +50,6 @@ public:
 
 private:
 	Result run();
-
 
 	uint32_t readUint32();
 	uint8_t readUint8();
@@ -67,15 +65,14 @@ private:
 	Result fatalError(const char* format, ...);
 
 private:
-	static void markStack(void* data, Allocator& allocator);
-	static void markGlobals(void* data, Allocator& allocator);
-	static void updateStack(void* data);
-	static void updateGlobals(void* data);
+	static void mark(Vm* vm, Allocator& allocator);
+	static void update(Vm* vm);
 
 public:
 	//// Storing a direct pointer should probably be faster than storing and index.
 	//const uint8_t* m_instructionPointer;
-	std::unordered_map<ObjString*, Value, ObjStringHasher, ObjStringComparator> m_globals;
+	//std::unordered_map<ObjString*, Value, ObjStringHasher, ObjStringComparator> m_globals;
+	HashTable m_globals;
 	
 	std::array<Value, 1024> m_stack;
 	Value* m_stackTop;
@@ -86,6 +83,9 @@ public:
 	Allocator* m_allocator;
 
 	ErrorPrinter* m_errorPrinter;
+
+	Allocator::RootMarkingFunctionHandle m_rootMarkingFunctionHandle;
+	Allocator::UpdateFunctionHandle m_updateFunctionHandle;
 };
 
 }

@@ -1,4 +1,3 @@
-#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -400,7 +399,16 @@ Compiler::Status Compiler::declareVariable(std::string_view name, size_t start, 
 	{
 		return errorAt(start, end, "redeclaration of variable '%.*s'", name.size(), name.data());
 	}
-	locals[name] = Local{ static_cast<uint32_t>(locals.size()) };
+	// TODO: Make this better maybe change scopes to store the count or maybe store it with a local.
+	size_t localsCount = 0;
+	auto functionDepth = m_scopes.back().functionDepth;
+	for (auto scope = m_scopes.crbegin(); scope != m_scopes.crend(); scope++)
+	{
+		if (scope->functionDepth != functionDepth)
+			break;
+		localsCount += scope->localVariables.size();
+	}
+	locals[name] = Local{ static_cast<uint32_t>(localsCount) };
 
 	return Status::Ok;
 }
