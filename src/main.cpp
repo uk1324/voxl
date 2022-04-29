@@ -86,6 +86,10 @@ Value add(Value* args, int argCount)
 // When storing marking function in the GC store them in a vector instead of a set because iteration is much more common
 // than removal
 
+// TODO: Decide if getting the class of an instance should be build in or should it just be a set field.
+
+// For static methods just wirte
+// fn test() [}
 
 int main()
 {
@@ -116,9 +120,6 @@ int main()
 
 	Compiler compiler;
 	auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
-
-	std::cout << "----<script>\n";
-	disassembleByteCode(compilerResult.program->byteCode);
 
 	if (compilerResult.hadError == false)
 	{

@@ -30,5 +30,9 @@ namespace Lang
 		JumpIfTrue,
 		Jump,
 		JumpBack, // 
+		CreateClass, // name
+		GetProperty, // instance name
+		SetProperty, // [rhs instance name]
+		StoreMethod, // [class function name]
 	};
 }

@@ -1,12 +1,25 @@
-loop {
-	let x = "";
-	let i = 0;
-	loop {
-		if i == 10 {
-			break;
-		}
-		x = x ++ i;
-		i = i + 1;
+class Test
+{
+	init()
+	{
+		this.count = 0;
 	}
-	print2(x);
+
+	value()
+	{
+		ret this.count;
+	}
+
+	increment(a, b)
+	{
+		this.count = this.count + 1 + a + b;
+	}
 }
+
+let x = Test();
+x.init();
+print(x.value());
+x.increment(2, 3);
+print(x.value());
+let function = x.value;
+print(function());

@@ -107,6 +107,29 @@ ObjFunction* Allocator::allocateFunction(ObjString* name, int argumentCount)
 	return obj;
 }
 
+ObjClass* Allocator::allocateClass(ObjString* name)
+{
+	auto obj = allocateObj(sizeof(ObjClass), ObjType::Class)->asClass();
+	obj->name = name;
+	return obj;
+}
+
+ObjInstance* Allocator::allocateInstance(ObjClass* class_)
+{
+	auto obj = allocateObj(sizeof(ObjInstance), ObjType::Instance)->asInstance();
+	obj->class_ = class_;
+	// Cannot init the fields hash table here because the allocator doesn't know about obj so it would collect it.
+	return obj;
+}
+
+ObjBoundFunction* Allocator::allocateBoundFunction(ObjFunction* function, ObjInstance* instance)
+{
+	auto obj = allocateObj(sizeof(ObjBoundFunction), ObjType::BoundFunction)->asBoundFunction();
+	obj->function = function;
+	obj->instance = instance;
+	return obj;
+}
+
 ObjForeignFunction* Allocator::allocateForeignFunction(ObjString* name, ForeignFunction function)
 {
 	auto obj = reinterpret_cast<ObjForeignFunction*>(allocateObj(sizeof(ObjForeignFunction), ObjType::ForeignFunction));

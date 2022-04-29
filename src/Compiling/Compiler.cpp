@@ -1,6 +1,11 @@
 #include <Compiling/Compiler.hpp>
+#include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
 #include <iostream>
+
+#ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
+	#include <Debug/Disassembler.hpp>
+#endif
 
 #define TRY(somethingThatReturnsStatus) \
 	do \
@@ -45,6 +50,11 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 
 	m_functionByteCodeStack.pop_back();
 
+#ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
+	std::cout << "----<script>\n";
+	disassembleByteCode(scriptFunction->byteCode);
+#endif
+
 	return Result{ m_hadError, reinterpret_cast<ObjFunction*>(scriptFunction) };
 }
 
@@ -65,6 +75,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 		CASE_STMT_TYPE(If, ifStmt)
 		CASE_STMT_TYPE(Loop, loopStmt)
 		CASE_STMT_TYPE(Break, breakStmt)
+		CASE_STMT_TYPE(Class, classStmt)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -119,8 +130,6 @@ Compiler::Status Compiler::letStmt(const LetStmt& stmt)
 	return Status::Ok;
 }
 
-#include <Debug/Disassembler.hpp>
-
 Compiler::Status Compiler::blockStmt(const BlockStmt& stmt)
 {
 	beginScope();
@@ -159,8 +168,10 @@ Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 	emitOp(Op::LoadNull);
 	emitOp(Op::Return);
 
+#ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
 	std::cout << "----" << stmt.name << '\n';
 	disassembleByteCode(function->byteCode);
+#endif
 
 	endScope();
 	m_functionByteCodeStack.pop_back();
@@ -252,6 +263,60 @@ Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
 	return Status::Ok;
 }
 
+Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
+{
+	if ((m_scopes.size() > 0) && (m_scopes.back().functionDepth > 0))
+		return errorAt(stmt, "nested functions not allowed");
+
+	auto className = m_allocator->allocateString(stmt.name);
+	auto classNameConstant = createConstant(Value(reinterpret_cast<Obj*>(className)));
+
+	TRY(declareVariable(stmt.name, stmt.start, stmt.end()));
+
+	loadConstant(classNameConstant);
+	emitOp(Op::CreateClass);
+
+	for (const auto& method : stmt.methods)
+	{
+		auto nameWithPrefix = m_allocator->allocateString(std::string(stmt.name) + '.' + std::string(method->name));
+		auto function = m_allocator->allocateFunction(nameWithPrefix, static_cast<int>(method->arguments.size() + 1));
+		auto functionConstant = createConstant(Value(reinterpret_cast<Obj*>(function)));
+		m_functionByteCodeStack.push_back(&function->byteCode);
+
+		beginScope();
+		m_scopes.back().functionDepth++;
+
+		TRY(declareVariable("this", method->start, method->end()));
+		for (const auto& argument : method->arguments)
+		{
+			// Could store the token for better error messages about redeclaration.
+			TRY(declareVariable(argument, stmt.start, stmt.end()));
+		}
+		TRY(compile(method->stmts));
+
+		emitOp(Op::LoadNull);
+		emitOp(Op::Return);
+
+#ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
+		std::cout << "----" << stmt.name << '.' << method->name << '\n';
+		disassembleByteCode(function->byteCode);
+#endif
+
+		endScope();
+		m_functionByteCodeStack.pop_back();
+
+		auto nameConstant = createStringConstant(method->name);
+		loadConstant(functionConstant);
+		loadConstant(nameConstant);
+		emitOp(Op::StoreMethod);
+	}
+
+	loadConstant(classNameConstant);
+	emitOp(Op::CreateGlobal);
+
+	return Status::Ok;
+}
+
 Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 {
 #define CASE_EXPR_TYPE(exprType, exprFunction) \
@@ -268,6 +333,9 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 		CASE_EXPR_TYPE(Identifier, identifierExpr)
 		CASE_EXPR_TYPE(Call, callExpr)
 		CASE_EXPR_TYPE(Assignment, assignmentExpr)
+		CASE_EXPR_TYPE(Array, arrayExpr)
+		CASE_EXPR_TYPE(SetField, setFieldExpr)
+		CASE_EXPR_TYPE(GetField, getFieldExpr)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -376,6 +444,7 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 
 Compiler::Status Compiler::callExpr(const CallExpr& expr)
 {
+	// TODO: Add an optimization for calling on instance fields.
 	TRY(compile(expr.calle));
 
 	for (const auto& argument : expr.arguments)
@@ -385,6 +454,36 @@ Compiler::Status Compiler::callExpr(const CallExpr& expr)
 	emitOp(Op::Call);
 	emitUint32(static_cast<uint32_t>(expr.arguments.size()));
 
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::arrayExpr(const ArrayExpr& expr)
+{
+	ASSERT_NOT_REACHED();
+	/*for (const auto& value : expr.values)
+	{
+		TRY(compile(value));
+	}
+	TRY(emitOpArg(Op::CreateArray, expr.values.size(), expr.start, expr.end()));*/
+	return Status::Error;
+}
+
+Compiler::Status Compiler::getFieldExpr(const GetFieldExpr& expr)
+{
+	TRY(compile(expr.lhs));
+	auto fieldName = createStringConstant(expr.fieldName);
+	loadConstant(fieldName);
+	emitOp(Op::GetProperty);
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::setFieldExpr(const SetFieldExpr& expr)
+{
+	TRY(compile(expr.rhs));
+	TRY(compile(expr.lhs));
+	auto fieldName = createStringConstant(expr.fieldName);
+	loadConstant(fieldName);
+	emitOp(Op::SetProperty);
 	return Status::Ok;
 }
 
@@ -457,6 +556,11 @@ uint32_t Compiler::createConstant(Value value)
 	return static_cast<uint32_t>(currentByteCode().constants.size() - 1);
 }
 
+uint32_t Compiler::createStringConstant(std::string_view name)
+{
+	return createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(name))));
+}
+
 void Compiler::loadConstant(uint32_t index)
 {
 	emitOp(Op::LoadConstant);
@@ -472,6 +576,17 @@ void Compiler::emitOp(Op op)
 {
 	currentByteCode().emitOp(op);
 	currentByteCode().lineNumberAtOffset.push_back(m_lineNumberStack.back());
+}
+
+Compiler::Status Compiler::emitOpArg(Op op, size_t arg, size_t start, size_t end)
+{
+	if (arg > std::numeric_limits<uint32_t>::max())
+	{
+		return errorAt(start, end, "argument size too big");
+	}
+	emitOp(op);
+	emitUint32(static_cast<uint32_t>(arg));
+	return Status::Ok;
 }
 
 void Compiler::emitUint32(uint32_t value)

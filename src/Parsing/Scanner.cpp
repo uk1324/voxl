@@ -1,5 +1,3 @@
-#include "Scanner.hpp"
-#include "Scanner.hpp"
 #include <Parsing/Scanner.hpp>
 
 #include <unordered_map>
@@ -74,14 +72,17 @@ Token Scanner::token()
 		case ')': return makeToken(TokenType::RightParen);
 		case '{': return makeToken(TokenType::LeftBrace);
 		case '}': return makeToken(TokenType::RightBrace);
+		case '[': return makeToken(TokenType::LeftBracket);
+		case ']': return makeToken(TokenType::RightBracket);
 		case ':': return makeToken(TokenType::Colon);
 		case ',': return makeToken(TokenType::Comma);
+		case '.': return makeToken(TokenType::Dot);
 		case '"': return string();
 
 		default:
 			if (isDigit(c))
 				return number();
-			if (isAlpha(c))
+			if (isIdentifierStartChar(c))
 				return keywordOrIdentifier();
 
 			return errorToken("illegal character");
@@ -122,9 +123,10 @@ Token Scanner::keywordOrIdentifier()
 		// Could rename break to stop and continue to next.
 		{ "break", TokenType::Break },
 		{ "continue", TokenType::Continue },
+		{ "class", TokenType::Class },
 	};
 
-	while (isAlnum(peek()) || (peek() == '_'))
+	while (isIdentifierChar(peek()))
 		advance();
 
 	auto identifier = m_sourceInfo->source.substr(m_tokenStartIndex, m_currentCharIndex - m_tokenStartIndex);
@@ -384,12 +386,12 @@ bool Scanner::isDigit(char c)
 	return (c >= '0') && (c <= '9');
 }
 
-bool Scanner::isAlpha(char c)
+bool Scanner::isIdentifierStartChar(char c)
 {
-	return ((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z'));
+	return ((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z')) || (c == '_') || (c == '$');
 }
 
-bool Scanner::isAlnum(char c)
+bool Scanner::isIdentifierChar(char c)
 {
-	return isAlpha(c) || isDigit(c);
+	return isIdentifierChar(c) || isDigit(c);
 }

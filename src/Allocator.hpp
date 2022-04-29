@@ -69,11 +69,15 @@ public:
 
 	Obj* allocateObj(size_t size, ObjType type);
 
+	// Function allocating constants should return const Obj because they shouldn't be marked.
 	ObjAllocation* allocateRawMemory(size_t size);
 	ObjString* allocateString(std::string_view chars);
 	ObjString* allocateString(std::string_view chars, size_t length);
 	ObjFunction* allocateFunction(ObjString* name, int argumentCount);
 	ObjForeignFunction* allocateForeignFunction(ObjString* name, ForeignFunction function);
+	ObjClass* allocateClass(ObjString* name);
+	ObjInstance* allocateInstance(ObjClass* class_);
+	ObjBoundFunction* allocateBoundFunction(ObjFunction* function, ObjInstance* instance);
 
 	void markObj(Obj* obj);
 	void addObj(Obj* obj);

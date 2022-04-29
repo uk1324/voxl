@@ -79,6 +79,10 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)
 	switch (static_cast<Op>(byteCode.code[offset]))
 	{
 		case Op::Add: return justOp("add");
+		case Op::CreateClass: return justOp("createClass");
+		case Op::GetProperty: return justOp("getProperty");
+		case Op::SetProperty: return justOp("setProperty");
+		case Op::StoreMethod: return justOp("storeMethod");
 		case Op::Concat: return justOp("concat");
 		case Op::Equals: return justOp("equals");
 		case Op::LoadConstant: return opConstant("loadConstant", byteCode, offset);

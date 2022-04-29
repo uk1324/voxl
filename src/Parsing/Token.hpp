@@ -23,6 +23,7 @@ enum class TokenType
 	Or,
 	OrOr,
 	PlusPlus,
+	Dot,
 
 	// Symbols
 	Semicolon,
@@ -32,10 +33,13 @@ enum class TokenType
 	LeftBrace,
 	RightBrace,
 	Comma,
+	LeftBracket,
+	RightBracket,
 
 	// Keywords
 	Print,
 	Let,
+	Class,
 	Fn,
 	Ret,
 	True,

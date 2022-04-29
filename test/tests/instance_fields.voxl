@@ -1,0 +1,9 @@
+class X
+{}
+
+let x = X();
+
+print(x.a);
+x.a = 4;
+print(x.a);
+print(x.b);

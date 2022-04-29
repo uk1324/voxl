@@ -64,6 +64,24 @@ AssignmentExpr::AssignmentExpr(std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> 
 	, rhs(std::move(rhs))
 {}
 
+ArrayExpr::ArrayExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size_t end)
+	: Expr(start, end, ExprType::Array)
+	, values(std::move(values))
+{}
+
+GetFieldExpr::GetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, size_t start, size_t end)
+	: Expr(start, end, ExprType::GetField)
+	, lhs(std::move(lhs))
+	, fieldName(fieldName)
+{}
+
+SetFieldExpr::SetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, std::unique_ptr<Expr> rhs, size_t start, size_t end)
+	: Expr(start, end, ExprType::SetField)
+	, lhs(std::move(lhs))
+	, fieldName(fieldName)
+	, rhs(std::move(rhs))
+{}
+
 Stmt::Stmt(size_t start, size_t end, StmtType type)
 	: start(start)
 	, length(end - start)
@@ -141,4 +159,10 @@ LoopStmt::LoopStmt(
 
 BreakStmt::BreakStmt(size_t start, size_t end)
 	: Stmt(start, end, StmtType::Break)
+{}
+
+ClassStmt::ClassStmt(std::string_view name, std::vector<std::unique_ptr<FnStmt>> methods, size_t start, size_t end)
+	: Stmt(start, end, StmtType::Class)
+	, name(name)
+	, methods(std::move(methods))
 {}

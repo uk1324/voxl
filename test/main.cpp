@@ -44,6 +44,7 @@ std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "ret", "6" },
 	{ "utf-8_strings", u8"Hello 🌎 world" },
 	{ "concatenation", "abctrue2false" },
+	{ "instance_fields", "null4null" },
 };
 
 void testFailed(std::string_view name)

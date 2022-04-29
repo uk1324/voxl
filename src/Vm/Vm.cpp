@@ -1,13 +1,13 @@
+#include "Vm.hpp"
 #include <Vm/Vm.hpp>
+#include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
 #include <iostream>
 #include <sstream>
 
-//#define DEBUG_PRINT_EXECUTION_TRACE
-#ifdef DEBUG_PRINT_EXECUTION_TRACE
+#ifdef VOXL_DEBUG_PRINT_VM_EXECUTION_TRACE
 	#include <Debug/Disassembler.hpp>
 #endif
-
 
 using namespace Lang;
 
@@ -42,7 +42,7 @@ Vm::Result Vm::run()
 {
 	for (;;)
 	{
-	#ifdef DEBUG_PRINT_EXECUTION_TRACE
+	#ifdef VOXL_DEBUG_PRINT_VM_EXECUTION_TRACE
 		std::cout << "[ ";
 		for (Value* value = m_stack.data(); value != m_stackTop; value++)
 		{
@@ -139,14 +139,14 @@ Vm::Result Vm::run()
 		case Op::LoadGlobal:
 		{
 			ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
-			auto& value = m_globals.findBucket(name);
-			if (m_globals.isBucketEmpty(value))
+			const auto value = m_globals.get(name);
+			if (value.has_value() == false)
 			{
 				m_errorPrinter->outStream() << '\'' << name->chars << "' is not defined\n";
 				return Result::RuntimeError;
 			}
 			popStack();
-			pushStack(value.value);
+			pushStack(**value);
 			break;
 		}
 
@@ -226,29 +226,11 @@ Vm::Result Vm::run()
 				return Result::RuntimeError;
 			}
 
-			if (calleValue.as.obj->type == ObjType::Function)
-			{
-				auto calle = reinterpret_cast<ObjFunction*>(calleValue.as.obj);
-				if ((m_callStackSize + 1) == m_callStack.size())
-				{
-					return fatalError("call stack overflow");
-				}
-				m_callStack[m_callStackSize] = CallFrame{ calle->byteCode.code.data(), m_stackTop - 1 - argCount, calle };
-				m_callStackSize++;
-			}
-			else if (calleValue.as.obj->type == ObjType::ForeignFunction)
-			{
-				auto calle = reinterpret_cast<ObjForeignFunction*>(calleValue.as.obj);
-				auto result = calle->function(m_stackTop - argCount, argCount);
-				m_stackTop -= 1 + static_cast<size_t>(argCount); // Pop the function and arguments.
-				pushStack(result);
-			}
-			else
+			if (callObj(calleValue.as.obj, argCount) == Result::RuntimeError)
 			{
 				m_errorPrinter->outStream() << "cannot call an object that isn't a function\n";
 				return Result::RuntimeError;
 			}
-
 			break;
 		}
 
@@ -326,6 +308,142 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::CreateClass:
+		{
+			auto nameValue = peekStack(0);
+
+			ASSERT((nameValue.type == ValueType::Obj) && (nameValue.as.obj->isString()));
+			auto name = nameValue.as.obj->asString();
+			auto class_ = m_allocator->allocateClass(name);
+			popStack();
+			class_->name = name;
+			pushStack(Value(reinterpret_cast<Obj*>(class_)));
+			// Pushing before HashTable::init to prevent the GC from collecting the class.
+			HashTable::init(class_->fields, *m_allocator);
+			HashTable::init(class_->methods, *m_allocator);
+			break;
+		}
+
+		case Op::GetProperty:
+		{
+			auto fieldNameValue = peekStack(0);
+			ASSERT(fieldNameValue.as.obj->isString());
+			auto fieldName = fieldNameValue.as.obj->asString();
+			auto lhs = peekStack(1);
+			if ((lhs.isObj() == false))
+			{
+				return fatalError("can only use field access operator on objects");
+			}
+			auto obj = lhs.as.obj;
+			if (obj->isInstance())
+			{
+				auto instance = obj->asInstance();
+				auto optResult = instance->fields.get(fieldName);
+				
+				if (optResult.has_value())
+				{
+					popStack();
+					popStack();
+					pushStack(**optResult);
+				}
+				else
+				{
+					auto optMethod = instance->class_->methods.get(fieldName);
+					if (optMethod.has_value())
+					{
+						ASSERT((*optMethod)->isObj());
+						ASSERT((*optMethod)->as.obj->type == ObjType::Function);
+						auto function = reinterpret_cast<ObjFunction*>((*optMethod)->as.obj);
+						auto method = m_allocator->allocateBoundFunction(function, instance);
+						popStack();
+						popStack();
+						pushStack(Value(reinterpret_cast<Obj*>(method)));
+					}
+					else
+					{
+						// TODO Maybe don't allow access of non existent fields. Then I would have to add a special method for checking
+						// if the field exists.
+						popStack();
+						popStack();
+						pushStack(Value::null());
+					}
+
+				}
+			}
+			else if (obj->isClass())
+			{
+				auto class_ = obj->asClass();
+				auto optResult = class_->fields.get(fieldName);
+				popStack();
+				popStack();
+				if (optResult.has_value())
+				{
+					pushStack(**optResult);
+				}
+				else
+				{
+					// TODO Maybe don't allow access of non existent fields. Then I would have to add a special method for checking
+					// if the field exists.
+					pushStack(Value::null());
+				}
+			}
+			else
+			{
+				return fatalError("cannot use field access operator on this kind of object");
+			}
+			break;
+		}
+
+		case Op::SetProperty:
+		{
+			auto fieldNameValue = peekStack(0);
+			ASSERT(fieldNameValue.as.obj->isString());
+			auto fieldName = fieldNameValue.as.obj->asString();
+			auto lhs = peekStack(1);
+			auto rhs = peekStack(2);
+			if ((lhs.isObj() == false))
+			{
+				return fatalError("can only use field access operator on objects");
+			}
+			auto obj = lhs.as.obj;
+			if (obj->isInstance())
+			{
+				auto instance = obj->asInstance();
+				instance->fields.insert(*m_allocator, fieldName, rhs);
+				popStack();
+				popStack();
+			}
+			else if (obj->isClass())
+			{
+				auto class_ = obj->asClass();
+				class_->fields.insert(*m_allocator, fieldName, rhs);
+				popStack();
+				popStack();
+			}
+			else
+			{
+				return fatalError("cannot use field access operator on this kind of object");
+			}
+			break;
+		}
+
+		case Op::StoreMethod:
+		{
+			auto methodNameValue = peekStack(0);
+			ASSERT(methodNameValue.as.obj->isString());
+			auto fieldName = methodNameValue.as.obj->asString();
+			auto classValue = peekStack(2);
+			auto methodValue = peekStack(1);
+			
+			ASSERT(classValue.isObj());
+			ASSERT(classValue.as.obj->isClass());
+			auto class_ = classValue.as.obj->asClass();
+			class_->methods.insert(*m_allocator, fieldName, methodValue);
+			popStack();
+			popStack();
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 			return Result::RuntimeError;
@@ -392,6 +510,68 @@ Vm::Result Vm::fatalError(const char* format, ...)
 		m_errorPrinter->outStream() << "line " << lineNumber << " in " << callFrame->function->name->chars << "()\n";
 	}
 	return Result::RuntimeError;
+}
+
+Vm::Result Vm::callObj(Obj* obj, int argCount)
+{
+	switch (obj->type)
+	{
+		case ObjType::Function:
+		{
+			auto calle = reinterpret_cast<ObjFunction*>(obj);
+			if ((m_callStackSize + 1) == m_callStack.size())
+			{
+				return fatalError("call stack overflow");
+			}
+			m_callStack[m_callStackSize] = CallFrame{ calle->byteCode.code.data(), m_stackTop - 1 - argCount, calle };
+			m_callStackSize++;
+			break;
+		}
+
+		case ObjType::ForeignFunction:
+		{
+			auto calle = reinterpret_cast<ObjForeignFunction*>(obj);
+			auto result = calle->function(m_stackTop - argCount, argCount);
+			m_stackTop -= 1 + static_cast<size_t>(argCount); // Pop the function and arguments.
+			pushStack(result);
+			break;
+		}
+
+		case ObjType::Class:
+		{
+			auto calle = obj->asClass();
+			auto instance = m_allocator->allocateInstance(calle);
+			instance->class_ = calle;
+			m_stackTop -= 1 + static_cast<size_t>(argCount); // Pop the function and arguments.
+			pushStack(Value(reinterpret_cast<Obj*>(instance))); // Pushing here so the GC knows about it before HashTable::init.
+			HashTable::init(instance->fields, *m_allocator);
+			break;
+		}
+
+		case ObjType::BoundFunction:
+		{
+			auto calle = obj->asBoundFunction();
+			auto function = calle->function;
+			for (size_t i = 0; i < static_cast<size_t>(argCount); i++)
+			{
+				*(m_stackTop - i) = m_stackTop[-1 - i];
+			}
+			*(m_stackTop - argCount) = Value(reinterpret_cast<Obj*>(calle->instance));
+			// TODO: do bound checking here.
+			m_stackTop++;
+			if (callObj(reinterpret_cast<Obj*>(function), function->argumentCount) == Result::RuntimeError)
+			{
+				m_errorPrinter->outStream() << "call error";
+				return Result::RuntimeError;
+			}
+			break;
+		}
+
+		default:
+			return Result::RuntimeError;
+	}
+
+	return Result::Success;
 }
 
 void Vm::mark(Vm* vm, Allocator& allocator)

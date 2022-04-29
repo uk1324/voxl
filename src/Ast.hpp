@@ -23,7 +23,10 @@ enum class ExprType
 	Unary,
 	Identifier,
 	Call,
-	Assignment
+	Assignment,
+	Array,
+	GetField,
+	SetField
 };
 
 class Expr
@@ -123,6 +126,35 @@ public:
 	std::unique_ptr<Expr> rhs;
 };
 
+class ArrayExpr final : public Expr
+{
+public:
+	ArrayExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size_t end);
+
+	std::vector<std::unique_ptr<Expr>> values;
+};
+
+class GetFieldExpr final : public Expr
+{
+public:
+	GetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, size_t start, size_t end);
+	~GetFieldExpr() = default;
+
+	std::unique_ptr<Expr> lhs;
+	std::string_view fieldName;
+};
+
+class SetFieldExpr final : public Expr
+{
+public:
+	SetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, std::unique_ptr<Expr> rhs, size_t start, size_t end);
+	~SetFieldExpr() = default;
+
+	std::unique_ptr<Expr> lhs;
+	std::string_view fieldName;
+	std::unique_ptr<Expr> rhs;
+};
+
 enum class StmtType
 {
 	Expr,
@@ -133,7 +165,8 @@ enum class StmtType
 	Ret,
 	If,
 	Loop,
-	Break
+	Break,
+	Class
 };
 
 class Stmt
@@ -245,6 +278,15 @@ class BreakStmt final : public Stmt
 {
 public:
 	BreakStmt(size_t start, size_t end);
+};
+
+class ClassStmt final : public Stmt
+{
+public:
+	ClassStmt(std::string_view name, std::vector<std::unique_ptr<FnStmt>>, size_t start, size_t end);
+	//ClassStmt(std::string_view name, std::vector<std::pair<std::string_view, std::unique_ptr<FnStmt>>>, size_t start, size_t end);
+	std::string_view name;
+	std::vector<std::unique_ptr<FnStmt>> methods;
 };
 
 }

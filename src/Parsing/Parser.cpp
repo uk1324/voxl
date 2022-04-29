@@ -1,3 +1,4 @@
+#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -66,6 +67,8 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return loopStmt();
 	if (match(TokenType::Break))
 		return breakStmt();
+	if (match(TokenType::Class))
+		return classStmt();
 	else
 		return exprStmt();
 
@@ -121,27 +124,7 @@ std::unique_ptr<Stmt> Parser::blockStmt()
 
 std::unique_ptr<Stmt> Parser::fnStmt()
 {
-	auto start = peekPrevious().end;
-
-	expect(TokenType::Identifier, "expected function name");
-	auto name = peekPrevious().identifier;
-
-	std::vector<std::string_view> arguments;
-	expect(TokenType::LeftParen, "expected '('");
-	if (peek().type != TokenType::RightParen)
-	{
-		do
-		{
-			expect(TokenType::Identifier, "expected function argument name");
-			arguments.push_back(peekPrevious().identifier);
-		} while (match(TokenType::Comma));
-	}
-	expect(TokenType::RightParen, "expected ')'");
-
-	expect(TokenType::LeftBrace, "expected '{'");
-	auto stmts = block();
-
-	return std::make_unique<FnStmt>(name, std::move(arguments), std::move(stmts), start, peekPrevious().end);
+	return function(peekPrevious().start);
 }
 
 std::unique_ptr<Stmt> Parser::retStmt()
@@ -200,6 +183,49 @@ std::unique_ptr<Stmt> Parser::breakStmt()
 	return std::make_unique<BreakStmt>(start, peekPrevious().end);
 }
 
+std::unique_ptr<Stmt> Parser::classStmt()
+{
+	size_t start = peekPrevious().start;
+
+	expect(TokenType::Identifier, "expected class name");
+	auto name = peekPrevious().identifier;
+
+	expect(TokenType::LeftBrace, "expected '{'");
+
+	decltype(ClassStmt::methods) methods;
+
+	while ((isAtEnd() == false) && (check(TokenType::RightBrace) == false))
+	{
+		methods.push_back(function(peek().end));
+	}
+	expect(TokenType::RightBrace, "expected '}'");
+	
+	return std::make_unique<ClassStmt>(name, std::move(methods), start, peekPrevious().end);
+}
+
+std::unique_ptr<FnStmt> Parser::function(size_t start)
+{
+	expect(TokenType::Identifier, "expected function name");
+	auto name = peekPrevious().identifier;
+
+	std::vector<std::string_view> arguments;
+	expect(TokenType::LeftParen, "expected '('");
+	if (peek().type != TokenType::RightParen)
+	{
+		do
+		{
+			expect(TokenType::Identifier, "expected function argument name");
+			arguments.push_back(peekPrevious().identifier);
+		} while ((isAtEnd() == false) && match(TokenType::Comma));
+	}
+	expect(TokenType::RightParen, "expected ')'");
+
+	expect(TokenType::LeftBrace, "expected '{'");
+	auto stmts = block();
+
+	return std::make_unique<FnStmt>(name, std::move(arguments), std::move(stmts), start, peekPrevious().end);
+}
+
 std::vector<std::unique_ptr<Stmt>> Parser::block()
 {
 	std::vector<std::unique_ptr<Stmt>> stmts;
@@ -224,6 +250,12 @@ std::unique_ptr<Expr> Parser::assignment()
 	if (match(TokenType::Equals))
 	{
 		auto rhs = assignment();
+
+		if (lhs->type == ExprType::GetField)
+		{
+			auto expr = static_cast<GetFieldExpr*>(lhs.get());
+			return std::make_unique<SetFieldExpr>(std::move(expr->lhs), expr->fieldName, std::move(rhs), start, peekPrevious().end);
+		}
 		return std::make_unique<AssignmentExpr>(std::move(lhs), std::move(rhs), start, peekPrevious().end);
 	}
 
@@ -279,7 +311,7 @@ std::unique_ptr<Expr> Parser::unary()
 std::unique_ptr<Expr> Parser::call()
 {
 	size_t start = peek().start;
-	auto calle = primary();
+	auto calle = fieldAccess();
 
 	while (match(TokenType::LeftParen))
 	{
@@ -289,7 +321,7 @@ std::unique_ptr<Expr> Parser::call()
 			do
 			{
 				arguments.push_back(expr());
-			} while (match(TokenType::Comma));
+			} while ((isAtEnd() == false) && match(TokenType::Comma));
 		}
 		expect(TokenType::RightParen, "expected ')'");
 
@@ -299,6 +331,20 @@ std::unique_ptr<Expr> Parser::call()
 	return calle;
 }
 
+std::unique_ptr<Expr> Parser::fieldAccess()
+{
+	const auto start = peek().start;
+
+	auto lhs = primary();
+	if (match(TokenType::Dot) == false)
+	{
+		return lhs;
+	}
+
+	expect(TokenType::Identifier, "expected field name");
+	const auto name = peekPrevious().identifier;
+	return std::make_unique<GetFieldExpr>(std::move(lhs), name, start, peekPrevious().end);
+}
 
 std::unique_ptr<Expr> Parser::primary()
 {
@@ -322,7 +368,30 @@ std::unique_ptr<Expr> Parser::primary()
 	{
 		return std::make_unique<BoolConstantExpr>(false, peekPrevious().start, peekPrevious().end);
 	}
-
+	if (match(TokenType::LeftBracket))
+	{
+		size_t start = peekPrevious().start;
+		if (match(TokenType::RightBracket))
+		{
+			// decltype because templates cannot deduce from "{}".
+			return std::make_unique<ArrayExpr>(decltype(ArrayExpr::values)(), start, peekPrevious().end);
+		}
+		std::vector<std::unique_ptr<Expr>> values;
+		
+		for (;;)
+		{
+			values.push_back(expr());
+			if (match(TokenType::RightBrace))
+			{
+				return std::make_unique<ArrayExpr>(std::move(values), start, peekPrevious().end);
+			}
+			expect(TokenType::Comma, "expected ','");
+			if (match(TokenType::RightBrace))
+			{
+				return std::make_unique<ArrayExpr>(std::move(values), start, peekPrevious().end);
+			}
+		}
+	}
 	// TODO: Check if this error location is good or should it maybe be token.
 	throw errorAt(peek(), "expected expression");
 }

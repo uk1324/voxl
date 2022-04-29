@@ -21,6 +21,31 @@ Value::Value(bool boolean)
 	as.boolean = boolean;
 }
 
+bool Value::isInt() const
+{
+	return type == ValueType::Int;
+}
+
+bool Value::isFloat() const
+{
+	return type == ValueType::Float;
+}
+
+bool Value::isObj() const
+{
+	return type == ValueType::Obj;
+}
+
+bool Value::isNull() const
+{
+	return type == ValueType::Null;
+}
+
+bool Value::isBool() const
+{
+	return type == ValueType::Bool;
+}
+
 Value Value::null()
 {
 	Value value;
@@ -56,53 +81,68 @@ std::ostream& operator<<(std::ostream& os, Value value)
 			break;
 
 		case ValueType::Obj:
-			switch (value.as.obj->type)
-			{
-				case ObjType::String:
-				{
-					const auto string = reinterpret_cast<ObjString*>(value.as.obj);
-					for (size_t i = 0; i < string->size; i++)
-					{
-						os << string->chars[i];
-					}
-					break;
-				}
-
-				case ObjType::Function:
-				{
-					const auto function = reinterpret_cast<ObjFunction*>(value.as.obj);
-					os << '<';
-					for (size_t i = 0; i < function->name->size; i++)
-					{
-						os << function->name->chars[i];
-					}
-					os << '>';
-					break;
-				}
-
-				case ObjType::ForeignFunction:
-				{
-					const auto function = reinterpret_cast<ObjForeignFunction*>(value.as.obj);
-					os << '<';
-					for (size_t i = 0; i < function->name->size; i++)
-					{
-						os << function->name->chars[i];
-					}
-					os << '>';
-					break;
-				}
-
-				case ObjType::Allocation:
-					os << "<memory*>";
-					break;
-
-				default:
-					ASSERT_NOT_REACHED();
-			}
+			os << value.as.obj;
 			break;
 
 	default:
 		ASSERT_NOT_REACHED();
+	}
+
+	return os;
+}
+
+std::ostream& operator<< (std::ostream& os, Lang::Obj* obj)
+{
+	switch (obj->type)
+	{
+		case ObjType::String:
+		{
+			const auto string = reinterpret_cast<ObjString*>(obj);
+			for (size_t i = 0; i < string->size; i++)
+			{
+				os << string->chars[i];
+			}
+			break;
+		}
+
+		case ObjType::Function:
+		{
+			const auto function = reinterpret_cast<ObjFunction*>(obj);
+			os << '<' << reinterpret_cast<Obj*>(function->name) << '>';
+			break;
+		}
+
+		case ObjType::ForeignFunction:
+		{
+			const auto function = reinterpret_cast<ObjForeignFunction*>(obj);
+			os << '<' << reinterpret_cast<Obj*>(function->name) << '>';
+			break;
+		}
+
+		case ObjType::Allocation:
+			os << "<memory*>";
+			break;
+
+		case ObjType::Class:
+		{
+			auto class_ = obj->asClass();
+			os << "<class '" << reinterpret_cast<Obj*>(class_->name) << "'>";
+			break;
+		}
+
+		case ObjType::Instance:
+		{
+			auto instance = obj->asInstance();
+			os << "<instance of '" << reinterpret_cast<Obj*>(instance->class_->name) << "'>";
+			break;
+		}
+
+		case ObjType::BoundFunction:
+			os << reinterpret_cast<Obj*>(obj->asBoundFunction()->function);
+			break;
+
+		default:
+			ASSERT_NOT_REACHED();
 	}
 
 	return os;
@@ -130,4 +170,48 @@ bool operator==(const Value& lhs, const Value& rhs)
 void* ObjAllocation::data()
 {
 	return reinterpret_cast<char*>(this) + sizeof(ObjAllocation);
+}
+
+bool Obj::isString()
+{
+	return type == ObjType::String;
+}
+
+ObjString* Obj::asString()
+{
+	ASSERT(isString());
+	return reinterpret_cast<ObjString*>(this);
+}
+
+bool Obj::isClass()
+{
+	return type == ObjType::Class;
+}
+
+ObjClass* Obj::asClass()
+{
+	ASSERT(isClass());
+	return reinterpret_cast<ObjClass*>(this);
+}
+
+bool Obj::isInstance()
+{
+	return type == ObjType::Instance;
+}
+
+ObjInstance* Obj::asInstance()
+{
+	ASSERT(isInstance());
+	return reinterpret_cast<ObjInstance*>(this);
+}
+
+bool Obj::isBoundFunction()
+{
+	return type == ObjType::BoundFunction;
+}
+
+ObjBoundFunction* Obj::asBoundFunction()
+{
+	ASSERT(isBoundFunction());
+	return reinterpret_cast<ObjBoundFunction*>(this);
 }

@@ -1,6 +1,8 @@
 #include <../test/tests.hpp>
 #include <HashMap.hpp>
 
+// TODO: Add tests that check the return value of insert and remove.
+
 using namespace Lang;
 
 #define INIT() \

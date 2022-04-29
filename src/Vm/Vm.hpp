@@ -63,6 +63,7 @@ private:
 	CallFrame& callStackTop();
 	const CallFrame& callStackTop() const;
 	Result fatalError(const char* format, ...);
+	Result callObj(Obj* obj, int argCount);
 
 private:
 	static void mark(Vm* vm, Allocator& allocator);

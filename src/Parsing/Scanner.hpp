@@ -47,8 +47,8 @@ private:
 	// Negative values might trigger asserts. Negative values happen because of conversion from the default on most compilers
 	// signed char. UTF-8 text could trigger the asserts.
 	static bool isDigit(char c);
-	static bool isAlpha(char c);
-	static bool isAlnum(char c);
+	static bool isIdentifierStartChar(char c);
+	static bool isIdentifierChar(char c);
 
 private:
 	std::vector<Token> m_tokens;

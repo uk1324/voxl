@@ -69,6 +69,7 @@ private:
 	Status ifStmt(const IfStmt& stmt);
 	Status loopStmt(const LoopStmt& stmt);
 	Status breakStmt(const BreakStmt& stmt);
+	Status classStmt(const ClassStmt& stmt);
 
 	Status compile(const std::unique_ptr<Expr>& expr);
 	// TODO: perform constant folding
@@ -80,6 +81,9 @@ private:
 	Status identifierExpr(const IdentifierExpr& expr);
 	Status callExpr(const CallExpr& expr);
 	Status assignmentExpr(const AssignmentExpr& expr);
+	Status arrayExpr(const ArrayExpr& expr);
+	Status getFieldExpr(const GetFieldExpr& expr);
+	Status setFieldExpr(const SetFieldExpr& expr);
 
 	Status declareVariable(std::string_view name, size_t start, size_t end);
 	// Could make a RAII class
@@ -87,10 +91,11 @@ private:
 	void endScope();
 
 	uint32_t createConstant(Value value);
-	uint32_t createIdentifierConstant(const Token& name);
+	uint32_t createStringConstant(std::string_view name);
 	void loadConstant(uint32_t index);
 	ByteCode& currentByteCode();
 	void emitOp(Op op);
+	Status emitOpArg(Op op, size_t arg, size_t start, size_t end);
 	void emitUint32(uint32_t value);
 	size_t emitJump(Op op);
 	void emitJump(Op op, size_t location);

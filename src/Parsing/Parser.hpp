@@ -41,7 +41,9 @@ private:
 	std::unique_ptr<Stmt> ifStmt();
 	std::unique_ptr<Stmt> loopStmt();
 	std::unique_ptr<Stmt> breakStmt();
+	std::unique_ptr<Stmt> classStmt();
 
+	std::unique_ptr<FnStmt> function(size_t start);
 	std::vector<std::unique_ptr<Stmt>> block();
 
 	std::unique_ptr<Expr> expr();
@@ -52,6 +54,7 @@ private:
 	std::unique_ptr<Expr> factor();
 	std::unique_ptr<Expr> unary();
 	std::unique_ptr<Expr> call();
+	std::unique_ptr<Expr> fieldAccess();
 	std::unique_ptr<Expr> primary();
 
 	const Token& peek() const;
