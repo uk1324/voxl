@@ -1,3 +1,5 @@
+#include "Scanner.hpp"
+#include "Scanner.hpp"
 #include <Parsing/Scanner.hpp>
 
 #include <unordered_map>
@@ -34,8 +36,7 @@ Scanner::Result Scanner::parse(SourceInfo& sourceInfoToComplete, ErrorPrinter& e
 
 	m_tokens.push_back(Token(TokenType::Eof, m_currentCharIndex, m_currentCharIndex));
 	
-	// TODO: Could return just a reference to the tokens so the scanner can reuse the memory instead of allocating new every time.
-	return Result{ m_hadError, std::move(m_tokens) };
+	return Result{ m_hadError, m_tokens };
 }
 
 Token Scanner::token()
@@ -272,6 +273,7 @@ void Scanner::skipWhitespace()
 {
 	while (isAtEnd() == false)
 	{
+		auto start = m_currentCharIndex;
 		char c = peek();
 
 		switch (c)
@@ -286,6 +288,56 @@ void Scanner::skipWhitespace()
 			case '\n':
 				advance();
 				advanceLine();
+				break;
+
+			case '/':
+				if (peekNext() == '/')
+				{
+					while ((isAtEnd() == false) && (peek() != '\n'))
+						advance();
+				}
+				else if (peekNext() == '*')
+				{
+					advance();
+					advance();
+					int nesting = 0;
+					for (;;)
+					{
+						if (match('*') && (peek() == '/'))
+						{
+							if (nesting == 0)
+							{
+								advance();
+								break;
+							}
+							nesting--;
+						}
+						else if (match('/') && (peek() == '*'))
+						{
+							advance();
+							nesting++;
+						}
+						else if (match('\n'))
+						{
+							advanceLine();
+						}
+						else
+						{
+							advance();
+						}
+
+						if (isAtEnd())
+						{
+							static constexpr size_t MULTILINE_COMMENT_START_TOKEN_LENGTH = 2; // "/*"
+							errorAt(start, start + MULTILINE_COMMENT_START_TOKEN_LENGTH, "unterminated multiline comment");
+							return;
+						}
+					}
+				}
+				else
+				{
+					return;
+				}
 				break;
 
 			default:
@@ -345,14 +397,31 @@ void Scanner::errorAt(size_t start, size_t end, const char* format, va_list args
 	}
 }
 
+void Scanner::errorAt(size_t start, size_t end, const char* format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	errorAt(start, end, format, args);
+	va_end(args);
+}
+
 char Scanner::peek()
 {
+	if (isAtEnd())
+		return '\0';
 	return m_sourceInfo->source[m_currentCharIndex];
 }
 
 char Scanner::peekPrevious()
 {
 	return m_sourceInfo->source[m_currentCharIndex - 1];
+}
+
+char Scanner::peekNext()
+{
+	if ((m_currentCharIndex + 1) >= m_sourceInfo->source.size())
+		return '\0';
+	return m_sourceInfo->source[m_currentCharIndex + 1];
 }
 
 bool Scanner::isAtEnd()

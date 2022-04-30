@@ -14,7 +14,7 @@ public:
 	{
 	public:
 		bool hadError;
-		std::vector<Token> tokens;
+		std::vector<Token>& tokens;
 	};
 
 public:
@@ -36,8 +36,10 @@ private:
 	[[nodiscard]] Token errorToken(const char* format, ...);
 	[[nodiscard]] Token errorTokenAt(size_t start, size_t end, const char* format, ...);
 	void errorAt(size_t start, size_t end, const char* format, va_list args);
+	void errorAt(size_t start, size_t end, const char* format, ...);
 	char peek();
 	char peekPrevious();
+	char peekNext();
 	bool isAtEnd();
 	void advance();
 	void advanceLine();
