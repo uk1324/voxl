@@ -11,6 +11,11 @@ namespace Lang
 // Maybe store a public bool that would make it so constants are allocated in a different place making them not needed to be compressed.
 // Could just store the constant pool inside the allocator.
 // Consants would also need to store the GcNode they could set newLocation that just points to itself so updating pointers works.
+
+	template<typename Key, typename Value, typename KeyTraits>
+	class HashMap;
+	using HashTable = HashMap<ObjString*, Value, ObjStringKeyTraits>;
+
 class Allocator
 {
 public:
@@ -79,10 +84,12 @@ public:
 	ObjInstance* allocateInstance(ObjClass* class_);
 	ObjBoundFunction* allocateBoundFunction(ObjFunction* function, ObjInstance* instance);
 
-	void markObj(Obj* obj);
+	void runGc();
+
 	void addObj(Obj* obj);
 	void addValue(Value& value);
-
+	void addHashTable(HashTable& hashTable);
+	static void updateHashTable(HashTable& hashTable);
 	static void updateValue(Value& value);
 	static Obj* newObjLocation(Obj* value);
 
@@ -93,10 +100,10 @@ private:
 	static bool isMarked(Obj* obj);
 	static bool hasBeenMoved(Obj* obj);
 
+	void markObj(Obj* obj);
 	Obj* copyToNewLocation(Obj* obj);
+	void copyToNewLocation(HashTable& newTable, HashTable& oldTable);
 	void freeObj(Obj* obj);
-
-	void runGc();
 
 private:
 	Obj* m_tail;

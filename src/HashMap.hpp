@@ -63,19 +63,25 @@ private:
 template<typename Key, typename Value, typename KeyTraits>
 void Lang::HashMap<Key, Value, KeyTraits>::init(HashMap& map, Lang::Allocator& allocator)
 {
-	map.allocation = allocator.allocateRawMemory(sizeof(Bucket) * INITIAL_SIZE);
-	map.setAllKeysToNull();
+	map.allocation = nullptr;
 	map.m_size = 0;
+	// Cannot allocate an initial size becuase the GC might run and update the pointers on the stack.
+	// This map would still refer to the old instance and the new instance would be left in an invalid state.
+	// It may be possible way to fix this by setting allocation to nullptr and the size to zero 
+	// before doing the allocation so even if the GC happens the new one will copy the old ones valid state.
+	// TODO: A better way to fix this would be to merge the allocation for the instance and the hash map.
+	// This would allow to remove the nullptr checks in other HashMap functions.
 }
 
 template<typename Key, typename Value, typename KeyTraits>
 bool Lang::HashMap<Key, Value, KeyTraits>::insert(Allocator& allocator, const Key& newKey, Value newValue)
 {
-	if ((static_cast<float>(m_size + 1) / static_cast<float>(capacity())) > MAX_LOAD_FACTOR)
+	if ((allocation == nullptr) || ((static_cast<float>(m_size + 1) / static_cast<float>(capacity())) > MAX_LOAD_FACTOR))
 	{
-		const auto oldData = data();
-		const auto oldCapacity = capacity();
-		allocation = allocator.allocateRawMemory(sizeof(Bucket) * oldCapacity * 2);
+		const auto oldData = (allocation == nullptr) ? nullptr : data();
+		const auto oldCapacity = (allocation == nullptr) ? 0 : capacity();
+		auto newCapacity = (allocation == nullptr) ? INITIAL_SIZE : capacity() * 2;
+		allocation = allocator.allocateRawMemory(sizeof(Bucket) * newCapacity);
 		setAllKeysToNull();
 
 		for (size_t i = 0; i < oldCapacity; i++)
@@ -90,10 +96,11 @@ bool Lang::HashMap<Key, Value, KeyTraits>::insert(Allocator& allocator, const Ke
 
 	auto& bucket = findBucket(newKey);
 	bool wasNotAlreadySet = isBucketEmpty(bucket);
+	if (wasNotAlreadySet)
+		m_size++;
 
 	bucket.key = newKey;
 	bucket.value = newValue;
-	m_size++;
 
 	return wasNotAlreadySet;
 }
@@ -114,6 +121,9 @@ bool Lang::HashMap<Key, Value, KeyTraits>::remove(const Key& key)
 template<typename Key, typename Value, typename KeyTraits>
 std::optional<Value*> Lang::HashMap<Key, Value, KeyTraits>::get(const Key& key)
 {
+	if (allocation == nullptr)
+		return std::nullopt;
+
 	auto& bucket = findBucket(key);
 	if (KeyTraits::isKeyNull(bucket.key) || KeyTraits::isKeyTombstone(bucket.key))
 	{
@@ -179,9 +189,12 @@ template<typename Key, typename Value, typename KeyTraits>
 void Lang::HashMap<Key, Value, KeyTraits>::clear()
 {
 	m_size = 0;
-	for (size_t i = 0; i < capacity(); i++)
+	if (allocation != nullptr)
 	{
-		KeyTraits::setKeyNull(data()[i].key);
+		for (size_t i = 0; i < capacity(); i++)
+		{
+			KeyTraits::setKeyNull(data()[i].key);
+		}
 	}
 }
 

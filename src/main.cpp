@@ -124,7 +124,7 @@ int main()
 	if (compilerResult.hadError == false)
 	{
 		auto vm = std::make_unique<Vm>(allocator);
-		vm->createForeignFunction("print2", print2);
+		//vm->createForeignFunction("print2", print2);
 		//vm->createForeignFunction("add", add);
 		auto result = vm->execute(compilerResult.program, errorPrinter);
 	}

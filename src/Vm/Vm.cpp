@@ -1,4 +1,3 @@
-#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -62,6 +61,11 @@ Vm::Result Vm::run()
 			callStackTop().instructionPointer - callStackTop().function->byteCode.code.data());
 		std::cout << '\n';
 	#endif
+
+	#ifdef VOXL_DEBUG_STRESS_TEST_GC
+		m_allocator->runGc();
+	#endif
+
 		Op op = static_cast<Op>(*callStackTop().instructionPointer);
 		callStackTop().instructionPointer++;
 
@@ -581,17 +585,7 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 		allocator.addValue(*value);
 	}
 
-	for (size_t i = 0; i < vm->m_globals.capacity(); i++)
-	{
-		auto& bucket = vm->m_globals.data()[i];
-
-		if (vm->m_globals.isBucketEmpty(bucket) == false)
-		{
-			allocator.addObj(reinterpret_cast<Obj*>((bucket.key)));
-			allocator.addValue(bucket.value);
-		}
-	}
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_globals.allocation));
+	allocator.addHashTable(vm->m_globals);
 }
 
 void Vm::update(Vm* vm)
@@ -601,19 +595,7 @@ void Vm::update(Vm* vm)
 		Allocator::updateValue(*value);
 	}
 
-	vm->m_globals.allocation = reinterpret_cast<ObjAllocation*>(
-		Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_globals.allocation)));
-	for (size_t i = 0; i < vm->m_globals.capacity(); i++)
-	{
-		auto& bucket = vm->m_globals.data()[i];
-
-		if (vm->m_globals.isBucketEmpty(bucket) == false)
-		{
-			bucket.key = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(bucket.key)));
-			Allocator::updateValue(bucket.value);
-		}
-	}
-
+	Allocator::updateHashTable(vm->m_globals);
 
 	for (auto frame = vm->m_callStack.data(); frame != &vm->callStackTop() + 1; frame++)
 	{

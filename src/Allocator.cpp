@@ -1,5 +1,6 @@
 #include <Allocator.hpp>
 #include <Asserts.hpp>
+#include <Debug/DebugOptions.hpp>
 #include <Utf8.hpp>
 #include <stdlib.h>
 
@@ -213,6 +214,29 @@ Obj* Allocator::copyToNewLocation(Obj* obj)
 			break;
 		}
 
+		case ObjType::Class:
+		{
+			auto class_ = obj->asClass();
+			auto newClass = allocateObj(sizeof(ObjClass), ObjType::Class)->asClass();
+			copyObj(newClass, class_, sizeof(ObjClass));
+			copyToNewLocation(newClass->fields, class_->fields);
+			copyToNewLocation(newClass->methods, class_->methods);
+			newClass->name = reinterpret_cast<ObjString*>(copyToNewLocation(reinterpret_cast<Obj*>(class_->name)));
+			obj->newLocation = reinterpret_cast<Obj*>(newClass);
+			break;
+		}
+
+		case ObjType::Instance:
+		{
+			auto instance = obj->asInstance();
+			auto newInstance = allocateObj(sizeof(ObjInstance), ObjType::Instance)->asInstance();
+			copyObj(newInstance, instance, sizeof(ObjInstance));
+			copyToNewLocation(newInstance->fields, instance->fields);
+			newInstance->class_ = reinterpret_cast<ObjClass*>(copyToNewLocation(reinterpret_cast<Obj*>(instance->class_)));
+			obj->newLocation = reinterpret_cast<Obj*>(newInstance);
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 	}
@@ -220,71 +244,22 @@ Obj* Allocator::copyToNewLocation(Obj* obj)
 	return obj->newLocation;
 }
 
-void Allocator::runGc()
+void Allocator::copyToNewLocation(HashTable& newTable, HashTable& oldTable)
 {
-	m_markedObjs.clear();
-	m_markedMemorySize = 0;
-	std::cout << "marking start\n";
-	for (auto& [function, data, _] : m_rootMarkingFunctions)
+	if (oldTable.allocation != nullptr) // Read HashMap::init;
 	{
-		function(data, *this);
-	}
-
-	while (m_markedObjs.empty() == false)
-	{
-		Obj* obj = m_markedObjs.back();
-		m_markedObjs.pop_back();
-		markObj(obj);
-	}
-	std::cout << "marking end\n";
-
-	const auto requiredSize = m_markedMemorySize + m_allocationThatTriggeredGcSize;
-	if (requiredSize > m_region2Size)
-	{
-		::operator delete(m_region2);
-		const auto oldSizeDoubled = m_region2Size * 2;
-		m_region2Size = oldSizeDoubled < requiredSize
-			? requiredSize
-			: oldSizeDoubled;
-		m_region2 = reinterpret_cast<uint8_t*>(::operator new(m_region2Size));
-	}
-
-	std::swap(m_region1, m_region2);
-	std::swap(m_region1Size, m_region2Size);
-	m_nextAllocation = m_region1;
-
-	auto obj = m_head;
-	m_tail = m_head = nullptr;
-	while (obj != nullptr)
-	{
-		if (isMarked(obj))
+		newTable.allocation = reinterpret_cast<ObjAllocation*>(copyToNewLocation(reinterpret_cast<Obj*>(oldTable.allocation)));
+		for (size_t i = 0; i < newTable.capacity(); i++)
 		{
-			ASSERT(copyToNewLocation(obj) != nullptr);
+			auto& bucket = newTable.data()[i];
+
+			if (newTable.isBucketEmpty(bucket) == false)
+			{
+				bucket.key = reinterpret_cast<ObjString*>(copyToNewLocation(reinterpret_cast<Obj*>(bucket.key)));
+				updateValue(bucket.value);
+			}
 		}
-		else if (obj->newLocation == nullptr)
-		{
-			freeObj(obj);
-		}
-		obj = obj->next;
 	}
-
-	for (auto& [function, data, _] : m_updateFunctions)
-	{
-		function(data);
-	}
-
-	memset(m_region2, 0, m_region2Size);
-
-	std::cout << "survivors: \n";
-	auto n = m_head;
-	size_t surviversCount = 0;
-	while (n != nullptr)
-	{
-		std::cout << Value(n) << '\n';
-		n = n->next;
-		surviversCount++;
-	}
-	std::cout << "survivors end \n";
 }
 
 void Allocator::markObj(Obj* obj)
@@ -292,7 +267,6 @@ void Allocator::markObj(Obj* obj)
 	if (isMarked(obj))
 		return;
 
-	std::cout << Value(obj) << '\n';
 	setMarked(obj);
 	static constexpr auto WORST_CASE_SIZE_FOR_ALIGNMENT = ALIGNMENT - 1;
 	switch (obj->type)
@@ -330,9 +304,84 @@ void Allocator::markObj(Obj* obj)
 			m_markedMemorySize += sizeof(ObjAllocation) + memory->size + WORST_CASE_SIZE_FOR_ALIGNMENT;
 			return;
 		}
+
+		case ObjType::Class:
+		{
+			const auto class_ = obj->asClass();
+			addHashTable(class_->fields);
+			addHashTable(class_->methods);
+			addObj(reinterpret_cast<Obj*>(class_->name));
+			m_markedMemorySize += sizeof(ObjClass) + WORST_CASE_SIZE_FOR_ALIGNMENT;
+			return;
+		}
+
+		case ObjType::Instance:
+		{
+			const auto instance = obj->asInstance();
+			addHashTable(instance->fields);
+			addObj(reinterpret_cast<Obj*>(instance->class_));
+			m_markedMemorySize += sizeof(ObjInstance) + WORST_CASE_SIZE_FOR_ALIGNMENT;
+			return;
+		}
 	}
 
 	ASSERT_NOT_REACHED();
+}
+
+void Allocator::runGc()
+{
+	m_markedObjs.clear();
+	m_markedMemorySize = 0;
+	for (auto& [function, data, _] : m_rootMarkingFunctions)
+	{
+		function(data, *this);
+	}
+
+	while (m_markedObjs.empty() == false)
+	{
+		Obj* obj = m_markedObjs.back();
+		m_markedObjs.pop_back();
+		markObj(obj);
+	}
+	const auto requiredSize = m_markedMemorySize + m_allocationThatTriggeredGcSize;
+	if (requiredSize > m_region2Size)
+	{
+		::operator delete(m_region2);
+		const auto oldSizeDoubled = m_region2Size * 2;
+		m_region2Size = oldSizeDoubled < requiredSize
+			? requiredSize
+			: oldSizeDoubled;
+		m_region2 = reinterpret_cast<uint8_t*>(::operator new(m_region2Size));
+	}
+
+	std::swap(m_region1, m_region2);
+	std::swap(m_region1Size, m_region2Size);
+	m_nextAllocation = m_region1;
+
+	auto obj = m_head;
+	m_tail = m_head = nullptr;
+	while (obj != nullptr)
+	{
+		if (isMarked(obj))
+		{
+			ASSERT(copyToNewLocation(obj) != nullptr);
+		}
+		else if (obj->newLocation == nullptr)
+		{
+			freeObj(obj);
+		}
+		obj = obj->next;
+	}
+
+	for (auto& [function, data, _] : m_updateFunctions)
+	{
+		function(data);
+	}
+
+#ifdef VOXL_DEBUG_STRESS_TEST_GC
+	memset(m_region2, 0, m_region2Size);
+#endif
+
 }
 
 void Allocator::addObj(Obj* obj)
@@ -345,6 +394,43 @@ void Allocator::addValue(Value& value)
 	if (value.type == ValueType::Obj)
 	{
 		addObj(value.as.obj);
+	}
+}
+
+void Allocator::addHashTable(HashTable& hashTable)
+{
+	if (hashTable.allocation != nullptr) // Read HashMap::init.
+	{
+		for (size_t i = 0; i < hashTable.capacity(); i++)
+		{
+			auto& bucket = hashTable.data()[i];
+
+			if (hashTable.isBucketEmpty(bucket) == false)
+			{
+				addObj(reinterpret_cast<Obj*>((bucket.key)));
+				addValue(bucket.value);
+			}
+		}
+
+		addObj(reinterpret_cast<Obj*>(hashTable.allocation));
+	}
+}
+
+void Allocator::updateHashTable(HashTable& hashTable)
+{
+	if (hashTable.allocation != nullptr) // Read HashMap::init.
+	{
+		hashTable.allocation = reinterpret_cast<ObjAllocation*>(newObjLocation(reinterpret_cast<Obj*>(hashTable.allocation)));
+		for (size_t i = 0; i < hashTable.capacity(); i++)
+		{
+			auto& bucket = hashTable.data()[i];
+
+			if (hashTable.isBucketEmpty(bucket) == false)
+			{
+				bucket.key = reinterpret_cast<ObjString*>(newObjLocation(reinterpret_cast<Obj*>(bucket.key)));
+				updateValue(bucket.value);
+			}
+		}
 	}
 }
 
@@ -408,12 +494,14 @@ void Allocator::updateValue(Value& value)
 {
 	if (value.type == ValueType::Obj)
 	{
-		value.as.obj = value.as.obj->newLocation;
+		value.as.obj = newObjLocation(value.as.obj);
 	}
 }
 
 Obj* Allocator::newObjLocation(Obj* value)
 {
+	ASSERT(value->newLocation != nullptr); // Didn't add the obj.
+	ASSERT(value->newLocation != reinterpret_cast<Obj*>(1)); // Probably forgot to set newLocation in copyToNewLocation.
 	return value->newLocation;
 }
 

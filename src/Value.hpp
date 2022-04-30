@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ByteCode.hpp>
+#include <KeyTraits.hpp>
 #include <ostream>
 
 namespace Lang
@@ -119,39 +120,6 @@ public:
 
 namespace Lang
 {
-
-struct ObjStringKeyTraits
-{
-	inline static bool compareKeys(const ObjString* a, const ObjString* b)
-	{
-		return (a->size == b->size) && (memcmp(a->chars, b->chars, a->size) == 0);
-	}
-
-	inline static size_t hashKey(const ObjString* key)
-	{
-		return std::hash<std::string_view>()(std::string_view(key->chars, key->size));
-	}
-
-	inline static void setKeyNull(ObjString*& key)
-	{
-		key = nullptr;
-	}
-
-	inline static void setKeyTombstone(ObjString*& key)
-	{
-		key = reinterpret_cast<ObjString*>(1);
-	}
-
-	inline static bool isKeyNull(const ObjString* key)
-	{
-		return key == nullptr;
-	}
-
-	inline static bool isKeyTombstone(const ObjString* key)
-	{
-		return key == reinterpret_cast<ObjString*>(1);
-	}
-};
 
 using HashTable = HashMap<ObjString*, Value, ObjStringKeyTraits>;
 

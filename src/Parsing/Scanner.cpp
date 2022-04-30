@@ -393,5 +393,5 @@ bool Scanner::isIdentifierStartChar(char c)
 
 bool Scanner::isIdentifierChar(char c)
 {
-	return isIdentifierChar(c) || isDigit(c);
+	return isIdentifierStartChar(c) || isDigit(c);
 }
