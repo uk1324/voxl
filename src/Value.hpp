@@ -89,6 +89,7 @@ class Value
 public:
 	Value() {};
 	explicit Value(Int value);
+	explicit Value(Float value);
 	explicit Value(Obj* obj);
 	explicit Value(bool boolean);
 		

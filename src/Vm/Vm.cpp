@@ -18,7 +18,7 @@ Vm::Vm(Allocator& allocator)
 	, m_rootMarkingFunctionHandle(allocator.registerRootMarkingFunction(this, mark))
 	, m_updateFunctionHandle(allocator.registerUpdateFunction(this, update))
 {
-	HashTable::init(m_globals, *m_allocator);
+	HashTable::init(m_globals);
 }
 
 Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
@@ -45,14 +45,7 @@ Vm::Result Vm::run()
 		std::cout << "[ ";
 		for (Value* value = m_stack.data(); value != m_stackTop; value++)
 		{
-			if ((value->type == ValueType::Obj) && (value->as.obj->type == ObjType::String))
-			{
-				std::cout << '"' << *value << '"';
-			}
-			else
-			{
-				std::cout << *value;
-			}
+			debugPrintValue(*value);
 			std::cout << ' ';
 		}
 		std::cout << "]\n";
@@ -75,15 +68,34 @@ Vm::Result Vm::run()
 		{
 			Value lhs = peekStack(1);
 			Value rhs = peekStack(0);
-			if (lhs.type == ValueType::Int && rhs.type == ValueType::Int)
+			if (false)
 			{
-				popStack();
-				popStack();
-				pushStack(Value(lhs.as.intNumber + rhs.as.intNumber));
+				// is instance
 			}
 			else
 			{
-				return Result::RuntimeError;
+				popStack();
+				popStack();
+				if (lhs.isInt() && rhs.isInt())
+				{
+					pushStack(Value(lhs.as.intNumber + rhs.as.intNumber));
+				}
+				else if (lhs.isFloat() && rhs.isFloat())
+				{
+					pushStack(Value(lhs.as.floatNumber + rhs.as.floatNumber));
+				}
+				else if (lhs.isFloat() && rhs.isInt())
+				{
+					pushStack(Value(lhs.as.floatNumber + static_cast<Float>(rhs.as.intNumber)));
+				}
+				else if (lhs.isInt() && rhs.isFloat())
+				{
+					pushStack(Value(static_cast<Float>(lhs.as.intNumber) + rhs.as.floatNumber));
+				}
+				else
+				{
+					return fatalError("cannot add these types");
+				}
 			}
 			break;
 		}
@@ -94,7 +106,7 @@ Vm::Result Vm::run()
 			Value rhs = peekStack(0);
 			std::stringstream result;
 			// Could optmize this by not recalculating the length using Utf8::strlen every time.
-			// Could also create an stream for ObjString* objects to avoid pointless allocatin in std::stringstream.
+			// Could also create an stream for ObjString* objects to avoid pointless allocating in std::stringstream.
 			result << lhs << rhs;
 			ObjString* string = m_allocator->allocateString(result.str());
 			popStack();
@@ -322,9 +334,6 @@ Vm::Result Vm::run()
 			popStack();
 			class_->name = name;
 			pushStack(Value(reinterpret_cast<Obj*>(class_)));
-			// Pushing before HashTable::init to prevent the GC from collecting the class.
-			HashTable::init(class_->fields, *m_allocator);
-			HashTable::init(class_->methods, *m_allocator);
 			break;
 		}
 
@@ -548,7 +557,6 @@ Vm::Result Vm::callObj(Obj* obj, int argCount)
 			instance->class_ = calle;
 			m_stackTop -= 1 + static_cast<size_t>(argCount); // Pop the function and arguments.
 			pushStack(Value(reinterpret_cast<Obj*>(instance))); // Pushing here so the GC knows about it before HashTable::init.
-			HashTable::init(instance->fields, *m_allocator);
 			break;
 		}
 

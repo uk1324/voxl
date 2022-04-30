@@ -32,7 +32,7 @@ public:
 	};
 
 public:
-	static void init(HashMap& map, Allocator& allocator);
+	static void init(HashMap& map);
 	bool insert(Allocator& allocator, const Key& key, Value value);
 	bool remove(const Key& key);
 	std::optional<Value*> get(const Key& key);
@@ -61,7 +61,7 @@ private:
 #include <Allocator.hpp>
 
 template<typename Key, typename Value, typename KeyTraits>
-void Lang::HashMap<Key, Value, KeyTraits>::init(HashMap& map, Lang::Allocator& allocator)
+void Lang::HashMap<Key, Value, KeyTraits>::init(HashMap& map)
 {
 	map.allocation = nullptr;
 	map.m_size = 0;

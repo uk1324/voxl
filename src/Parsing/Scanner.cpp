@@ -1,7 +1,6 @@
-#include "Scanner.hpp"
-#include "Scanner.hpp"
 #include <Parsing/Scanner.hpp>
 
+#include <charconv>
 #include <unordered_map>
 #include <iostream>
 #include <stdarg.h>
@@ -92,18 +91,83 @@ Token Scanner::token()
 
 Token Scanner::number()
 {
-	Int number = static_cast<Int>(peekPrevious()) - static_cast<Int>('0');
-
-	while ((isAtEnd() == false) && isDigit(peek()))
+	int base = 10;
+	if (peekPrevious() == '0')
 	{
-		number *= 10;
-		number += static_cast<Int>(peek()) - static_cast<Int>('0');
+		if (match('x'))
+		{
+			base = 16;
+		}
+		else if (isDigit(peek()))
+		{
+			base = 8;
+		}
+		else if (match('b'))
+		{
+			base = 2;
+		}
+	}
+
+	bool isInt = true;
+	while ((isAtEnd() == false))
+	{
+		if (match('.'))
+		{
+			if (base != 10)
+			{
+				while ((isAtEnd() == false) && isDigit(peek()))
+					advance();
+				return errorToken("cannot use non base 10 floating point constants");
+			}
+			isInt = false;
+			break;
+		}
+		else if (isDigit(peek()) == false)
+		{
+			break;
+		}
 		advance();
 	}
 
-	auto token = makeToken(TokenType::IntNumber);
-	token.intValue = number;
-	return token;
+	auto start = &m_sourceInfo->source[m_tokenStartIndex];
+	if (isInt)
+	{
+		Int value;
+		auto result = std::from_chars(start, &m_sourceInfo->source.back(), value, base);
+		m_currentCharIndex = m_tokenStartIndex + (result.ptr - start);
+
+		if (result.ec == std::errc::invalid_argument)
+		{
+			return errorToken("invalid number");
+		}
+		else if (result.ec == std::errc::result_out_of_range)
+		{
+			return errorToken("number out of precision range");
+		}
+
+		auto token = makeToken(TokenType::IntNumber);
+		token.intValue = value;
+		return token;
+	}
+	else
+	{
+		Float value;
+		auto result = std::from_chars(&m_sourceInfo->source[m_tokenStartIndex], &m_sourceInfo->source.back(), value);
+		m_currentCharIndex = m_tokenStartIndex + (result.ptr - start);
+
+		if (result.ec == std::errc::invalid_argument)
+		{
+			return errorToken("invalid number");
+		}
+		else if (result.ec == std::errc::result_out_of_range)
+		{
+			return errorToken("number out of precision range");
+		}
+
+		auto token = makeToken(TokenType::FloatNumber);
+		token.floatValue = value;
+		return token;
+	}
 }
 
 Token Scanner::keywordOrIdentifier()

@@ -9,6 +9,12 @@ Value::Value(Int value)
 	as.intNumber = value;
 }
 
+Value::Value(Float value)
+	: type(ValueType::Float)
+{
+	as.floatNumber = value;
+}
+
 Value::Value(Obj* obj)
 	: type(ValueType::Obj)
 {

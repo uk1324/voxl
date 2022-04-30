@@ -38,14 +38,7 @@ static size_t opConstant(std::string_view name, const ByteCode& byteCode, size_t
 	// Justify left later
 	std::cout << " c[" << index << "] -> ";
 	const auto& constant = byteCode.constants[index];
-	if ((constant.type == ValueType::Obj) && (constant.as.obj->type == ObjType::String))
-	{
-		std::cout << '"' << constant << '"';
-	}
-	else
-	{
-		std::cout << constant;
-	}
+	debugPrintValue(constant);
 	return 5;
 }
 
@@ -61,6 +54,18 @@ static size_t jump(std::string_view name, const ByteCode& byteCode, size_t offse
 	auto offsetAfterDecoding = offset + 5;
 	std::cout << ' ' << offset << " -> " << ((sign == 1) ? (offsetAfterDecoding + jumpSize) : (offsetAfterDecoding - jumpSize));
 	return 5;
+}
+
+void Lang::debugPrintValue(const Value& value)
+{
+	if ((value.type == ValueType::Obj) && (value.as.obj->type == ObjType::String))
+	{
+		std::cout << '"' << value << '"';
+	}
+	else
+	{
+		std::cout << value;
+	}
 }
 
 size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)

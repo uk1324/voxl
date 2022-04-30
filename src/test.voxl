@@ -1,7 +1,1 @@
-/*
-	/* nested /**/ */
-	comment
-*/
-// c o m m e n t
-print("abc" /* abc */);
-/* print("comment") */
+print(1.231 + (2.3 + 1));

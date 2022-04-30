@@ -9,6 +9,7 @@
 namespace Lang
 {
 
+void debugPrintValue(const Value& value);
 size_t disassembleInstruction(const ByteCode& byteCode, size_t offset);
 void disassembleByteCode(const ByteCode& byteCode);
 

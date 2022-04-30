@@ -112,6 +112,8 @@ ObjClass* Allocator::allocateClass(ObjString* name)
 {
 	auto obj = allocateObj(sizeof(ObjClass), ObjType::Class)->asClass();
 	obj->name = name;
+	HashTable::init(obj->fields);
+	HashTable::init(obj->methods);
 	return obj;
 }
 
@@ -119,6 +121,7 @@ ObjInstance* Allocator::allocateInstance(ObjClass* class_)
 {
 	auto obj = allocateObj(sizeof(ObjInstance), ObjType::Instance)->asInstance();
 	obj->class_ = class_;
+	HashTable::init(obj->fields);
 	// Cannot init the fields hash table here because the allocator doesn't know about obj so it would collect it.
 	return obj;
 }

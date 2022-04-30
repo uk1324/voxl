@@ -1,3 +1,4 @@
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -44,7 +45,6 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 
 	// The return from program is on the last line of the file.
 	m_lineNumberStack.push_back(m_errorPrinter->sourceInfo().lineStartOffsets.size());
-	emitOp(Op::LoadNull);
 	emitOp(Op::Return);
 	m_lineNumberStack.pop_back();
 
@@ -326,6 +326,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 	switch (expr.get()->type)
 	{
 		CASE_EXPR_TYPE(IntConstant, intConstantExpr)
+		CASE_EXPR_TYPE(FloatConstant, floatConstantExpr)
 		CASE_EXPR_TYPE(BoolConstant, boolConstantExpr)
 		CASE_EXPR_TYPE(Binary, binaryExpr)
 		CASE_EXPR_TYPE(StringConstant, stringConstantExpr)
@@ -344,7 +345,13 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 
 Compiler::Status Compiler::intConstantExpr(const IntConstantExpr& expr)
 {
-	// TODO: Search if constant already exists.
+	auto constant = createConstant(Value(expr.value));
+	loadConstant(constant);
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::floatConstantExpr(const FloatConstantExpr& expr)
+{
 	auto constant = createConstant(Value(expr.value));
 	loadConstant(constant);
 	return Status::Ok;

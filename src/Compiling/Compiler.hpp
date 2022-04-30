@@ -74,6 +74,7 @@ private:
 	Status compile(const std::unique_ptr<Expr>& expr);
 	// TODO: perform constant folding
 	Status intConstantExpr(const IntConstantExpr& expr);
+	Status floatConstantExpr(const FloatConstantExpr& expr);
 	Status boolConstantExpr(const BoolConstantExpr& expr);
 	Status stringConstantExpr(const StringConstantExpr& expr);
 	Status binaryExpr(const BinaryExpr& expr);

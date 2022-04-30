@@ -65,8 +65,6 @@ Value add(Value* args, int argCount)
 // because the function return will pop them anyway.
 // Could optimize also be creating an instruction to pop n values of the stack.
 
-// TODO: Add function like asString to Obj.
-
 // TODO: Make static vector class
 
 // How to synchronize this without semicolons

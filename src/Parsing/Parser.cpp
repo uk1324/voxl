@@ -352,6 +352,10 @@ std::unique_ptr<Expr> Parser::primary()
 	{
 		return std::make_unique<IntConstantExpr>(peekPrevious().intValue, peekPrevious().start, peekPrevious().end);
 	}
+	if (match(TokenType::FloatNumber))
+	{
+		return std::make_unique<FloatConstantExpr>(peekPrevious().floatValue, peekPrevious().start, peekPrevious().end);
+	}
 	if (match(TokenType::Identifier))
 	{
 		return std::make_unique<IdentifierExpr>(peekPrevious().identifier, peekPrevious().start, peekPrevious().end);
@@ -391,6 +395,12 @@ std::unique_ptr<Expr> Parser::primary()
 				return std::make_unique<ArrayExpr>(std::move(values), start, peekPrevious().end);
 			}
 		}
+	}
+	else if (match(TokenType::LeftParen))
+	{
+		auto expression = expr();
+		expect(TokenType::RightParen, "expected ')'");
+		return expression;
 	}
 	// TODO: Check if this error location is good or should it maybe be token.
 	throw errorAt(peek(), "expected expression");
