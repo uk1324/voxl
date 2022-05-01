@@ -27,6 +27,7 @@ namespace Lang
 		LoadTrue,
 		LoadFalse,
 		JumpIfFalse, // 32bit - bytes to jump forward
+		JumpIfFalseAndPop, // 32bit - bytes to jump forward
 		JumpIfTrue,
 		Jump,
 		JumpBack, // 

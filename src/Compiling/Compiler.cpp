@@ -197,7 +197,7 @@ Compiler::Status Compiler::ifStmt(const IfStmt& stmt)
 {
 	TRY(compile(stmt.condition));
 
-	auto jumpToElse = emitJump(Op::JumpIfFalse);
+	auto jumpToElse = emitJump(Op::JumpIfFalseAndPop);
 
 	TRY(compile(stmt.ifThen));
 
@@ -226,7 +226,7 @@ Compiler::Status Compiler::loopStmt(const LoopStmt& stmt)
 	if (stmt.condition.has_value())
 	{
 		TRY(compile(*stmt.condition));
-		jumpToEnd = emitJump(Op::JumpIfFalse);
+		jumpToEnd = emitJump(Op::JumpIfFalseAndPop);
 	}
 
 	beginScope();

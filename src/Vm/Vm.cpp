@@ -158,8 +158,7 @@ Vm::Result Vm::run()
 			const auto value = m_globals.get(name);
 			if (value.has_value() == false)
 			{
-				m_errorPrinter->outStream() << '\'' << name->chars << "' is not defined\n";
-				return Result::RuntimeError;
+				return fatalError("'%s' is not defined", name->chars);
 			}
 			popStack();
 			pushStack(**value);
@@ -292,7 +291,7 @@ Vm::Result Vm::run()
 			break;
 		}
 
-		case Op::JumpIfFalse:
+		case Op::JumpIfFalseAndPop:
 		{
 			auto jump = readUint32();
 			auto& value = peekStack(0);
@@ -308,6 +307,21 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::JumpIfFalse:
+		{
+			auto jump = readUint32();
+			auto& value = peekStack(0);
+			if ((value.type != ValueType::Bool))
+			{
+				return fatalError("must be bool");
+			}
+			if (value.as.boolean == false)
+			{
+				callStackTop().instructionPointer += jump;
+			}
+			break;
+		}
+
 		case Op::JumpIfTrue:
 		{
 			auto jump = readUint32();
@@ -320,7 +334,6 @@ Vm::Result Vm::run()
 			{
 				callStackTop().instructionPointer += jump;
 			}
-			popStack();
 			break;
 		}
 
