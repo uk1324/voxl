@@ -1,4 +1,5 @@
 #include "Parser.hpp"
+#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -286,12 +287,17 @@ std::unique_ptr<Expr> Parser:: or()
 
 std::unique_ptr<Expr> Parser::equality()
 {
-	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::EqualsEquals), factor)
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::EqualsEquals), term)
+}
+
+std::unique_ptr<Expr> Parser::term()
+{
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::Star) || match(TokenType::Slash) || match(TokenType::Percent), factor)
 }
 
 std::unique_ptr<Expr> Parser::factor()
 {
-	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::Plus) || match(TokenType::PlusPlus), unary)
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::Plus) || match(TokenType::PlusPlus) || match(TokenType::Minus), unary)
 }
 
 std::unique_ptr<Expr> Parser::unary()

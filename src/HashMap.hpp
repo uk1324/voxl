@@ -79,7 +79,7 @@ bool Lang::HashMap<Key, Value, KeyTraits>::insert(Allocator& allocator, const Ke
 	if ((allocation == nullptr) || ((static_cast<float>(m_size + 1) / static_cast<float>(capacity())) > MAX_LOAD_FACTOR))
 	{
 		const auto oldData = (allocation == nullptr) ? nullptr : data();
-		const auto oldCapacity = capacity();
+		const auto oldCapacity = (allocation == nullptr) ? 0 : capacity();
 		auto newCapacity = (allocation == nullptr) ? INITIAL_SIZE : capacity() * 2;
 		allocation = allocator.allocateRawMemory(sizeof(Bucket) * newCapacity);
 		setAllKeysToNull();

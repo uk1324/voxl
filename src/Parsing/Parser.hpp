@@ -51,10 +51,10 @@ private:
 	std::unique_ptr<Expr> and();
 	std::unique_ptr<Expr> or();
 	std::unique_ptr<Expr> equality();
+	std::unique_ptr<Expr> term();
 	std::unique_ptr<Expr> factor();
 	std::unique_ptr<Expr> unary();
 	std::unique_ptr<Expr> callOrFieldAccess();
-	//std::unique_ptr<Expr> fieldAccess();
 	std::unique_ptr<Expr> primary();
 
 	const Token& peek() const;

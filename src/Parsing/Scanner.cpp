@@ -63,6 +63,9 @@ Token Scanner::token()
 			? makeToken(TokenType::OrOr)
 			: makeToken(TokenType::Or);
 		case '-': return makeToken(TokenType::Minus);
+		case '/': return makeToken(TokenType::Slash);
+		case '%': return makeToken(TokenType::Percent);
+		case '*': return makeToken(TokenType::Star);
 		case '!': return makeToken(TokenType::Not);
 		case ';': return makeToken(TokenType::Semicolon);
 		case '=': return match('=')

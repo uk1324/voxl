@@ -15,6 +15,9 @@ enum class TokenType
 	// Operators
 	Plus,
 	Minus,
+	Star,
+	Slash,
+	Percent,
 	Not,
 	Equals,
 	EqualsEquals,

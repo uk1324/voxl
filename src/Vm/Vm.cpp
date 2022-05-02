@@ -21,6 +21,10 @@ Vm::Vm(Allocator& allocator)
 	HashTable::init(m_globals);
 	m_initString = m_allocator->allocateString("$init");
 	m_addString = m_allocator->allocateString("$add");
+	m_subString = m_allocator->allocateString("$sub");
+	m_mulString = m_allocator->allocateString("$mul");
+	m_divString = m_allocator->allocateString("$div");
+	m_modString = m_allocator->allocateString("$mod");
 }
 
 Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
@@ -31,7 +35,10 @@ Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 	m_callStackSize = 1;
 
 	auto result = run();
-	ASSERT(m_stack.data() == m_stackTop); // The program should always finish without anything on the stack.
+	if (result == Result::Success)
+	{
+		ASSERT(m_stack.data() == m_stackTop); // The program should always finish without anything on the stack.
+	}
 	return result;
 }
 
@@ -67,14 +74,66 @@ Vm::Result Vm::run()
 
 		switch (op)
 		{
-		case Op::Add:
+#define BINARY_ARITHMETIC_OP(op, overloadNameString) \
+	{ \
+		Value lhs = peekStack(1); \
+		Value rhs = peekStack(0); \
+		if (lhs.isObj() && lhs.as.obj->isInstance()) \
+		{ \
+			auto instance = lhs.as.obj->asInstance(); \
+			auto optMethod = instance->class_->methods.get(overloadNameString); \
+			if (optMethod.has_value()) \
+			{ \
+				if (callValue(**optMethod, 2, 0) == Result::RuntimeError) \
+				{ \
+					return Result::RuntimeError; \
+				} \
+			} \
+			else \
+			{ \
+				return fatalError("no operator" #op " for these types"); \
+			} \
+		} \
+		else \
+		{ \
+			popStack(); \
+			popStack(); \
+			if (lhs.isInt() && rhs.isInt()) \
+			{ \
+				pushStack(Value(lhs.as.intNumber op rhs.as.intNumber)); \
+			} \
+			else if (lhs.isFloat() && rhs.isFloat()) \
+			{ \
+				pushStack(Value(lhs.as.floatNumber op rhs.as.floatNumber)); \
+			} \
+			else if (lhs.isFloat() && rhs.isInt()) \
+			{ \
+				pushStack(Value(lhs.as.floatNumber op static_cast<Float>(rhs.as.intNumber))); \
+			} \
+			else if (lhs.isInt() && rhs.isFloat()) \
+			{ \
+				pushStack(Value(static_cast<Float>(lhs.as.intNumber) op rhs.as.floatNumber)); \
+			} \
+			else \
+			{ \
+				return fatalError("no operator " #op " for these types"); \
+			} \
+		} \
+		break; \
+	}
+		case Op::Add: BINARY_ARITHMETIC_OP(+, m_addString)
+		case Op::Subtract: BINARY_ARITHMETIC_OP(-, m_subString)
+		case Op::Multiply: BINARY_ARITHMETIC_OP(*, m_mulString)
+		case Op::Divide: BINARY_ARITHMETIC_OP(/, m_divString)
+#undef BINARY_ARITHMETIC_OP
+		case Op::Modulo: 
 		{
 			Value lhs = peekStack(1);
 			Value rhs = peekStack(0);
 			if (lhs.isObj() && lhs.as.obj->isInstance())
 			{
 				auto instance = lhs.as.obj->asInstance();
-				auto optMethod = instance->class_->methods.get(m_addString);
+				auto optMethod = instance->class_->methods.get(m_modString);
 				if (optMethod.has_value())
 				{
 					if (callValue(**optMethod, 2, 0) == Result::RuntimeError)
@@ -84,7 +143,7 @@ Vm::Result Vm::run()
 				}
 				else
 				{
-					return fatalError("cannot add these types");
+					return fatalError("no operator % for these types");
 				}
 			}
 			else
@@ -93,26 +152,26 @@ Vm::Result Vm::run()
 				popStack();
 				if (lhs.isInt() && rhs.isInt())
 				{
-					pushStack(Value(lhs.as.intNumber + rhs.as.intNumber));
+					pushStack(Value(lhs.as.intNumber % rhs.as.intNumber));
 				}
 				else if (lhs.isFloat() && rhs.isFloat())
 				{
-					pushStack(Value(lhs.as.floatNumber + rhs.as.floatNumber));
+					pushStack(Value(fmod(lhs.as.floatNumber, rhs.as.floatNumber)));
 				}
 				else if (lhs.isFloat() && rhs.isInt())
 				{
-					pushStack(Value(lhs.as.floatNumber + static_cast<Float>(rhs.as.intNumber)));
+					pushStack(Value(fmod(lhs.as.floatNumber, static_cast<Float>(rhs.as.intNumber))));
 				}
 				else if (lhs.isInt() && rhs.isFloat())
 				{
-					pushStack(Value(static_cast<Float>(lhs.as.intNumber) + rhs.as.floatNumber));
+					pushStack(Value(fmod(static_cast<Float>(lhs.as.intNumber), rhs.as.floatNumber)));
 				}
 				else
 				{
-					return fatalError("cannot add these types");
+					return fatalError("no operator % for these types");
 				}
 			}
-			break;
+				break;
 		}
 
 		case Op::Concat:
@@ -659,6 +718,10 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 
 	allocator.addObj(reinterpret_cast<Obj*>(vm->m_initString));
 	allocator.addObj(reinterpret_cast<Obj*>(vm->m_addString));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_subString));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_mulString));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_divString));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_modString));
 }
 
 void Vm::update(Vm* vm)
@@ -677,6 +740,10 @@ void Vm::update(Vm* vm)
 
 	vm->m_initString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_initString)));
 	vm->m_addString= reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_addString)));
+	vm->m_subString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_subString)));
+	vm->m_mulString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_mulString)));
+	vm->m_divString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_divString)));
+	vm->m_modString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_modString)));
 }
 
 Vm::CallFrame& Vm::callStackTop()

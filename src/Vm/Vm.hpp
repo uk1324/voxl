@@ -49,6 +49,8 @@ public:
 
 	void createForeignFunction(std::string_view name, ForeignFunction function, int argCount);
 
+	//Value add(Value lhs, Value rhs);
+
 private:
 	Result run();
 
@@ -88,6 +90,10 @@ public:
 
 	ObjString* m_initString;
 	ObjString* m_addString;
+	ObjString* m_subString;
+	ObjString* m_mulString;
+	ObjString* m_divString;
+	ObjString* m_modString;
 
 	Allocator::RootMarkingFunctionHandle m_rootMarkingFunctionHandle;
 	Allocator::UpdateFunctionHandle m_updateFunctionHandle;

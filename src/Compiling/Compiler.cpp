@@ -549,6 +549,10 @@ Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
 	{
 		case TokenType::Plus: emitOp(Op::Add); break;
 		case TokenType::PlusPlus: emitOp(Op::Concat); break;
+		case TokenType::Minus: emitOp(Op::Subtract); break;
+		case TokenType::Star: emitOp(Op::Multiply); break;
+		case TokenType::Slash: emitOp(Op::Divide); break;
+		case TokenType::Percent: emitOp(Op::Modulo); break;
 		case TokenType::EqualsEquals: emitOp(Op::Equals); break;
 		default:
 			ASSERT_NOT_REACHED();

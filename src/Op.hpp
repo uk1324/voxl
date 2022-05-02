@@ -8,8 +8,16 @@ namespace Lang
 	// This would reduce code size.
 	enum class Op : uint8_t
 	{
-		Add, // [lhs, rhs]
-		Concat, // [lhs, rhs]
+		// [lhs, rhs]
+		// {
+		Add, 
+		Subtract, 
+		Multiply, 
+		Divide, 
+		Modulo, 
+		Concat,
+		// }
+
 		LoadConstant,
 		LoadLocal,
 		SetLocal,
