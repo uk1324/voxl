@@ -8,7 +8,7 @@ using namespace Lang;
 #define INIT() \
 	Allocator _a; \
 	HashMap<ObjString*, int, ObjStringKeyTraits> _m;  \
-	_m.init(_m, _a);
+	_m.init(_m);
 
 #define PUT(k, v) _m.insert(_a, _a.allocateString(k), v)
 #define GET(k) (_m.get(_a.allocateString(k)))

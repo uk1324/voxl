@@ -79,7 +79,7 @@ bool Lang::HashMap<Key, Value, KeyTraits>::insert(Allocator& allocator, const Ke
 	if ((allocation == nullptr) || ((static_cast<float>(m_size + 1) / static_cast<float>(capacity())) > MAX_LOAD_FACTOR))
 	{
 		const auto oldData = (allocation == nullptr) ? nullptr : data();
-		const auto oldCapacity = (allocation == nullptr) ? 0 : capacity();
+		const auto oldCapacity = capacity();
 		auto newCapacity = (allocation == nullptr) ? INITIAL_SIZE : capacity() * 2;
 		allocation = allocator.allocateRawMemory(sizeof(Bucket) * newCapacity);
 		setAllKeysToNull();
@@ -189,19 +189,18 @@ template<typename Key, typename Value, typename KeyTraits>
 void Lang::HashMap<Key, Value, KeyTraits>::clear()
 {
 	m_size = 0;
-	if (allocation != nullptr)
+	for (size_t i = 0; i < capacity(); i++)
 	{
-		for (size_t i = 0; i < capacity(); i++)
-		{
-			KeyTraits::setKeyNull(data()[i].key);
-		}
+		KeyTraits::setKeyNull(data()[i].key);
 	}
 }
 
 template<typename Key, typename Value, typename KeyTraits>
 size_t Lang::HashMap<Key, Value, KeyTraits>::capacity() const
 {
-	return allocation->size / sizeof(Bucket);
+	return (allocation == nullptr)
+		? 0
+		: allocation->size / sizeof(Bucket);
 }
 
 template<typename Key, typename Value, typename KeyTraits>

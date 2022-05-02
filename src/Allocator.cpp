@@ -99,10 +99,10 @@ ObjString* Allocator::allocateString(std::string_view chars, size_t length)
 	return obj;
 }
 
-ObjFunction* Allocator::allocateFunction(ObjString* name, int argumentCount)
+ObjFunction* Allocator::allocateFunction(ObjString* name, int argCount)
 {
 	auto obj = reinterpret_cast<ObjFunction*>(allocateObj(sizeof(ObjFunction), ObjType::Function));
-	obj->argumentCount = argumentCount;
+	obj->argCount = argCount;
 	obj->name = name;
 	new (&obj->byteCode) ByteCode();
 	return obj;
@@ -134,12 +134,13 @@ ObjBoundFunction* Allocator::allocateBoundFunction(ObjFunction* function, ObjIns
 	return obj;
 }
 
-ObjForeignFunction* Allocator::allocateForeignFunction(ObjString* name, ForeignFunction function)
+ObjForeignFunction* Allocator::allocateForeignFunction(ObjString* name, ForeignFunction function, int argCount)
 {
 	auto obj = reinterpret_cast<ObjForeignFunction*>(allocateObj(sizeof(ObjForeignFunction), ObjType::ForeignFunction));
 	obj->obj.type = ObjType::ForeignFunction;
 	obj->name = name;
 	obj->function = function;
+	obj->argCount = argCount;
 	return obj;
 }
 
@@ -240,6 +241,17 @@ Obj* Allocator::copyToNewLocation(Obj* obj)
 			break;
 		}
 
+		case ObjType::BoundFunction:
+		{
+			auto function = obj->asBoundFunction();
+			auto newFunction = allocateObj(sizeof(ObjBoundFunction), ObjType::BoundFunction)->asBoundFunction();
+			copyObj(newFunction, function, sizeof(ObjBoundFunction));
+			newFunction->instance = reinterpret_cast<ObjInstance*>(copyToNewLocation(reinterpret_cast<Obj*>(function->instance)));
+			newFunction->function = reinterpret_cast<ObjFunction*>(copyToNewLocation(reinterpret_cast<Obj*>(function->function)));
+			obj->newLocation = reinterpret_cast<Obj*>(newFunction);
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 	}
@@ -324,6 +336,15 @@ void Allocator::markObj(Obj* obj)
 			addHashTable(instance->fields);
 			addObj(reinterpret_cast<Obj*>(instance->class_));
 			m_markedMemorySize += sizeof(ObjInstance) + WORST_CASE_SIZE_FOR_ALIGNMENT;
+			return;
+		}
+
+		case ObjType::BoundFunction:
+		{
+			const auto function = obj->asBoundFunction();
+			addObj(reinterpret_cast<Obj*>(function->instance));
+			addObj(reinterpret_cast<Obj*>(function->function));
+			m_markedMemorySize += sizeof(ObjBoundFunction) + WORST_CASE_SIZE_FOR_ALIGNMENT;
 			return;
 		}
 	}

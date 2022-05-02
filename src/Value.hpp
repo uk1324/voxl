@@ -19,6 +19,9 @@ enum class ObjType
 };
 
 struct ObjString;
+struct ObjFunction;
+struct ObjForeignFunction;
+struct ObjAllocation;
 struct ObjClass;
 struct ObjInstance;
 struct ObjBoundFunction;
@@ -29,8 +32,15 @@ struct Obj
 	Obj* next; // nullptr if it is the newest allocation
 	Obj* newLocation; // nullptr if value hasn't been copied to the other region.
 
+	// TODO maybe inline these.
 	bool isString();
 	ObjString* asString();
+	bool isFunction();
+	ObjFunction* asFunction();
+	bool isForeignFunction();
+	ObjForeignFunction* asForeignFunction();
+	bool isAllocation();
+	ObjAllocation* asAllocation();
 	bool isClass();
 	ObjClass* asClass();
 	bool isInstance();
@@ -52,7 +62,7 @@ struct ObjFunction
 {
 	Obj obj;
 	ObjString* name;
-	int argumentCount;
+	int argCount;
 	ByteCode byteCode;
 };
 
@@ -62,6 +72,7 @@ struct ObjForeignFunction
 {
 	Obj obj;
 	ObjString* name;
+	int argCount;
 	ForeignFunction function;
 };
 

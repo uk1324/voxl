@@ -99,6 +99,7 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)
 		case Op::CreateGlobal: return justOp("createGlobal");
 		case Op::JumpIfFalse: return jump("jumpIfFalse", byteCode, offset, 1);
 		case Op::JumpIfTrue: return jump("jumpIfTrue", byteCode, offset, 1);
+		case Op::JumpIfFalseAndPop: return jump("JumpIfFalseAndPop", byteCode, offset, 1);
 		case Op::Jump: return jump("jump", byteCode, offset, 1);
 		case Op::JumpBack: return jump("jumpBack", byteCode, offset, -1);
 		case Op::Print: return justOp("print");

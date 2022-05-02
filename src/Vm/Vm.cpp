@@ -19,6 +19,8 @@ Vm::Vm(Allocator& allocator)
 	, m_updateFunctionHandle(allocator.registerUpdateFunction(this, update))
 {
 	HashTable::init(m_globals);
+	m_initString = m_allocator->allocateString("$init");
+	m_addString = m_allocator->allocateString("$add");
 }
 
 Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
@@ -27,9 +29,10 @@ Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 	m_stackTop = m_stack.data();
 	m_callStack[0] = CallFrame{ program->byteCode.code.data(), m_stack.data(), program };
 	m_callStackSize = 1;
-	pushStack(Value(reinterpret_cast<Obj*>(program)));
 
-	return run();
+	auto result = run();
+	ASSERT(m_stack.data() == m_stackTop); // The program should always finish without anything on the stack.
+	return result;
 }
 
 void Vm::reset()
@@ -68,9 +71,21 @@ Vm::Result Vm::run()
 		{
 			Value lhs = peekStack(1);
 			Value rhs = peekStack(0);
-			if (false)
+			if (lhs.isObj() && lhs.as.obj->isInstance())
 			{
-				// is instance
+				auto instance = lhs.as.obj->asInstance();
+				auto optMethod = instance->class_->methods.get(m_addString);
+				if (optMethod.has_value())
+				{
+					if (callValue(**optMethod, 2, 0) == Result::RuntimeError)
+					{
+						return Result::RuntimeError;
+					}
+				}
+				else
+				{
+					return fatalError("cannot add these types");
+				}
 			}
 			else
 			{
@@ -125,14 +140,14 @@ Vm::Result Vm::run()
 		case Op::LoadLocal:
 		{
 			size_t stackOffset = (size_t)readUint32();
-			pushStack(callStackTop().values[stackOffset + 1]);
+			pushStack(callStackTop().values[stackOffset]);
 			break;
 		}
 
 		case Op::SetLocal:
 		{
 			size_t stackOffset = (size_t)readUint32();
-			callStackTop().values[stackOffset + 1] = peekStack(0);
+			callStackTop().values[stackOffset] = peekStack(0);
 			break;
 		}
 
@@ -235,15 +250,9 @@ Vm::Result Vm::run()
 		{
 			auto argCount = readUint32();
 			auto calleValue = peekStack(argCount);
-			if ((calleValue.type != ValueType::Obj))
-			{
-				m_errorPrinter->outStream() << "cannot call an object that isn't a function\n";
-				return Result::RuntimeError;
-			}
 
-			if (callObj(calleValue.as.obj, argCount) == Result::RuntimeError)
+			if (callValue(calleValue, argCount, 1 /* pop callValue */) == Result::RuntimeError)
 			{
-				m_errorPrinter->outStream() << "cannot call an object that isn't a function\n";
 				return Result::RuntimeError;
 			}
 			break;
@@ -271,6 +280,7 @@ Vm::Result Vm::run()
 			{
 				Value result = peekStack();
 				m_stackTop = callStackTop().values;
+				m_stackTop -= callStackTop().numberOfValuesToPopOffExceptArgs;
 				m_callStackSize--;
 				pushStack(result);
 			}
@@ -477,10 +487,10 @@ Vm::Result Vm::run()
 	}
 }
 
-void Vm::createForeignFunction(std::string_view name, ForeignFunction function)
+void Vm::createForeignFunction(std::string_view name, ForeignFunction function, int argCount)
 {
 	auto nameObj = m_allocator->allocateString(name);
-	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function);
+	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount);
 	m_globals.insert(*m_allocator, nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
 }
 
@@ -538,27 +548,46 @@ Vm::Result Vm::fatalError(const char* format, ...)
 	return Result::RuntimeError;
 }
 
-Vm::Result Vm::callObj(Obj* obj, int argCount)
+Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffExceptArgs)
 {
+	if (value.isObj() == false)
+	{
+		return fatalError("type is not calable\n");
+	}
+	auto obj = value.as.obj;
 	switch (obj->type)
 	{
 		case ObjType::Function:
 		{
-			auto calle = reinterpret_cast<ObjFunction*>(obj);
+			auto calle = obj->asFunction();
+
+			if (argCount != calle->argCount)
+			{
+				return fatalError("expected %d arguments but got %d", calle->argCount, argCount);
+			}
 			if ((m_callStackSize + 1) == m_callStack.size())
 			{
 				return fatalError("call stack overflow");
 			}
-			m_callStack[m_callStackSize] = CallFrame{ calle->byteCode.code.data(), m_stackTop - 1 - argCount, calle };
+			m_callStack[m_callStackSize] = CallFrame{ 
+				calle->byteCode.code.data(), 
+				m_stackTop - argCount, 
+				calle, 
+				numberOfValuesToPopOffExceptArgs 
+			};
 			m_callStackSize++;
 			break;
 		}
 
 		case ObjType::ForeignFunction:
 		{
-			auto calle = reinterpret_cast<ObjForeignFunction*>(obj);
+			auto calle = obj->asForeignFunction();
+			if (argCount != calle->argCount)
+			{
+				return fatalError("expected %d arguments but got %d", calle->argCount, argCount);
+			} 
 			auto result = calle->function(m_stackTop - argCount, argCount);
-			m_stackTop -= 1 + static_cast<size_t>(argCount); // Pop the function and arguments.
+			m_stackTop -= numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount);
 			pushStack(result);
 			break;
 		}
@@ -568,32 +597,47 @@ Vm::Result Vm::callObj(Obj* obj, int argCount)
 			auto calle = obj->asClass();
 			auto instance = m_allocator->allocateInstance(calle);
 			instance->class_ = calle;
-			m_stackTop -= 1 + static_cast<size_t>(argCount); // Pop the function and arguments.
-			pushStack(Value(reinterpret_cast<Obj*>(instance))); // Pushing here so the GC knows about it before HashTable::init.
+			auto optInitalizer = calle->methods.get(m_initString);
+			auto hashTable = instance->class_->methods;
+			for (size_t i = 0; i < hashTable.capacity(); i++)
+			{
+				auto& bucket = hashTable.data()[i];
+
+				if (hashTable.isBucketEmpty(bucket) == false)
+				{
+					//std::cout << "key: " << reinterpret_cast<Obj*>(bucket.key) << " value: " << bucket.value << '\n';
+				}
+			}
+			ASSERT(numberOfValuesToPopOffExceptArgs == 1);
+			m_stackTop[-argCount - 1] = Value(reinterpret_cast<Obj*>(instance)); // Replace the class with the instance.
+			if (optInitalizer.has_value())
+			{
+				if (callValue(**optInitalizer, argCount + 1, 0) == Result::RuntimeError)
+				{
+					return Result::RuntimeError;
+				}
+			}
+			else if (argCount != 0)
+			{
+				return fatalError("expected 0 args but got %d", argCount);
+			}
 			break;
 		}
 
 		case ObjType::BoundFunction:
 		{
 			auto calle = obj->asBoundFunction();
+			m_stackTop[-argCount - 1] = Value(reinterpret_cast<Obj*>(calle->instance));
 			auto function = calle->function;
-			for (size_t i = 0; i < static_cast<size_t>(argCount); i++)
+			if (callValue(Value(reinterpret_cast<Obj*>(function)), argCount + 1, 0) == Result::RuntimeError)
 			{
-				*(m_stackTop - i) = m_stackTop[-1 - i];
-			}
-			*(m_stackTop - argCount) = Value(reinterpret_cast<Obj*>(calle->instance));
-			// TODO: do bound checking here.
-			m_stackTop++;
-			if (callObj(reinterpret_cast<Obj*>(function), function->argumentCount) == Result::RuntimeError)
-			{
-				m_errorPrinter->outStream() << "call error";
 				return Result::RuntimeError;
 			}
 			break;
 		}
 
 		default:
-			return Result::RuntimeError;
+			return fatalError("type is not calable\n");
 	}
 
 	return Result::Success;
@@ -607,6 +651,14 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 	}
 
 	allocator.addHashTable(vm->m_globals);
+
+	for (auto frame = vm->m_callStack.data(); frame != &vm->callStackTop() + 1; frame++)
+	{
+		allocator.addObj(reinterpret_cast<Obj*>(frame->function));
+	}
+
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_initString));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_addString));
 }
 
 void Vm::update(Vm* vm)
@@ -622,6 +674,9 @@ void Vm::update(Vm* vm)
 	{
 		frame->function = reinterpret_cast<ObjFunction*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(frame->function)));
 	}
+
+	vm->m_initString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_initString)));
+	vm->m_addString= reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_addString)));
 }
 
 Vm::CallFrame& Vm::callStackTop()

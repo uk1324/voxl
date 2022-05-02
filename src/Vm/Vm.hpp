@@ -25,6 +25,7 @@ public:
 		// this is pointless the executing function is always at the bottom of the call stack
 		// thogh it does use one level of indirection less
 		ObjFunction* function;
+		int numberOfValuesToPopOffExceptArgs;
 	};
 
 private:
@@ -46,7 +47,7 @@ public:
 	Result execute(ObjFunction* program, ErrorPrinter& errorPrinter);
 	void reset();
 
-	void createForeignFunction(std::string_view name, ForeignFunction function);
+	void createForeignFunction(std::string_view name, ForeignFunction function, int argCount);
 
 private:
 	Result run();
@@ -63,7 +64,7 @@ private:
 	CallFrame& callStackTop();
 	const CallFrame& callStackTop() const;
 	Result fatalError(const char* format, ...);
-	Result callObj(Obj* obj, int argCount);
+	Result callValue(Value value, int argCount, int numberOfValuesToPopOffExceptArgs);
 
 private:
 	static void mark(Vm* vm, Allocator& allocator);
@@ -84,6 +85,9 @@ public:
 	Allocator* m_allocator;
 
 	ErrorPrinter* m_errorPrinter;
+
+	ObjString* m_initString;
+	ObjString* m_addString;
 
 	Allocator::RootMarkingFunctionHandle m_rootMarkingFunctionHandle;
 	Allocator::UpdateFunctionHandle m_updateFunctionHandle;

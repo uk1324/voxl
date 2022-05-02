@@ -78,8 +78,8 @@ public:
 	ObjAllocation* allocateRawMemory(size_t size);
 	ObjString* allocateString(std::string_view chars);
 	ObjString* allocateString(std::string_view chars, size_t length);
-	ObjFunction* allocateFunction(ObjString* name, int argumentCount);
-	ObjForeignFunction* allocateForeignFunction(ObjString* name, ForeignFunction function);
+	ObjFunction* allocateFunction(ObjString* name, int argCount);
+	ObjForeignFunction* allocateForeignFunction(ObjString* name, ForeignFunction function, int argCount);
 	ObjClass* allocateClass(ObjString* name);
 	ObjInstance* allocateInstance(ObjClass* class_);
 	ObjBoundFunction* allocateBoundFunction(ObjFunction* function, ObjInstance* instance);

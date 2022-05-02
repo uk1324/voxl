@@ -189,6 +189,39 @@ ObjString* Obj::asString()
 	return reinterpret_cast<ObjString*>(this);
 }
 
+bool Obj::isFunction()
+{
+	return type == ObjType::Function;
+}
+
+ObjFunction* Obj::asFunction()
+{
+	ASSERT(isFunction());
+	return reinterpret_cast<ObjFunction*>(this);
+}
+
+bool Obj::isForeignFunction()
+{
+	return type == ObjType::ForeignFunction;
+}
+
+ObjForeignFunction* Obj::asForeignFunction()
+{
+	ASSERT(isForeignFunction());
+	return reinterpret_cast<ObjForeignFunction*>(this);
+}
+
+bool Obj::isAllocation()
+{
+	return type == ObjType::Allocation;
+}
+
+ObjAllocation* Obj::asAllocation()
+{
+	ASSERT(isAllocation());
+	return reinterpret_cast<ObjAllocation*>(this);
+}
+
 bool Obj::isClass()
 {
 	return type == ObjType::Class;

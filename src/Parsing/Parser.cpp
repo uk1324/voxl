@@ -301,49 +301,44 @@ std::unique_ptr<Expr> Parser::unary()
 	if (match(TokenType::Minus) || match(TokenType::Not))
 	{
 		auto op = peekPrevious().type;
-		auto expr = call();
+		auto expr = callOrFieldAccess();
 		return std::make_unique<UnaryExpr>(std::move(expr), op, start, peekPrevious().end);
 	}
 
-	return call();
+	return callOrFieldAccess();
 }
 
-std::unique_ptr<Expr> Parser::call()
+std::unique_ptr<Expr> Parser::callOrFieldAccess()
 {
 	size_t start = peek().start;
-	auto calle = fieldAccess();
+	auto expression = primary();
 
-	while (match(TokenType::LeftParen))
+	for (;;)
 	{
-		std::vector<std::unique_ptr<Expr>> arguments;
-		if (peek().type != TokenType::RightParen)
+		if (match(TokenType::LeftParen))
 		{
-			do
+			std::vector<std::unique_ptr<Expr>> arguments;
+			if (peek().type != TokenType::RightParen)
 			{
-				arguments.push_back(expr());
-			} while ((isAtEnd() == false) && match(TokenType::Comma));
+				do
+				{
+					arguments.push_back(expr());
+				} while ((isAtEnd() == false) && match(TokenType::Comma));
+			}
+			expect(TokenType::RightParen, "expected ')'");
+			expression = std::make_unique<CallExpr>(std::move(expression), std::move(arguments), start, peekPrevious().end);
 		}
-		expect(TokenType::RightParen, "expected ')'");
-
-		calle = std::make_unique<CallExpr>(std::move(calle), std::move(arguments), start, peekPrevious().end);
+		else if (match(TokenType::Dot))
+		{
+			expect(TokenType::Identifier, "expected field name");
+			const auto name = peekPrevious().identifier;
+			expression = std::make_unique<GetFieldExpr>(std::move(expression), name, start, peekPrevious().end);
+		}
+		else
+		{
+			return expression;
+		}
 	}
-
-	return calle;
-}
-
-std::unique_ptr<Expr> Parser::fieldAccess()
-{
-	const auto start = peek().start;
-
-	auto lhs = primary();
-	if (match(TokenType::Dot) == false)
-	{
-		return lhs;
-	}
-
-	expect(TokenType::Identifier, "expected field name");
-	const auto name = peekPrevious().identifier;
-	return std::make_unique<GetFieldExpr>(std::move(lhs), name, start, peekPrevious().end);
 }
 
 std::unique_ptr<Expr> Parser::primary()

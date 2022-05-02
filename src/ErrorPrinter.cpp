@@ -44,7 +44,7 @@ void ErrorPrinter::printErrorStart(size_t line, size_t charInLine, const char* f
 	assert(bytesWritten < sizeof(message));
 
 	m_out << m_sourceInfo.filename
-		<< ':' << line
+		<< ':' << line + 1
 		<< ':' << charInLine
 		<< ":" TERM_COL_RED " error: " TERM_COL_RESET
 		<< TERM_COL_CYAN << message << TERM_COL_RESET << '\n';
