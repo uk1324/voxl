@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ByteCode.hpp>
+#include <Allocator.hpp>
 
 // If I want to use instructions like extend arg the has to treat the extend arg and everything after it as one instruction
 // for it to make sense. I would need to make extend arg a special case in the vm.
@@ -10,7 +11,7 @@ namespace Lang
 {
 
 void debugPrintValue(const Value& value);
-size_t disassembleInstruction(const ByteCode& byteCode, size_t offset);
-void disassembleByteCode(const ByteCode& byteCode);
+size_t disassembleInstruction(const ByteCode& byteCode, size_t offset, const Allocator& allocator);
+void disassembleByteCode(const ByteCode& byteCode, const Allocator& allocator);
 
 }

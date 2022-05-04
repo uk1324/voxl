@@ -26,7 +26,7 @@ static size_t opNumber(std::string_view name, const ByteCode& byteCode, size_t o
 	return 5;
 }
 
-static size_t opConstant(std::string_view name, const ByteCode& byteCode, size_t offset)
+static size_t opConstant(std::string_view name, const ByteCode& byteCode, size_t offset, const Allocator& allocator)
 {
 	std::cout << name;
 	uint32_t index = 0;
@@ -37,7 +37,7 @@ static size_t opConstant(std::string_view name, const ByteCode& byteCode, size_t
 	}
 	// Justify left later
 	std::cout << " c[" << index << "] -> ";
-	const auto& constant = byteCode.constants[index];
+	const auto& constant = allocator.getConstant(index);
 	debugPrintValue(constant);
 	return 5;
 }
@@ -68,7 +68,7 @@ void Lang::debugPrintValue(const Value& value)
 	}
 }
 
-size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)
+size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, const Allocator& allocator)
 {
 	std::cout << std::left << std::setw(5) << offset;
 	if ((offset > 0) && (byteCode.lineNumberAtOffset[offset] == byteCode.lineNumberAtOffset[offset - 1]))
@@ -101,7 +101,7 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)
 		case Op::StoreMethod: return justOp("storeMethod");
 		case Op::Concat: return justOp("concat");
 		case Op::Equals: return justOp("equals");
-		case Op::LoadConstant: return opConstant("loadConstant", byteCode, offset);
+		case Op::LoadConstant: return opConstant("loadConstant", byteCode, offset, allocator);
 		case Op::LoadLocal: return opNumber("loadLocal", byteCode, offset);
 		case Op::SetLocal: return opNumber("setLocal", byteCode, offset);
 		case Op::Call: return opNumber("call", byteCode, offset);
@@ -128,12 +128,12 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)
 	}
 }
 
-void Lang::disassembleByteCode(const ByteCode& byteCode)
+void Lang::disassembleByteCode(const ByteCode& byteCode, const Allocator& allocator)
 {
 	size_t offset = 0;
 	while (offset < byteCode.code.size())
 	{
-		offset += disassembleInstruction(byteCode, offset);
+		offset += disassembleInstruction(byteCode, offset, allocator);
 		std::cout << '\n';
 	}
 }

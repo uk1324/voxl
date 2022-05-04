@@ -20,16 +20,16 @@ Vm::Vm(Allocator& allocator)
 	, m_updateFunctionHandle(allocator.registerUpdateFunction(this, update))
 {
 	HashTable::init(m_globals);
-	m_initString = m_allocator->allocateString("$init");
-	m_addString = m_allocator->allocateString("$add");
-	m_subString = m_allocator->allocateString("$sub");
-	m_mulString = m_allocator->allocateString("$mul");
-	m_divString = m_allocator->allocateString("$div");
-	m_modString = m_allocator->allocateString("$mod");
-	m_ltString = m_allocator->allocateString("$lt");
-	m_leString = m_allocator->allocateString("$le");
-	m_gtString = m_allocator->allocateString("$gt");
-	m_geString = m_allocator->allocateString("$ge");
+	m_initString = m_allocator->allocateStringConstant("$init").value;
+	m_addString = m_allocator->allocateStringConstant("$add").value;
+	m_subString = m_allocator->allocateStringConstant("$sub").value;
+	m_mulString = m_allocator->allocateStringConstant("$mul").value;
+	m_divString = m_allocator->allocateStringConstant("$div").value;
+	m_modString = m_allocator->allocateStringConstant("$mod").value;
+	m_ltString = m_allocator->allocateStringConstant("$lt").value;
+	m_leString = m_allocator->allocateStringConstant("$le").value;
+	m_gtString = m_allocator->allocateStringConstant("$gt").value;
+	m_geString = m_allocator->allocateStringConstant("$ge").value;
 }
 
 Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
@@ -129,6 +129,7 @@ Vm::Result Vm::run()
 		case Op::Add: BINARY_ARITHMETIC_OP(+, m_addString)
 		case Op::Subtract: BINARY_ARITHMETIC_OP(-, m_subString)
 		case Op::Multiply: BINARY_ARITHMETIC_OP(*, m_mulString)
+			// TODO: handle integer division by zero
 		case Op::Divide: BINARY_ARITHMETIC_OP(/, m_divString)
 #undef BINARY_ARITHMETIC_OP
 		case Op::Modulo: 
@@ -273,7 +274,7 @@ Vm::Result Vm::run()
 		case Op::LoadConstant:
 		{
 			const auto constantIndex = readUint32();
-			pushStack(callStackTop().function->byteCode.constants[constantIndex]);
+			pushStack(m_allocator->getConstant(constantIndex));
 			break;
 		}
 
@@ -823,17 +824,6 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 	{
 		allocator.addObj(reinterpret_cast<Obj*>(frame->function));
 	}
-
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_initString));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_addString));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_subString));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_mulString));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_divString));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_modString));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_ltString));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_leString));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_gtString));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_geString));
 }
 
 void Vm::update(Vm* vm)
@@ -849,17 +839,6 @@ void Vm::update(Vm* vm)
 	{
 		frame->function = reinterpret_cast<ObjFunction*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(frame->function)));
 	}
-
-	vm->m_initString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_initString)));
-	vm->m_addString= reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_addString)));
-	vm->m_subString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_subString)));
-	vm->m_mulString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_mulString)));
-	vm->m_divString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_divString)));
-	vm->m_modString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_modString)));
-	vm->m_ltString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_ltString)));
-	vm->m_leString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_leString)));
-	vm->m_gtString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_gtString)));
-	vm->m_geString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_geString)));
 }
 
 Vm::CallFrame& Vm::callStackTop()

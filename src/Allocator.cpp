@@ -87,6 +87,16 @@ ObjString* Allocator::allocateString(std::string_view chars)
 
 ObjString* Allocator::allocateString(std::string_view chars, size_t length)
 {
+	ObjString string;
+	string.chars = chars.data();
+	string.size = chars.size();
+	string.length = length;
+	auto result = m_stringPool.find(&string);
+	if (result != m_stringPool.end())
+	{
+		return *result;
+	}
+
 	auto obj = reinterpret_cast<ObjString*>(allocateObj(sizeof(ObjString) + (chars.size() + 1), ObjType::String));
 	auto data = reinterpret_cast<char*>(obj) + sizeof(ObjString);
 	obj->size = chars.size();
@@ -132,6 +142,46 @@ ObjBoundFunction* Allocator::allocateBoundFunction(ObjFunction* function, ObjIns
 	obj->function = function;
 	obj->instance = instance;
 	return obj;
+}
+
+Allocator::StringConstant Allocator::allocateStringConstant(std::string_view chars)
+{
+	return allocateStringConstant(chars, Utf8::strlen(chars.data(), chars.size()));
+}
+
+Allocator::StringConstant Allocator::allocateStringConstant(std::string_view chars, size_t length)
+{
+	ObjString string;
+	string.chars = chars.data();
+	string.size = chars.size();
+	string.length = length;
+	auto result = m_stringPool.find(&string);
+	if (result != m_stringPool.end())
+	{
+		return { createConstant(Value(reinterpret_cast<Obj*>(*result))), *result };
+	}
+
+	auto obj = reinterpret_cast<ObjString*>(::operator new(sizeof(ObjString) + chars.size() + 1));
+	obj->obj.type = ObjType::String;
+	obj->obj.newLocation = reinterpret_cast<Obj*>(obj);
+	auto data = reinterpret_cast<char*>(obj + 1);
+	memcpy(data, chars.data(), chars.size());
+	obj->size = chars.size();
+	data[chars.size()] = '\0';
+	obj->chars = data;
+	obj->length = length;
+	return { createConstant(Value(reinterpret_cast<Obj*>(obj))), obj };
+}
+
+Allocator::FunctionConstant Allocator::allocateFunctionConstant(ObjString* name, int argCount)
+{
+	auto obj = reinterpret_cast<ObjFunction*>(::operator new(sizeof(ObjFunction)));
+	obj->obj.newLocation = reinterpret_cast<Obj*>(obj);
+	obj->obj.type = ObjType::Function;
+	obj->argCount = argCount;
+	obj->name = name;
+	new (&obj->byteCode) ByteCode();
+	return { createConstant(Value(reinterpret_cast<Obj*>(obj))), obj };
 }
 
 ObjForeignFunction* Allocator::allocateForeignFunction(ObjString* name, ForeignFunction function, int argCount)
@@ -188,13 +238,6 @@ Obj* Allocator::copyToNewLocation(Obj* obj)
 			copyObj(newFunction, function, sizeof(ObjFunction));
 			newFunction->name = reinterpret_cast<ObjString*>(copyToNewLocation(reinterpret_cast<Obj*>(function->name)));
 			obj->newLocation = reinterpret_cast<Obj*>(newFunction);
-			for (auto& value : newFunction->byteCode.constants)
-			{
-				if (value.type == ValueType::Obj)
-				{
-					value.as.obj = reinterpret_cast<Obj*>(copyToNewLocation(value.as.obj));
-				}
-			}
 			break;
 		}
 
@@ -298,10 +341,6 @@ void Allocator::markObj(Obj* obj)
 			const auto function = reinterpret_cast<ObjFunction*>(obj);
 			addObj(reinterpret_cast<Obj*>(function->name));
 			m_markedMemorySize += sizeof(ObjFunction) + WORST_CASE_SIZE_FOR_ALIGNMENT;
-			for (auto& value : function->byteCode.constants)
-			{
-				addValue(value);
-			}
 			return;
 		}
 
@@ -350,6 +389,42 @@ void Allocator::markObj(Obj* obj)
 	}
 
 	ASSERT_NOT_REACHED();
+}
+
+size_t Allocator::createConstant(const Value& value)
+{
+	for (size_t i = 0; i < m_constants.size(); i++)
+	{
+		const auto& constant = m_constants[i];
+		if (value.type == constant.type)
+		{
+			switch (value.type)
+			{
+				case ValueType::Int: 
+					if (value.as.intNumber == constant.as.intNumber)
+						return i;
+					break;
+				case ValueType::Float:
+					if (value.as.floatNumber == constant.as.floatNumber)
+						return i;
+					break;
+				case ValueType::Obj:
+					if ((value.as.obj->type == ObjType::String)
+						&& (constant.as.obj->type == ObjType::String)
+						&& (value.as.obj == constant.as.obj))
+						return i;
+					break;
+
+				case ValueType::Null:
+				case ValueType::Bool:
+					// null and bools should be created using instructions.
+					ASSERT_NOT_REACHED();
+			}
+		}
+	}
+
+	m_constants.push_back(value);
+	return m_constants.size() - 1;
 }
 
 void Allocator::runGc()
@@ -469,8 +544,8 @@ bool Allocator::isMarked(Obj* obj)
 	// What about constants they may have changing values that need to be marked like classes - static fields and methods.
 	// Could use a bitmask.
 	// Maybe make constants a special case and update them inside the allocator manually.
-	return obj->newLocation == reinterpret_cast<Obj*>(1);
-	//return obj->newLocation != nullptr;
+	//return obj->newLocation == reinterpret_cast<Obj*>(1);
+	return obj->newLocation != nullptr;
 }
 
 bool Allocator::hasBeenMoved(Obj* obj)
@@ -527,6 +602,11 @@ Obj* Allocator::newObjLocation(Obj* value)
 	ASSERT(value->newLocation != nullptr); // Didn't add the obj.
 	ASSERT(value->newLocation != reinterpret_cast<Obj*>(1)); // Probably forgot to set newLocation in copyToNewLocation.
 	return value->newLocation;
+}
+
+const Value& Allocator::getConstant(size_t id) const
+{
+	return m_constants[id];
 }
 
 Allocator::RootMarkingFunctionHandle::~RootMarkingFunctionHandle()

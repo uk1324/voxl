@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Value.hpp>
+#include <unordered_set>
 #include <string_view>
 
 namespace Lang
@@ -84,6 +85,22 @@ public:
 	ObjInstance* allocateInstance(ObjClass* class_);
 	ObjBoundFunction* allocateBoundFunction(ObjFunction* function, ObjInstance* instance);
 
+	struct StringConstant
+	{
+		size_t index;
+		ObjString* value;
+	}
+	allocateStringConstant(std::string_view chars),
+	allocateStringConstant(std::string_view chars, size_t length);
+
+	struct FunctionConstant
+	{
+		size_t index;
+		ObjFunction* value;
+	} allocateFunctionConstant(ObjString* name, int argCount);
+
+	size_t createConstant(const Value& value);
+
 	void runGc();
 
 	void addObj(Obj* obj);
@@ -92,10 +109,10 @@ public:
 	static void updateHashTable(HashTable& hashTable);
 	static void updateValue(Value& value);
 	static Obj* newObjLocation(Obj* value);
+	const Value& getConstant(size_t id) const;
 
 private:
 	static uint8_t* alignUp(uint8_t* ptr, size_t alignment);
-	static void setNewLocation(void* obj, void* newLocation);
 	static void setMarked(Obj* obj);
 	static bool isMarked(Obj* obj);
 	static bool hasBeenMoved(Obj* obj);
@@ -125,6 +142,27 @@ private:
 	size_t m_markedMemorySize;
 
 	static constexpr size_t ALIGNMENT = 8;
+
+	std::vector<Value> m_constants;
+
+	struct ObjStringHasher
+	{
+		size_t operator()(const ObjString* string) const
+		{
+			return std::hash<std::string_view>()(std::string_view(string->chars, string->size));
+		}
+	};
+
+	struct ObjStringComparator
+	{
+		bool operator()(const ObjString* a, const ObjString* b) const
+		{
+			// TODO: Benchmark this -> Could also compare lengths but it probably wouldn't make it faster becuase that is a rare case.
+			return (a->size == b->size) && memcmp(a->chars, b->chars, a->size);
+		}
+	};
+
+	std::unordered_set<ObjString*, ObjStringHasher, ObjStringComparator> m_stringPool;
 };
 
 }

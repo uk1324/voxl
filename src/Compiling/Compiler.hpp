@@ -93,9 +93,7 @@ private:
 	void beginScope();
 	void endScope();
 
-	uint32_t createConstant(Value value);
-	uint32_t createStringConstant(std::string_view name);
-	void loadConstant(uint32_t index);
+	Status loadConstant(size_t index);
 	ByteCode& currentByteCode();
 	void emitOp(Op op);
 	Status emitOpArg(Op op, size_t arg, size_t start, size_t end);

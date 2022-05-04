@@ -31,8 +31,8 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 	m_errorPrinter = &errorPrinter;
 	m_allocator = &allocator;
 
-	auto scriptName = m_allocator->allocateString("script");
-	auto scriptFunction = m_allocator->allocateFunction(scriptName, 0);
+	const auto scriptName = m_allocator->allocateStringConstant("script").value;
+	auto scriptFunction = m_allocator->allocateFunctionConstant(scriptName, 0).value;
 	m_functionByteCodeStack.push_back(&scriptFunction->byteCode);
 
 	for (const auto& stmt : ast)
@@ -124,8 +124,8 @@ Compiler::Status Compiler::letStmt(const LetStmt& stmt)
 	TRY(declareVariable(stmt.identifier, stmt.start, stmt.end()));
 	if (m_scopes.size() == 0)
 	{
-		auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(stmt.identifier))));
-		loadConstant(constant);
+		const auto constant = m_allocator->allocateStringConstant(stmt.identifier).index;
+		TRY(loadConstant(constant));
 		emitOp(Op::CreateGlobal);
 	}
 
@@ -148,12 +148,10 @@ Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 
 	TRY(declareVariable(stmt.name, stmt.start, stmt.end()));
 
-	auto name = m_allocator->allocateString(stmt.name);
-	auto function = m_allocator->allocateFunction(name, static_cast<int>(stmt.arguments.size()));
-	auto functionConstant = createConstant(Value(reinterpret_cast<Obj*>(function)));
-	loadConstant(functionConstant);
-	auto nameConstant = createConstant(Value(reinterpret_cast<Obj*>(name)));
-	loadConstant(nameConstant);
+	const auto [nameConstant, name] = m_allocator->allocateStringConstant(stmt.name);
+	const auto [functionConstant, function] = m_allocator->allocateFunctionConstant(name, static_cast<int>(stmt.arguments.size()));
+	TRY(loadConstant(functionConstant));
+	TRY(loadConstant(nameConstant));
 	emitOp(Op::CreateGlobal);
 	m_functionByteCodeStack.push_back(&function->byteCode);
 
@@ -311,19 +309,19 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 	if ((m_scopes.size() > 0) && (m_scopes.back().functionDepth > 0))
 		return errorAt(stmt, "nested functions not allowed");
 
-	auto className = m_allocator->allocateString(stmt.name);
-	auto classNameConstant = createConstant(Value(reinterpret_cast<Obj*>(className)));
+	const auto [classNameConstant, className] = m_allocator->allocateStringConstant(stmt.name);
 
 	TRY(declareVariable(stmt.name, stmt.start, stmt.end()));
 
-	loadConstant(classNameConstant);
+	TRY(loadConstant(classNameConstant));
 	emitOp(Op::CreateClass);
 
 	for (const auto& method : stmt.methods)
 	{
-		auto nameWithPrefix = m_allocator->allocateString(std::string(stmt.name) + '.' + std::string(method->name));
-		auto function = m_allocator->allocateFunction(nameWithPrefix, static_cast<int>(method->arguments.size() + 1));
-		auto functionConstant = createConstant(Value(reinterpret_cast<Obj*>(function)));
+		const auto [nameConstant, name] = m_allocator->allocateStringConstant(std::string(stmt.name) + '.' + std::string(method->name));
+		const auto [functionConstant, function] =
+			m_allocator->allocateFunctionConstant(name, static_cast<int>(method->arguments.size() + 1));
+
 		m_functionByteCodeStack.push_back(&function->byteCode);
 
 		beginScope();
@@ -348,13 +346,13 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 		endScope();
 		m_functionByteCodeStack.pop_back();
 
-		auto nameConstant = createStringConstant(method->name);
-		loadConstant(functionConstant);
-		loadConstant(nameConstant);
+		const auto methodNameConstant = m_allocator->allocateStringConstant(method->name).index;
+		TRY(loadConstant(functionConstant));
+		TRY(loadConstant(methodNameConstant));
 		emitOp(Op::StoreMethod);
 	}
 
-	loadConstant(classNameConstant);
+	TRY(loadConstant(classNameConstant));
 	emitOp(Op::CreateGlobal);
 
 	return Status::Ok;
@@ -432,15 +430,15 @@ Compiler::Status Compiler::compileBinaryExpr(const std::unique_ptr<Expr>& lhs, T
 
 Compiler::Status Compiler::intConstantExpr(const IntConstantExpr& expr)
 {
-	auto constant = createConstant(Value(expr.value));
-	loadConstant(constant);
+	auto constant = m_allocator->createConstant(Value(expr.value));
+	TRY(loadConstant(constant));
 	return Status::Ok;
 }
 
 Compiler::Status Compiler::floatConstantExpr(const FloatConstantExpr& expr)
 {
-	auto constant = createConstant(Value(expr.value));
-	loadConstant(constant);
+	auto constant = m_allocator->createConstant(Value(expr.value));
+	TRY(loadConstant(constant));
 	return Status::Ok;
 }
 
@@ -459,8 +457,8 @@ Compiler::Status Compiler::boolConstantExpr(const BoolConstantExpr& expr)
 
 Compiler::Status Compiler::stringConstantExpr(const StringConstantExpr& expr)
 {
-	auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(expr.text))));
-	loadConstant(constant);
+	const auto constant = m_allocator->allocateStringConstant(expr.text, expr.length).index;
+	TRY(loadConstant(constant));
 	return Status::Ok;
 }
 
@@ -496,7 +494,7 @@ Compiler::Status Compiler::identifierExpr(const IdentifierExpr& expr)
 	for (auto it = m_scopes.crbegin(); it != m_scopes.crend(); it++)
 	{
 		const auto& scope = *it;
-		auto local = scope.localVariables.find(expr.identifier);
+		const auto local = scope.localVariables.find(expr.identifier);
 		if (local != scope.localVariables.end())
 		{
 			emitOp(Op::LoadLocal);
@@ -505,8 +503,8 @@ Compiler::Status Compiler::identifierExpr(const IdentifierExpr& expr)
 		}
 	}
 
-	auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(expr.identifier))));
-	loadConstant(constant);
+	const auto constant = m_allocator->allocateStringConstant(expr.identifier).index;
+	TRY(loadConstant(constant));
 	emitOp(Op::LoadGlobal);
 
 	return Status::Ok;
@@ -530,7 +528,7 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 		for (auto it = m_scopes.crbegin(); it != m_scopes.crend(); it++)
 		{
 			const auto& scope = *it;
-			auto local = scope.localVariables.find(lhs);
+			const auto local = scope.localVariables.find(lhs);
 			if (local != scope.localVariables.end())
 			{
 				emitOp(Op::SetLocal);
@@ -538,8 +536,8 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 				return Status::Ok;
 			}
 		}
-		auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(lhs))));
-		loadConstant(constant);
+		const auto constant = m_allocator->allocateStringConstant(lhs).index;
+		TRY(loadConstant(constant));
 		emitOp(Op::SetGlobal);
 		return Status::Ok;
 	}
@@ -547,8 +545,8 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 	{
 		const auto lhs = static_cast<GetFieldExpr*>(expr.lhs.get());
 		TRY(compile(lhs->lhs));
-		auto fieldName = createStringConstant(lhs->fieldName);
-		loadConstant(fieldName);
+		const auto fieldNameConstant = m_allocator->allocateStringConstant(lhs->fieldName).index;
+		TRY(loadConstant(fieldNameConstant));
 		emitOp(Op::SetProperty);
 		return Status::Ok;
 	}
@@ -585,8 +583,8 @@ Compiler::Status Compiler::arrayExpr(const ArrayExpr& expr)
 Compiler::Status Compiler::getFieldExpr(const GetFieldExpr& expr)
 {
 	TRY(compile(expr.lhs));
-	auto fieldName = createStringConstant(expr.fieldName);
-	loadConstant(fieldName);
+	auto fieldNameConstant = m_allocator->allocateStringConstant(expr.fieldName).index;
+	TRY(loadConstant(fieldNameConstant));
 	emitOp(Op::GetProperty);
 	return Status::Ok;
 }
@@ -616,21 +614,13 @@ Compiler::Status Compiler::declareVariable(std::string_view name, size_t start, 
 	return Status::Ok;
 }
 
-uint32_t Compiler::createConstant(Value value)
+Compiler::Status Compiler::loadConstant(size_t index)
 {
-	currentByteCode().constants.push_back(value);
-	return static_cast<uint32_t>(currentByteCode().constants.size() - 1);
-}
-
-uint32_t Compiler::createStringConstant(std::string_view name)
-{
-	return createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(name))));
-}
-
-void Compiler::loadConstant(uint32_t index)
-{
+	if (index > UINT32_MAX)
+		return Status::Error;
 	emitOp(Op::LoadConstant);
-	emitUint32(index);
+	emitUint32(static_cast<uint32_t>(index));
+	return Status::Ok;
 }
 
 ByteCode& Compiler::currentByteCode()
