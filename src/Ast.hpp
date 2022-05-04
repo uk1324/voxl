@@ -24,9 +24,8 @@ enum class ExprType
 	Identifier,
 	Call,
 	Assignment,
-	Array,
 	GetField,
-	SetField
+	Array,
 };
 
 struct Expr
@@ -104,10 +103,21 @@ struct CallExpr final : public Expr
 
 struct AssignmentExpr final : public Expr
 {
-	AssignmentExpr(std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs, size_t start, size_t end);
+	AssignmentExpr(std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs, std::optional<TokenType> op, size_t start, size_t end);
 
 	std::unique_ptr<Expr> lhs;
 	std::unique_ptr<Expr> rhs;
+	std::optional<TokenType> op;
+};
+
+class GetFieldExpr final : public Expr
+{
+public:
+	GetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, size_t start, size_t end);
+	~GetFieldExpr() = default;
+
+	std::unique_ptr<Expr> lhs;
+	std::string_view fieldName;
 };
 
 struct ArrayExpr final : public Expr
@@ -115,24 +125,6 @@ struct ArrayExpr final : public Expr
 	ArrayExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size_t end);
 
 	std::vector<std::unique_ptr<Expr>> values;
-};
-
-struct GetFieldExpr final : public Expr
-{
-	GetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, size_t start, size_t end);
-
-	std::unique_ptr<Expr> lhs;
-	std::string_view fieldName;
-};
-
-struct SetFieldExpr final : public Expr
-{
-	SetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, std::unique_ptr<Expr> rhs, size_t start, size_t end);
-	~SetFieldExpr() = default;
-
-	std::unique_ptr<Expr> lhs;
-	std::string_view fieldName;
-	std::unique_ptr<Expr> rhs;
 };
 
 enum class StmtType

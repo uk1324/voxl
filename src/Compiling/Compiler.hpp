@@ -74,6 +74,7 @@ private:
 	Status throwStmt(const ThrowStmt& stmt);
 
 	Status compile(const std::unique_ptr<Expr>& expr);
+	Status compileBinaryExpr(const std::unique_ptr<Expr>& lhs, TokenType op, const std::unique_ptr<Expr>& rhs);
 	// TODO: perform constant folding
 	Status intConstantExpr(const IntConstantExpr& expr);
 	Status floatConstantExpr(const FloatConstantExpr& expr);
@@ -86,7 +87,6 @@ private:
 	Status assignmentExpr(const AssignmentExpr& expr);
 	Status arrayExpr(const ArrayExpr& expr);
 	Status getFieldExpr(const GetFieldExpr& expr);
-	Status setFieldExpr(const SetFieldExpr& expr);
 
 	Status declareVariable(std::string_view name, size_t start, size_t end);
 	// Could make a RAII class

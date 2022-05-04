@@ -51,10 +51,11 @@ Token Scanner::token()
 			{
 				return makeToken(TokenType::PlusPlus);
 			}
-			else
+			if (match('='))
 			{
-				return makeToken(TokenType::Plus);
+				return makeToken(TokenType::PlusEquals);
 			}
+			return makeToken(TokenType::Plus);
 		}
 		case '&': return match('&')
 			? makeToken(TokenType::AndAnd)
@@ -71,10 +72,18 @@ Token Scanner::token()
 		case '>': return match('=')
 			? makeToken(TokenType::MoreEquals)
 			: makeToken(TokenType::More);
-		case '-': return makeToken(TokenType::Minus);
-		case '/': return makeToken(TokenType::Slash);
-		case '%': return makeToken(TokenType::Percent);
-		case '*': return makeToken(TokenType::Star);
+		case '-': return match('=') 
+			? makeToken(TokenType::MinusEquals)
+			: makeToken(TokenType::Minus);
+		case '/': return match('=')
+			? makeToken(TokenType::SlashEquals)
+			: makeToken(TokenType::Slash);
+		case '%': return match('=')
+			? makeToken(TokenType::PercentEquals)
+			: makeToken(TokenType::Percent);
+		case '*': return match('=')
+			? makeToken(TokenType::StarEquals)
+			: makeToken(TokenType::Star);
 		case '!': return makeToken(TokenType::Not);
 		case ';': return makeToken(TokenType::Semicolon);
 		case '(': return makeToken(TokenType::LeftParen);

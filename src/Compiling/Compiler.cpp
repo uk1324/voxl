@@ -1,6 +1,4 @@
 #include "Compiler.hpp"
-#include "Compiler.hpp"
-#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -381,10 +379,54 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 		CASE_EXPR_TYPE(Call, callExpr)
 		CASE_EXPR_TYPE(Assignment, assignmentExpr)
 		CASE_EXPR_TYPE(Array, arrayExpr)
-		CASE_EXPR_TYPE(SetField, setFieldExpr)
 		CASE_EXPR_TYPE(GetField, getFieldExpr)
 	}
 	m_lineNumberStack.pop_back();
+
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::compileBinaryExpr(const std::unique_ptr<Expr>& lhs, TokenType op, const std::unique_ptr<Expr>& rhs)
+{
+	if (op == TokenType::AndAnd)
+	{
+		TRY(compile(lhs));
+		auto placeToPatch = emitJump(Op::JumpIfFalse);
+		emitOp(Op::PopStack);
+		TRY(compile(rhs));
+		setJumpToHere(placeToPatch);
+
+		return Status::Ok;
+	}
+	if (op == TokenType::OrOr)
+	{
+		TRY(compile(lhs));
+		auto placeToPatch = emitJump(Op::JumpIfTrue);
+		emitOp(Op::PopStack);
+		TRY(compile(rhs));
+		setJumpToHere(placeToPatch);
+
+		return Status::Ok;
+	}
+
+	TRY(compile(lhs));
+	TRY(compile(rhs));
+	switch (op)
+	{
+		case TokenType::Plus: emitOp(Op::Add); break;
+		case TokenType::PlusPlus: emitOp(Op::Concat); break;
+		case TokenType::Minus: emitOp(Op::Subtract); break;
+		case TokenType::Star: emitOp(Op::Multiply); break;
+		case TokenType::Slash: emitOp(Op::Divide); break;
+		case TokenType::Percent: emitOp(Op::Modulo); break;
+		case TokenType::EqualsEquals: emitOp(Op::Equals); break;
+		case TokenType::Less: emitOp(Op::Less); break;
+		case TokenType::LessEquals: emitOp(Op::LessEqual); break;
+		case TokenType::More: emitOp(Op::More); break;
+		case TokenType::MoreEquals: emitOp(Op::MoreEqual); break;
+		default:
+			ASSERT_NOT_REACHED();
+	}
 
 	return Status::Ok;
 }
@@ -421,6 +463,11 @@ Compiler::Status Compiler::stringConstantExpr(const StringConstantExpr& expr)
 	auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(expr.text))));
 	loadConstant(constant);
 	return Status::Ok;
+}
+
+Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
+{
+	return compileBinaryExpr(expr.lhs, expr.op, expr.rhs);
 }
 
 Compiler::Status Compiler::unaryExpr(const UnaryExpr& expr)
@@ -468,31 +515,46 @@ Compiler::Status Compiler::identifierExpr(const IdentifierExpr& expr)
 
 Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 {
-	TRY(compile(expr.rhs));
-
-	if (expr.lhs->type != ExprType::Identifier)
+	if (expr.op.has_value())
 	{
-		return errorAt(expr, "left hand side of assignment must be an identifier");
+		TRY(compileBinaryExpr(expr.lhs, *expr.op, expr.rhs));
 	}
-	const auto lhs = static_cast<IdentifierExpr&>(*expr.lhs.get()).identifier;
-
-	for (auto it = m_scopes.crbegin(); it != m_scopes.crend(); it++)
+	else
 	{
-		const auto& scope = *it;
-		auto local = scope.localVariables.find(lhs);
-		if (local != scope.localVariables.end())
+		TRY(compile(expr.rhs));
+	}
+
+	if (expr.lhs->type == ExprType::Identifier)
+	{
+		const auto lhs = static_cast<IdentifierExpr&>(*expr.lhs.get()).identifier;
+
+		for (auto it = m_scopes.crbegin(); it != m_scopes.crend(); it++)
 		{
-			emitOp(Op::SetLocal);
-			emitUint32(local->second.index);
-			return Status::Ok;
+			const auto& scope = *it;
+			auto local = scope.localVariables.find(lhs);
+			if (local != scope.localVariables.end())
+			{
+				emitOp(Op::SetLocal);
+				emitUint32(local->second.index);
+				return Status::Ok;
+			}
 		}
+		auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(lhs))));
+		loadConstant(constant);
+		emitOp(Op::SetGlobal);
+		return Status::Ok;
+	}
+	else if (expr.lhs->type == ExprType::GetField)
+	{
+		const auto lhs = static_cast<GetFieldExpr*>(expr.lhs.get());
+		TRY(compile(lhs->lhs));
+		auto fieldName = createStringConstant(lhs->fieldName);
+		loadConstant(fieldName);
+		emitOp(Op::SetProperty);
+		return Status::Ok;
 	}
 
-	auto constant = createConstant(Value(reinterpret_cast<Obj*>(m_allocator->allocateString(lhs))));
-	loadConstant(constant);
-	emitOp(Op::SetGlobal);
-
-	return Status::Ok;
+	return errorAt(expr, "invalid left side of assignment");
 }
 
 Compiler::Status Compiler::callExpr(const CallExpr& expr)
@@ -530,16 +592,6 @@ Compiler::Status Compiler::getFieldExpr(const GetFieldExpr& expr)
 	return Status::Ok;
 }
 
-Compiler::Status Compiler::setFieldExpr(const SetFieldExpr& expr)
-{
-	TRY(compile(expr.rhs));
-	TRY(compile(expr.lhs));
-	auto fieldName = createStringConstant(expr.fieldName);
-	loadConstant(fieldName);
-	emitOp(Op::SetProperty);
-	return Status::Ok;
-}
-
 Compiler::Status Compiler::declareVariable(std::string_view name, size_t start, size_t end)
 {
 	if (m_scopes.size() == 0)
@@ -561,52 +613,6 @@ Compiler::Status Compiler::declareVariable(std::string_view name, size_t start, 
 		localsCount += scope->localVariables.size();
 	}
 	locals[name] = Local{ static_cast<uint32_t>(localsCount) };
-
-	return Status::Ok;
-}
-
-Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
-{
-	if (expr.op == TokenType::AndAnd)
-	{
-		TRY(compile(expr.lhs));
-		auto placeToPatch = emitJump(Op::JumpIfFalse);
-		emitOp(Op::PopStack);
-		TRY(compile(expr.rhs));
-		setJumpToHere(placeToPatch);
-
-		return Status::Ok;
-	}
-	if (expr.op == TokenType::OrOr)
-	{
-		TRY(compile(expr.lhs));
-		auto placeToPatch = emitJump(Op::JumpIfTrue);
-		emitOp(Op::PopStack);
-		TRY(compile(expr.rhs));
-		setJumpToHere(placeToPatch);
-
-		return Status::Ok;
-	}
-
-	TRY(compile(expr.lhs));
-	TRY(compile(expr.rhs));
-	// Can't pop here beacause I have to keep the result at the top. The pops will happen in the vm.
-	switch (expr.op)
-	{
-		case TokenType::Plus: emitOp(Op::Add); break;
-		case TokenType::PlusPlus: emitOp(Op::Concat); break;
-		case TokenType::Minus: emitOp(Op::Subtract); break;
-		case TokenType::Star: emitOp(Op::Multiply); break;
-		case TokenType::Slash: emitOp(Op::Divide); break;
-		case TokenType::Percent: emitOp(Op::Modulo); break;
-		case TokenType::EqualsEquals: emitOp(Op::Equals); break;
-		case TokenType::Less: emitOp(Op::Less); break;
-		case TokenType::LessEquals: emitOp(Op::LessEqual); break;
-		case TokenType::More: emitOp(Op::More); break;
-		case TokenType::MoreEquals: emitOp(Op::MoreEqual); break;
-		default:
-			ASSERT_NOT_REACHED();
-	}
 
 	return Status::Ok;
 }

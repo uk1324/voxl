@@ -58,15 +58,11 @@ CallExpr::CallExpr(std::unique_ptr<Expr> calle, std::vector<std::unique_ptr<Expr
 	, arguments(std::move(arguments))
 {}
 
-AssignmentExpr::AssignmentExpr(std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs, size_t start, size_t end)
+AssignmentExpr::AssignmentExpr(std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs, std::optional<TokenType> op, size_t start, size_t end)
 	: Expr(start, end, ExprType::Assignment)
 	, lhs(std::move(lhs))
 	, rhs(std::move(rhs))
-{}
-
-ArrayExpr::ArrayExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size_t end)
-	: Expr(start, end, ExprType::Array)
-	, values(std::move(values))
+	, op(op)
 {}
 
 GetFieldExpr::GetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, size_t start, size_t end)
@@ -75,11 +71,9 @@ GetFieldExpr::GetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName
 	, fieldName(fieldName)
 {}
 
-SetFieldExpr::SetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, std::unique_ptr<Expr> rhs, size_t start, size_t end)
-	: Expr(start, end, ExprType::SetField)
-	, lhs(std::move(lhs))
-	, fieldName(fieldName)
-	, rhs(std::move(rhs))
+ArrayExpr::ArrayExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size_t end)
+	: Expr(start, end, ExprType::Array)
+	, values(std::move(values))
 {}
 
 Stmt::Stmt(size_t start, size_t end, StmtType type)

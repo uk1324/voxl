@@ -1,2 +1,5 @@
-print(1 <= 2);
-print("abc" >= "efg");
+let x = 10;
+
+x /= 2;
+x += 2;
+print(x);

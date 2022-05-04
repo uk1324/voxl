@@ -287,17 +287,25 @@ std::unique_ptr<Expr> Parser::assignment()
 	size_t start = peek().start;
 	auto lhs = and();
 
+#define COMPOUND_OP(opTokenType) \
+	else if (match(TokenType::opTokenType##Equals)) \
+	{ \
+		auto rhs = assignment(); \
+		return std::make_unique<AssignmentExpr>(std::move(lhs), std::move(rhs), TokenType::opTokenType, start, peekPrevious().end); \
+	}
+
 	if (match(TokenType::Equals))
 	{
 		auto rhs = assignment();
-
-		if (lhs->type == ExprType::GetField)
-		{
-			auto expr = static_cast<GetFieldExpr*>(lhs.get());
-			return std::make_unique<SetFieldExpr>(std::move(expr->lhs), expr->fieldName, std::move(rhs), start, peekPrevious().end);
-		}
-		return std::make_unique<AssignmentExpr>(std::move(lhs), std::move(rhs), start, peekPrevious().end);
+		return std::make_unique<AssignmentExpr>(std::move(lhs), std::move(rhs), std::nullopt, start, peekPrevious().end);
 	}
+	COMPOUND_OP(Plus)
+	COMPOUND_OP(Minus)
+	COMPOUND_OP(Star)
+	COMPOUND_OP(Slash)
+	COMPOUND_OP(Percent)
+
+#undef COMPOUND_OP
 
 	return lhs;
 }
