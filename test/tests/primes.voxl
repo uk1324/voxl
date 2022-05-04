@@ -1,4 +1,4 @@
-let n = 100;
+let n = 50;
 let i = 2;
 while i < n {
 	let j = 2;

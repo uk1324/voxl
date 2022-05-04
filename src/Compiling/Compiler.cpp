@@ -239,7 +239,6 @@ Compiler::Status Compiler::loopStmt(const LoopStmt& stmt)
 
 	if (stmt.condition.has_value())
 	{
-		ASSERT_NOT_REACHED();
 		setJumpToHere(jumpToEnd);
 	}
 

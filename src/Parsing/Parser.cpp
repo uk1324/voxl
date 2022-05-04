@@ -3,6 +3,7 @@
 #include "Parser.hpp"
 #include "Parser.hpp"
 #include "Parser.hpp"
+#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -59,6 +60,8 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return ifStmt();
 	if (match(TokenType::Loop))
 		return loopStmt();
+	if (match(TokenType::While))
+		return whileStmt();
 	if (match(TokenType::Break))
 		return breakStmt();
 	if (match(TokenType::Class))
@@ -174,6 +177,14 @@ std::unique_ptr<Stmt> Parser::loopStmt()
 	auto stmts = block();
 	// loop is just syntax for a while loop without condition.
 	return std::make_unique<LoopStmt>(std::nullopt, std::nullopt, std::nullopt, std::move(stmts), start, peekPrevious().end);
+}
+
+std::unique_ptr<Stmt> Parser::whileStmt()
+{
+	size_t start = peekPrevious().start;
+	auto condition = expr();
+	auto stmts = block();
+	return std::make_unique<LoopStmt>(std::nullopt, std::move(condition), std::nullopt, std::move(stmts), start, peekPrevious().end);
 }
 
 std::unique_ptr<Stmt> Parser::breakStmt()

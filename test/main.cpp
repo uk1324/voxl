@@ -48,6 +48,7 @@ std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "comments", "abc" },
 	{ "operator_overloading", "(6, 9)" },
 	{ "try_catch", "catchfinally" },
+	{ "primes", "2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 " },
 };
 
 void testFailed(std::string_view name)
