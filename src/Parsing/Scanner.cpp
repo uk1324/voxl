@@ -62,15 +62,21 @@ Token Scanner::token()
 		case '|': return match('|')
 			? makeToken(TokenType::OrOr)
 			: makeToken(TokenType::Or);
+		case '=': return match('=')
+			? makeToken(TokenType::EqualsEquals)
+			: makeToken(TokenType::Equals);
+		case '<': return match('=')
+			? makeToken(TokenType::LessEquals)
+			: makeToken(TokenType::Less);
+		case '>': return match('=')
+			? makeToken(TokenType::MoreEquals)
+			: makeToken(TokenType::More);
 		case '-': return makeToken(TokenType::Minus);
 		case '/': return makeToken(TokenType::Slash);
 		case '%': return makeToken(TokenType::Percent);
 		case '*': return makeToken(TokenType::Star);
 		case '!': return makeToken(TokenType::Not);
 		case ';': return makeToken(TokenType::Semicolon);
-		case '=': return match('=')
-			? makeToken(TokenType::EqualsEquals)
-			: makeToken(TokenType::Equals);
 		case '(': return makeToken(TokenType::LeftParen);
 		case ')': return makeToken(TokenType::RightParen);
 		case '{': return makeToken(TokenType::LeftBrace);
@@ -192,6 +198,10 @@ Token Scanner::keywordOrIdentifier()
 		{ "break", TokenType::Break },
 		{ "continue", TokenType::Continue },
 		{ "class", TokenType::Class },
+		{ "try", TokenType::Try },
+		{ "catch", TokenType::Catch },
+		{ "finally", TokenType::Finally },
+		{ "throw", TokenType::Throw },
 	};
 
 	while (isIdentifierChar(peek()))

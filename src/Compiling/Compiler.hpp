@@ -70,6 +70,8 @@ private:
 	Status loopStmt(const LoopStmt& stmt);
 	Status breakStmt(const BreakStmt& stmt);
 	Status classStmt(const ClassStmt& stmt);
+	Status tryStmt(const TryStmt& stmt);
+	Status throwStmt(const ThrowStmt& stmt);
 
 	Status compile(const std::unique_ptr<Expr>& expr);
 	// TODO: perform constant folding
@@ -101,6 +103,7 @@ private:
 	size_t emitJump(Op op);
 	void emitJump(Op op, size_t location);
 	void setJumpToHere(size_t placeToPatch);
+	void patch(size_t placeToPatch, uint32_t value);
 	size_t currentLocation();
 
 	Status errorAt(size_t start, size_t end, const char* format, ...);

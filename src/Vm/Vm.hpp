@@ -26,19 +26,11 @@ public:
 		// thogh it does use one level of indirection less
 		ObjFunction* function;
 		int numberOfValuesToPopOffExceptArgs;
+		uint32_t absoluteJumpToCatch;
+		bool isTrySet;
 	};
 
 private:
-	// With string interning I could precompute the hash
-	struct ObjStringHasher
-	{
-		size_t operator()(const ObjString* string) const;
-	};
-
-	struct ObjStringComparator
-	{
-		size_t operator()(const ObjString* a, const ObjString* b) const;
-	};
 
 public:
 	Vm(Allocator& allocator);
@@ -57,8 +49,6 @@ private:
 	uint32_t readUint32();
 	uint8_t readUint8();
 
-	//Result call(ObjFunction* function);
-
 	const Value& peekStack(size_t depth = 0) const;
 	Value& peekStack(size_t depth = 0);
 	void popStack();
@@ -73,9 +63,6 @@ private:
 	static void update(Vm* vm);
 
 public:
-	//// Storing a direct pointer should probably be faster than storing and index.
-	//const uint8_t* m_instructionPointer;
-	//std::unordered_map<ObjString*, Value, ObjStringHasher, ObjStringComparator> m_globals;
 	HashTable m_globals;
 	
 	std::array<Value, 1024> m_stack;
@@ -94,6 +81,10 @@ public:
 	ObjString* m_mulString;
 	ObjString* m_divString;
 	ObjString* m_modString;
+	ObjString* m_ltString;
+	ObjString* m_leString;
+	ObjString* m_gtString;
+	ObjString* m_geString;
 
 	Allocator::RootMarkingFunctionHandle m_rootMarkingFunctionHandle;
 	Allocator::UpdateFunctionHandle m_updateFunctionHandle;

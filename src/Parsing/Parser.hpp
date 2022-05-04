@@ -21,7 +21,7 @@ public:
 	{
 	public:
 		bool hadError;
-		std::vector<std::unique_ptr<Stmt>> ast;
+		StmtList ast;
 	};
 
 public:
@@ -42,6 +42,8 @@ private:
 	std::unique_ptr<Stmt> loopStmt();
 	std::unique_ptr<Stmt> breakStmt();
 	std::unique_ptr<Stmt> classStmt();
+	std::unique_ptr<Stmt> tryStmt();
+	std::unique_ptr<Stmt> throwStmt();
 
 	std::unique_ptr<FnStmt> function(size_t start);
 	std::vector<std::unique_ptr<Stmt>> block();
@@ -51,6 +53,7 @@ private:
 	std::unique_ptr<Expr> and();
 	std::unique_ptr<Expr> or();
 	std::unique_ptr<Expr> equality();
+	std::unique_ptr<Expr> comparasion();
 	std::unique_ptr<Expr> term();
 	std::unique_ptr<Expr> factor();
 	std::unique_ptr<Expr> unary();

@@ -25,14 +25,43 @@ void ErrorPrinter::at(size_t start, size_t end, const char* format, va_list args
 
 	printErrorStart(startLine, start - m_sourceInfo.lineStartOffsets[startLine], format, args);
 
-	for (auto currentLine = startLine; currentLine < endLine; currentLine++)
+	for (auto currentLine = startLine; currentLine <= endLine; currentLine++)
 	{
-		auto lineText = trimLine(m_sourceInfo.getLineText(currentLine));
-		if (lineText.size() == 0)
+		auto lineText = m_sourceInfo.getLineText(currentLine);
+		if (trimLine(lineText).size() == 0)
 		{
 			continue;
 		}
-		printLine(lineText);
+		m_out << lineText;
+		if (lineText.back() != '\n')
+		{
+			m_out << '\n';
+		}
+		auto current = m_sourceInfo.lineStartOffsets[currentLine];
+		m_out << TERM_COL_RED;
+		// TODO: Find a better way to handle tabs and also other invisible characters.
+		for (size_t i = current; i < current + lineText.size(); i++)
+		{
+			if ((i >= start) && (i < end))
+			{
+				if (m_sourceInfo.source[i] == '\t')
+				{
+					for (int _ = 0; _ < 4; _++)
+					{
+						m_out << '~';
+					}
+				}
+				else
+				{
+					m_out << '~';
+				}
+			}
+			else
+			{
+				m_out << ((m_sourceInfo.source[i] == '\t') ? '\t' : ' ');
+			}
+		}
+		m_out << TERM_COL_RESET "\n";
 	}
 }
 

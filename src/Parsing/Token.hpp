@@ -21,6 +21,10 @@ enum class TokenType
 	Not,
 	Equals,
 	EqualsEquals,
+	Less,
+	LessEquals,
+	More,
+	MoreEquals,
 	And,
 	AndAnd,
 	Or,
@@ -55,6 +59,10 @@ enum class TokenType
 	For,
 	Break,
 	Continue,
+	Try,
+	Catch,
+	Throw,
+	Finally,
 
 	// Other
 	Identifier,

@@ -31,3 +31,26 @@ size_t Lang::Utf8::strlen(const char* str, size_t size)
 	}
 	return length;
 }
+
+int Lang::Utf8::strcmp(const char* a, size_t aSize, const char* b, size_t bSize)
+{
+	if (aSize < bSize)
+		return -1;
+
+	if (aSize > bSize)
+		return 1;
+
+	for (size_t i = 0; i < aSize; i++)
+	{
+		if (a[i] < b[1])
+		{
+			return -1;
+		}
+		else if (a[i] > b[1])
+		{
+			return 1;
+		}
+	}
+
+	return 0;
+}

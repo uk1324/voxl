@@ -1,4 +1,5 @@
 #include <Vm/Vm.hpp>
+#include <Utf8.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
 #include <iostream>
@@ -25,6 +26,10 @@ Vm::Vm(Allocator& allocator)
 	m_mulString = m_allocator->allocateString("$mul");
 	m_divString = m_allocator->allocateString("$div");
 	m_modString = m_allocator->allocateString("$mod");
+	m_ltString = m_allocator->allocateString("$lt");
+	m_leString = m_allocator->allocateString("$le");
+	m_gtString = m_allocator->allocateString("$gt");
+	m_geString = m_allocator->allocateString("$ge");
 }
 
 Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
@@ -174,6 +179,82 @@ Vm::Result Vm::run()
 				break;
 		}
 
+#define BINARY_COMPARASION_OP(op, overloadNameString) \
+	{ \
+		Value lhs = peekStack(1); \
+		Value rhs = peekStack(0); \
+		if (lhs.isObj()) \
+		{ \
+			if (rhs.isObj() && lhs.as.obj->isString() && rhs.as.obj->isString()) \
+			{ \
+				auto left = lhs.as.obj->asString(); \
+				auto right = rhs.as.obj->asString(); \
+				popStack(); \
+				popStack(); \
+				pushStack(Value(Utf8::strcmp(left->chars, left->size, right->chars, right->size) op 0)); \
+			} \
+			else if (lhs.as.obj->isInstance()) \
+			{ \
+				auto instance = lhs.as.obj->asInstance(); \
+				auto optMethod = instance->class_->methods.get(overloadNameString); \
+				if (optMethod.has_value()) \
+				{ \
+					if (callValue(**optMethod, 2, 0) == Result::RuntimeError) \
+					{ \
+						return Result::RuntimeError; \
+					} \
+				} \
+				else \
+				{ \
+					return fatalError("no operator" #op " for these types"); \
+				} \
+			} \
+		} \
+		else \
+		{ \
+			popStack(); \
+			popStack(); \
+			if (lhs.isInt() && rhs.isInt()) \
+			{ \
+				pushStack(Value(lhs.as.intNumber op rhs.as.intNumber)); \
+			} \
+			else if (lhs.isFloat() && rhs.isFloat()) \
+			{ \
+				pushStack(Value(lhs.as.floatNumber op rhs.as.floatNumber)); \
+			} \
+			else if (lhs.isFloat() && rhs.isInt()) \
+			{ \
+				pushStack(Value(lhs.as.floatNumber op static_cast<Float>(rhs.as.intNumber))); \
+			} \
+			else if (lhs.isInt() && rhs.isFloat()) \
+			{ \
+				pushStack(Value(static_cast<Float>(lhs.as.intNumber) op rhs.as.floatNumber)); \
+			} \
+			else \
+			{ \
+				return fatalError("no operator " #op " for these types"); \
+			} \
+		} \
+		break; \
+	}
+
+		case Op::Less: BINARY_COMPARASION_OP(<, m_ltString)
+		case Op::LessEqual: BINARY_COMPARASION_OP(<=, m_leString)
+		case Op::More: BINARY_COMPARASION_OP(>, m_gtString)
+		case Op::MoreEqual: BINARY_COMPARASION_OP(>=, m_geString)
+#undef BINARY_COMPARASION_OP
+
+		case Op::Equals:
+		{
+			auto& lhs = peekStack(1);
+			auto& rhs = peekStack(0);
+			Value result(lhs == rhs);
+			popStack();
+			popStack();
+			pushStack(result);
+			break;
+		}
+
 		case Op::Concat:
 		{
 			Value lhs = peekStack(1);
@@ -291,17 +372,6 @@ Vm::Result Vm::run()
 			{
 				return fatalError("can use not on bools");
 			}
-			break;
-		}
-
-		case Op::Equals:
-		{
-			auto& lhs = peekStack(1);
-			auto& rhs = peekStack(0);
-			Value result(lhs == rhs);
-			popStack();
-			popStack();
-			pushStack(result);
 			break;
 		}
 
@@ -539,6 +609,44 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::TryBegin:
+		{
+			auto jump = readUint32();
+			callStackTop().isTrySet = true;
+			callStackTop().absoluteJumpToCatch = jump;
+			break;
+		}
+
+		case Op::TryEnd:
+			callStackTop().isTrySet = false;
+			break;
+
+		case Op::Throw:
+		{
+			auto& thrownValue = peekStack();
+
+			while (m_callStackSize != 0)
+			{
+				auto& frame = callStackTop();
+
+				if (frame.isTrySet)
+				{
+					frame.instructionPointer = &frame.function->byteCode.code[frame.absoluteJumpToCatch];
+					frame.isTrySet = false;
+					m_stackTop = callStackTop().values;
+					m_stackTop -= callStackTop().numberOfValuesToPopOffExceptArgs;
+					pushStack(thrownValue);
+					goto breakLabel;
+				}
+
+				m_callStackSize--;
+			}
+			m_callStackSize++;
+			return fatalError("uncaught exception");
+		breakLabel:
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 			return Result::RuntimeError;
@@ -722,6 +830,10 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 	allocator.addObj(reinterpret_cast<Obj*>(vm->m_mulString));
 	allocator.addObj(reinterpret_cast<Obj*>(vm->m_divString));
 	allocator.addObj(reinterpret_cast<Obj*>(vm->m_modString));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_ltString));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_leString));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_gtString));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_geString));
 }
 
 void Vm::update(Vm* vm)
@@ -744,6 +856,10 @@ void Vm::update(Vm* vm)
 	vm->m_mulString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_mulString)));
 	vm->m_divString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_divString)));
 	vm->m_modString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_modString)));
+	vm->m_ltString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_ltString)));
+	vm->m_leString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_leString)));
+	vm->m_gtString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_gtString)));
+	vm->m_geString = reinterpret_cast<ObjString*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(vm->m_geString)));
 }
 
 Vm::CallFrame& Vm::callStackTop()
@@ -760,14 +876,4 @@ uint32_t Vm::readUint32()
 		value |= static_cast<uint32_t>(readUint8());
 	}
 	return value;
-}
-
-size_t Vm::ObjStringHasher::operator()(const ObjString* string) const
-{
-	return std::hash<std::string_view>()(std::string_view(string->chars, string->size));
-}
-
-size_t Vm::ObjStringComparator::operator()(const ObjString* a, const ObjString* b) const
-{
-	return (a->size == b->size) && (memcmp(a->chars, b->chars, a->size) == 0);
 }

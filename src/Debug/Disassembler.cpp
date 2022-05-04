@@ -84,6 +84,17 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset)
 	switch (static_cast<Op>(byteCode.code[offset]))
 	{
 		case Op::Add: return justOp("add");
+		case Op::Subtract: return justOp("subtract");
+		case Op::Multiply: return justOp("multiply");
+		case Op::Divide: return justOp("divide");
+		case Op::Modulo: return justOp("modulo");
+		case Op::Less: return justOp("less");
+		case Op::LessEqual: return justOp("lessEqual");
+		case Op::More: return justOp("more");
+		case Op::MoreEqual: return justOp("moreEqual");
+		case Op::Throw: return justOp("throw");
+		case Op::TryBegin: return opNumber("tryBegin", byteCode, offset);
+		case Op::TryEnd: return justOp("tryEnd");
 		case Op::CreateClass: return justOp("createClass");
 		case Op::GetProperty: return justOp("getProperty");
 		case Op::SetProperty: return justOp("setProperty");

@@ -1,5 +1,8 @@
 #include "Parser.hpp"
 #include "Parser.hpp"
+#include "Parser.hpp"
+#include "Parser.hpp"
+#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -19,8 +22,7 @@ Parser::Result Parser::parse(const std::vector<Token>& tokens, const SourceInfo&
 	m_sourceInfo = &sourceInfo;
 	m_currentTokenIndex = 0;
 
-	std::vector<std::unique_ptr<Stmt>> ast;
-
+	StmtList ast;
 	while (isAtEnd() == false)
 	{
 		try
@@ -32,15 +34,6 @@ Parser::Result Parser::parse(const std::vector<Token>& tokens, const SourceInfo&
 		}
 		catch (const ParsingError&)
 		{
-			
-			if (peek().type == TokenType::Error)
-			{
-				;
-			}
-			else
-			{
-			}
-
 			synchronize();
 		}
 	}
@@ -70,6 +63,10 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return breakStmt();
 	if (match(TokenType::Class))
 		return classStmt();
+	if (match(TokenType::Try))
+		return tryStmt();
+	if (match(TokenType::Throw))
+		return throwStmt();
 	else
 		return exprStmt();
 
@@ -117,10 +114,14 @@ std::unique_ptr<Stmt> Parser::letStmt()
 
 std::unique_ptr<Stmt> Parser::blockStmt()
 {
-	auto start = peek().start;
-	auto stmts = block();
-	auto end = peekPrevious().end;
-	return std::make_unique<BlockStmt>(std::move(stmts), start, end);
+	auto start = peekPrevious().start;
+	StmtList stmts;
+	while ((isAtEnd() == false) && (match(TokenType::RightBrace) == false))
+	{
+		stmts.push_back(stmt());
+	}
+
+	return std::make_unique<BlockStmt>(std::move(stmts), start, peekPrevious().end);
 }
 
 std::unique_ptr<Stmt> Parser::fnStmt()
@@ -147,7 +148,6 @@ std::unique_ptr<Stmt> Parser::ifStmt()
 	auto start = peekPrevious().start;
 	auto condition = expr();
 
-	expect(TokenType::LeftBrace, "expected '{'");
 	auto ifThen = block();
 
 	if (match(TokenType::Else) == false)
@@ -171,7 +171,6 @@ std::unique_ptr<Stmt> Parser::ifStmt()
 std::unique_ptr<Stmt> Parser::loopStmt()
 {
 	size_t start = peekPrevious().start;
-	expect(TokenType::LeftBrace, "expected '{'");
 	auto stmts = block();
 	// loop is just syntax for a while loop without condition.
 	return std::make_unique<LoopStmt>(std::nullopt, std::nullopt, std::nullopt, std::move(stmts), start, peekPrevious().end);
@@ -204,6 +203,46 @@ std::unique_ptr<Stmt> Parser::classStmt()
 	return std::make_unique<ClassStmt>(name, std::move(methods), start, peekPrevious().end);
 }
 
+std::unique_ptr<Stmt> Parser::tryStmt()
+{
+	size_t start = peekPrevious().start;
+	auto tryBlock = block();
+
+	if (match(TokenType::Finally))
+	{
+		auto finallyBlock = block();
+		return std::make_unique<TryStmt>(std::move(tryBlock), std::nullopt, std::nullopt, std::move(finallyBlock), start, peekPrevious().end);
+	}
+
+	expect(TokenType::Catch, "expected catch block");
+
+	std::optional<std::string_view> caughtValueName;
+	if (match(TokenType::LeftParen))
+	{
+		expect(TokenType::Identifier, "expected caught value name");
+		// TODO if (peek().type == TokenType::RightParen) hint("to ignore the caught value remove the parens");
+		caughtValueName = peekPrevious().identifier;
+		expect(TokenType::RightParen, "expected ')'");
+	}
+	auto catchBlock = block();
+
+	if (match(TokenType::Finally))
+	{
+		auto finallyBlock = block();
+		return std::make_unique<TryStmt>(std::move(tryBlock), caughtValueName, std::move(catchBlock), std::move(finallyBlock), start, peekPrevious().end);
+	}
+
+	return std::make_unique<TryStmt>(std::move(tryBlock), caughtValueName, std::move(catchBlock), std::nullopt, start, peekPrevious().end);
+}
+
+std::unique_ptr<Stmt> Parser::throwStmt()
+{
+	size_t start = peekPrevious().end;
+	auto value = expr();
+	expect(TokenType::Semicolon, "expected ';'");
+	return std::make_unique<ThrowStmt>(std::move(value), start, peekPrevious().end);
+}
+
 std::unique_ptr<FnStmt> Parser::function(size_t start)
 {
 	expect(TokenType::Identifier, "expected function name");
@@ -221,7 +260,6 @@ std::unique_ptr<FnStmt> Parser::function(size_t start)
 	}
 	expect(TokenType::RightParen, "expected ')'");
 
-	expect(TokenType::LeftBrace, "expected '{'");
 	auto stmts = block();
 
 	return std::make_unique<FnStmt>(name, std::move(arguments), std::move(stmts), start, peekPrevious().end);
@@ -229,17 +267,18 @@ std::unique_ptr<FnStmt> Parser::function(size_t start)
 
 std::vector<std::unique_ptr<Stmt>> Parser::block()
 {
-	std::vector<std::unique_ptr<Stmt>> stmts;
+	expect(TokenType::LeftBrace, "expected '{'");
+	StmtList stmts;
 	while ((isAtEnd() == false) && (match(TokenType::RightBrace) == false))
 	{
 		stmts.push_back(stmt());
 	}
-
 	return stmts;
 }
 
 std::unique_ptr<Expr> Parser::expr()
 {
+	// TODO: Maybe do checking for recursion depth here to avoid stack overflow.
 	return assignment();
 }
 
@@ -287,7 +326,13 @@ std::unique_ptr<Expr> Parser:: or()
 
 std::unique_ptr<Expr> Parser::equality()
 {
-	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::EqualsEquals), term)
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::EqualsEquals), comparasion)
+}
+
+std::unique_ptr<Expr> Parser::comparasion()
+{
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(
+		match(TokenType::Less) || match(TokenType::LessEquals) || match(TokenType::More) || match(TokenType::MoreEquals), term)
 }
 
 std::unique_ptr<Expr> Parser::term()
@@ -451,6 +496,18 @@ void Parser::synchronize()
 		switch (peek().type)
 		{
 			case TokenType::Semicolon:
+			case TokenType::Class:
+			case TokenType::Try:
+			case TokenType::Throw:
+			case TokenType::Fn:
+			case TokenType::For:
+			case TokenType::Loop:
+			case TokenType::While:
+			case TokenType::If:
+			case TokenType::Let:
+			case TokenType::Ret:
+			case TokenType::Break:
+			case TokenType::Continue:
 				return;
 
 			default:

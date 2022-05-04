@@ -10,15 +10,8 @@ namespace Lang
 
 class Value;
 
-class ByteCode
+struct ByteCode
 {
-public:
-	void emitOp(Op op);
-	void emitByte(uint8_t byte);
-	void emitWord(uint16_t word);
-	void emitUint32(uint32_t dword);
-
-public:
 	std::vector<uint8_t> code;
 	// Could use RLE compression if the size is an issuse though I don't see why would it be.
 	// Finding the line of an opcode would just require searching through the array.

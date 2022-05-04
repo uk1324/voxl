@@ -1,4 +1,6 @@
 #include "Compiler.hpp"
+#include "Compiler.hpp"
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -76,6 +78,8 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 		CASE_STMT_TYPE(Loop, loopStmt)
 		CASE_STMT_TYPE(Break, breakStmt)
 		CASE_STMT_TYPE(Class, classStmt)
+		CASE_STMT_TYPE(Try, tryStmt)
+		CASE_STMT_TYPE(Throw, throwStmt)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -260,6 +264,48 @@ Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
 	}
 	auto jump = emitJump(Op::Jump);
 	m_loops.back().breakJumpLocations.push_back(jump);
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
+{
+	ASSERT(stmt.catchBlock.has_value() || stmt.finallyBlock.has_value());
+	
+	emitOp(Op::TryBegin);
+	const auto tryJumpToCatch = currentLocation();
+	emitUint32(0);
+	TRY(compile(stmt.tryBlock));
+	emitOp(Op::TryEnd);
+
+	const auto jumpToEndOfCatch = emitJump(Op::Jump);
+
+	if (stmt.catchBlock.has_value())
+	{
+		patch(tryJumpToCatch, static_cast<int32_t>(currentLocation()));
+
+		beginScope();
+		// Always declare a variable so the VM catch doesn't have to handle it as a special case.
+		auto name = stmt.caughtValueName.has_value() ? *stmt.caughtValueName : "";
+		TRY(declareVariable(name, stmt.start, stmt.end()));
+
+		TRY(compile(*stmt.catchBlock));
+
+		endScope();
+	}
+	setJumpToHere(jumpToEndOfCatch);
+
+	if (stmt.finallyBlock.has_value())
+	{
+		TRY(compile(*stmt.finallyBlock));
+	}
+
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::throwStmt(const ThrowStmt& stmt)
+{
+	TRY(compile(stmt.expr));
+	emitOp(Op::Throw);
 	return Status::Ok;
 }
 
@@ -554,6 +600,10 @@ Compiler::Status Compiler::binaryExpr(const BinaryExpr& expr)
 		case TokenType::Slash: emitOp(Op::Divide); break;
 		case TokenType::Percent: emitOp(Op::Modulo); break;
 		case TokenType::EqualsEquals: emitOp(Op::Equals); break;
+		case TokenType::Less: emitOp(Op::Less); break;
+		case TokenType::LessEquals: emitOp(Op::LessEqual); break;
+		case TokenType::More: emitOp(Op::More); break;
+		case TokenType::MoreEquals: emitOp(Op::MoreEqual); break;
 		default:
 			ASSERT_NOT_REACHED();
 	}
@@ -585,7 +635,7 @@ ByteCode& Compiler::currentByteCode()
 
 void Compiler::emitOp(Op op)
 {
-	currentByteCode().emitOp(op);
+	currentByteCode().code.push_back(static_cast<uint8_t>(op));
 	currentByteCode().lineNumberAtOffset.push_back(m_lineNumberStack.back());
 }
 
@@ -602,10 +652,15 @@ Compiler::Status Compiler::emitOpArg(Op op, size_t arg, size_t start, size_t end
 
 void Compiler::emitUint32(uint32_t value)
 {
-	currentByteCode().emitUint32(value);
-	for (int i = 0; i < 4; i++)
+	auto& code = currentByteCode();
+	code.code.push_back(static_cast<uint8_t>((value >> 24) & 0xFF));
+	code.code.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
+	code.code.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+	code.code.push_back(static_cast<uint8_t>(value & 0xFF));
+
+	for (int _ = 0; _ < 4; _++)
 	{
-		currentByteCode().lineNumberAtOffset.push_back(m_lineNumberStack.back());
+		code.lineNumberAtOffset.push_back(m_lineNumberStack.back());
 	}
 }
 
@@ -627,13 +682,16 @@ void Compiler::emitJump(Op op, size_t location)
 void Compiler::setJumpToHere(size_t placeToPatch)
 {
 	auto jumpSize = static_cast<uint32_t>(currentLocation() - (placeToPatch + sizeof(uint32_t))) ;
+	patch(placeToPatch, jumpSize);
+}
 
+void Compiler::patch(size_t placeToPatch, uint32_t value)
+{
 	uint8_t* jumpLocation = &currentByteCode().code[placeToPatch];
-
-	jumpLocation[0] = static_cast<uint8_t>((jumpSize >> 24) & 0xFF);
-	jumpLocation[1] = static_cast<uint8_t>((jumpSize >> 16) & 0xFF);
-	jumpLocation[2] = static_cast<uint8_t>((jumpSize >> 8) & 0xFF);
-	jumpLocation[3] = static_cast<uint8_t>(jumpSize & 0xFF);
+	jumpLocation[0] = static_cast<uint8_t>((value >> 24) & 0xFF);
+	jumpLocation[1] = static_cast<uint8_t>((value >> 16) & 0xFF);
+	jumpLocation[2] = static_cast<uint8_t>((value >> 8) & 0xFF);
+	jumpLocation[3] = static_cast<uint8_t>(value & 0xFF);
 }
 
 size_t Compiler::currentLocation()

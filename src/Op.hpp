@@ -8,7 +8,7 @@ namespace Lang
 	// This would reduce code size.
 	enum class Op : uint8_t
 	{
-		// [lhs, rhs]
+		// [lhs, rhs] -> [result]
 		// {
 		Add, 
 		Subtract, 
@@ -16,6 +16,17 @@ namespace Lang
 		Divide, 
 		Modulo, 
 		Concat,
+		Less,
+		LessEqual,
+		More,
+		MoreEqual,
+		Equals,
+		// }
+
+		// [value] -> [result]
+		// {
+		Negate,
+		Not,
 		// }
 
 		LoadConstant,
@@ -29,9 +40,6 @@ namespace Lang
 		LoadNull,
 		PopStack,
 		Return,
-		Negate,
-		Not,
-		Equals,
 		LoadTrue,
 		LoadFalse,
 		JumpIfFalse, // 32bit - bytes to jump forward
@@ -43,5 +51,9 @@ namespace Lang
 		GetProperty, // instance name
 		SetProperty, // [rhs instance name]
 		StoreMethod, // [class function name]
+		TryBegin, // absolute jump to catch stmt.
+		TryEnd,
+		Throw // [value]
+
 	};
 }

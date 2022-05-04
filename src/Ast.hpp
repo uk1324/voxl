@@ -29,9 +29,8 @@ enum class ExprType
 	SetField
 };
 
-class Expr
+struct Expr
 {
-public:
 	Expr(size_t start, size_t end, ExprType type);
 	virtual ~Expr() = default;
 
@@ -39,114 +38,95 @@ public:
 
 	const size_t start;
 	const size_t length;
-
 	const ExprType type;
 };
 
-class IntConstantExpr final : public Expr
+struct IntConstantExpr final : public Expr
 {
-public:
 	IntConstantExpr(Int value, size_t start, size_t end);
-	~IntConstantExpr() = default;
 
 	Int value;
 };
 
-class FloatConstantExpr final : public Expr
+struct FloatConstantExpr final : public Expr
 {
-public:
 	FloatConstantExpr(Float value, size_t start, size_t end);
-	~FloatConstantExpr() = default;
 
 	Float value;
 };
 
-class BoolConstantExpr final : public Expr
+struct BoolConstantExpr final : public Expr
 {
-public:
 	BoolConstantExpr(bool value, size_t start, size_t end);
 
 	bool value;
 };
 
-class StringConstantExpr final : public Expr
+struct StringConstantExpr final : public Expr
 {
-public:
 	StringConstantExpr(std::string_view text, size_t length, size_t start, size_t end);
 
 	std::string_view text;
 	size_t length;
 };
 
-class BinaryExpr final : public Expr
+struct BinaryExpr final : public Expr
 {
-public:
 	BinaryExpr(std::unique_ptr<Expr> lhs, TokenType op, std::unique_ptr<Expr> rhs, size_t start, size_t end);
-	~BinaryExpr() = default;
 
 	TokenType op;
 	std::unique_ptr<Expr> lhs;
 	std::unique_ptr<Expr> rhs;
 };
 
-class UnaryExpr final : public Expr
+struct UnaryExpr final : public Expr
 {
-public:
 	UnaryExpr(std::unique_ptr<Expr> expr, TokenType op, size_t start, size_t end);
 	
 	TokenType op;
 	std::unique_ptr<Expr> expr;
 };
 
-class IdentifierExpr final : public Expr
+struct IdentifierExpr final : public Expr
 {
-public:
 	IdentifierExpr(std::string_view identifier, size_t start, size_t end);
-	~IdentifierExpr() = default;
 
 	std::string_view identifier;
 };
 
-class CallExpr final : public Expr
+struct CallExpr final : public Expr
 {
-public:
 	CallExpr(std::unique_ptr<Expr> calle, std::vector<std::unique_ptr<Expr>> arguments, size_t start, size_t end);
-	~CallExpr() = default;
 
 	std::unique_ptr<Expr> calle;
 	std::vector<std::unique_ptr<Expr>> arguments;
 };
 
-class AssignmentExpr final : public Expr
+struct AssignmentExpr final : public Expr
 {
-public:
 	AssignmentExpr(std::unique_ptr<Expr> lhs, std::unique_ptr<Expr> rhs, size_t start, size_t end);
 
 	std::unique_ptr<Expr> lhs;
 	std::unique_ptr<Expr> rhs;
 };
 
-class ArrayExpr final : public Expr
+struct ArrayExpr final : public Expr
 {
-public:
 	ArrayExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size_t end);
 
 	std::vector<std::unique_ptr<Expr>> values;
 };
 
-class GetFieldExpr final : public Expr
+struct GetFieldExpr final : public Expr
 {
-public:
 	GetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, size_t start, size_t end);
-	~GetFieldExpr() = default;
 
 	std::unique_ptr<Expr> lhs;
 	std::string_view fieldName;
 };
 
-class SetFieldExpr final : public Expr
+struct SetFieldExpr final : public Expr
 {
-public:
 	SetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, std::unique_ptr<Expr> rhs, size_t start, size_t end);
 	~SetFieldExpr() = default;
 
@@ -166,62 +146,59 @@ enum class StmtType
 	If,
 	Loop,
 	Break,
-	Class
+	Class,
+	Try,
+	Throw,
 };
 
-class Stmt
+struct Stmt
 {
-public:
 	Stmt(size_t start, size_t end, StmtType type);
 	virtual ~Stmt() = default;
 	size_t end() const;
 
 	const size_t start;
 	const size_t length;
-
 	const StmtType type;
 };
 
-class ExprStmt final : public Stmt
+using StmtList = std::vector<std::unique_ptr<Stmt>>;
+
+struct ExprStmt final : public Stmt
 {
 public:
 	ExprStmt(std::unique_ptr<Expr> expr, size_t start, size_t end);
-	~ExprStmt() = default;
 
 	std::unique_ptr<Expr> expr;
 };
 
-class PrintStmt final : public Stmt
+struct PrintStmt final : public Stmt
 {
 public:
 	PrintStmt(std::unique_ptr<Expr> expr, size_t start, size_t end);
-	~PrintStmt() = default;
 
 	std::unique_ptr<Expr> expr;
 };
 
-class LetStmt final : public Stmt
+struct LetStmt final : public Stmt
 {
 public:
 	LetStmt(std::string_view identifier, std::optional<std::unique_ptr<Expr>> initializer, size_t start, size_t end);
-	~LetStmt() = default;
 
 	std::string_view identifier;
 	std::optional<std::unique_ptr<Expr>> initializer;
 };
 
-class BlockStmt final : public Stmt
+struct BlockStmt final : public Stmt
 {
 public:
 	BlockStmt(std::vector<std::unique_ptr<Stmt>> stmts, size_t start, size_t end);
-	~BlockStmt() = default;
 
 	std::vector<std::unique_ptr<Stmt>> stmts;
 };
 
-class FnStmt final : public Stmt
+struct FnStmt final : public Stmt
 {
-public:
 	FnStmt(
 		std::string_view name,
 		std::vector<std::string_view> arguments,
@@ -234,17 +211,15 @@ public:
 	std::vector<std::unique_ptr<Stmt>> stmts;
 };
 
-class RetStmt final : public Stmt
+struct RetStmt final : public Stmt
 {
-public:
 	RetStmt(std::optional<std::unique_ptr<Expr>> returnValue, size_t start, size_t end);
 
 	std::optional<std::unique_ptr<Expr>> returnValue;
 };
 
-class IfStmt final : public Stmt
+struct IfStmt final : public Stmt
 {
-public:
 	IfStmt(
 		std::unique_ptr<Expr> condition,
 		std::vector<std::unique_ptr<Stmt>> ifThen,
@@ -257,9 +232,8 @@ public:
 	std::optional<std::unique_ptr<Stmt>> elseThen;
 };
 
-class LoopStmt final : public Stmt
+struct LoopStmt final : public Stmt
 {
-public:
 	LoopStmt(
 		std::optional<std::unique_ptr<Stmt>> initStmt,
 		std::optional<std::unique_ptr<Expr>> condition,
@@ -274,19 +248,40 @@ public:
 	std::vector<std::unique_ptr<Stmt>> block;
 };
 
-class BreakStmt final : public Stmt
+struct BreakStmt final : public Stmt
 {
-public:
 	BreakStmt(size_t start, size_t end);
 };
 
-class ClassStmt final : public Stmt
+struct ClassStmt final : public Stmt
 {
-public:
 	ClassStmt(std::string_view name, std::vector<std::unique_ptr<FnStmt>>, size_t start, size_t end);
-	//ClassStmt(std::string_view name, std::vector<std::pair<std::string_view, std::unique_ptr<FnStmt>>>, size_t start, size_t end);
+
 	std::string_view name;
 	std::vector<std::unique_ptr<FnStmt>> methods;
+};
+
+struct TryStmt final : public Stmt
+{
+	TryStmt(
+		StmtList tryBlock,
+		std::optional<std::string_view> caughtValueName,
+		std::optional<StmtList> catchBlock,
+		std::optional<StmtList> finallyBlock,
+		size_t start,
+		size_t end);
+
+	StmtList tryBlock; 
+	std::optional<std::string_view> caughtValueName;
+	std::optional<StmtList> catchBlock; 
+	std::optional<StmtList> finallyBlock;
+};
+
+struct ThrowStmt final : public Stmt
+{
+	ThrowStmt(std::unique_ptr<Expr> expr, size_t start, size_t end);
+
+	std::unique_ptr<Expr> expr;
 };
 
 }

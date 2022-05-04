@@ -166,3 +166,23 @@ ClassStmt::ClassStmt(std::string_view name, std::vector<std::unique_ptr<FnStmt>>
 	, name(name)
 	, methods(std::move(methods))
 {}
+
+TryStmt::TryStmt(
+	StmtList tryBlock,
+	std::optional<std::string_view> caughtValueName,
+	std::optional<StmtList> catchBlock,
+	std::optional<StmtList> finallyBlock,
+	size_t start,
+	size_t end)
+	: Stmt(start, end, StmtType::Try)
+	, tryBlock(std::move(tryBlock))
+	, caughtValueName(caughtValueName)
+	, catchBlock(std::move(catchBlock))
+	, finallyBlock(std::move(finallyBlock))
+{}
+
+
+ThrowStmt::ThrowStmt(std::unique_ptr<Expr> expr, size_t start, size_t end)
+	: Stmt(start, end, StmtType::Throw)
+	, expr(std::move(expr))
+{}
