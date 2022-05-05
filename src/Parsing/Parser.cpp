@@ -355,17 +355,17 @@ std::unique_ptr<Expr> Parser::equality()
 std::unique_ptr<Expr> Parser::comparasion()
 {
 	PARSE_LEFT_RECURSIVE_BINARY_EXPR(
-		match(TokenType::Less) || match(TokenType::LessEquals) || match(TokenType::More) || match(TokenType::MoreEquals), term)
-}
-
-std::unique_ptr<Expr> Parser::term()
-{
-	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::Star) || match(TokenType::Slash) || match(TokenType::Percent), factor)
+		match(TokenType::Less) || match(TokenType::LessEquals) || match(TokenType::More) || match(TokenType::MoreEquals), factor)
 }
 
 std::unique_ptr<Expr> Parser::factor()
 {
-	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::Plus) || match(TokenType::PlusPlus) || match(TokenType::Minus), unary)
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::Plus) || match(TokenType::PlusPlus) || match(TokenType::Minus), term)
+}
+
+std::unique_ptr<Expr> Parser::term()
+{
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::Star) || match(TokenType::Slash) || match(TokenType::Percent), unary)
 }
 
 std::unique_ptr<Expr> Parser::unary()

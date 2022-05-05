@@ -129,9 +129,55 @@ Vm::Result Vm::run()
 		case Op::Add: BINARY_ARITHMETIC_OP(+, m_addString)
 		case Op::Subtract: BINARY_ARITHMETIC_OP(-, m_subString)
 		case Op::Multiply: BINARY_ARITHMETIC_OP(*, m_mulString)
-			// TODO: handle integer division by zero
-		case Op::Divide: BINARY_ARITHMETIC_OP(/, m_divString)
 #undef BINARY_ARITHMETIC_OP
+			// TODO: handle integer division by zero
+		case Op::Divide: 
+		{
+			Value lhs = peekStack(1);
+			Value rhs = peekStack(0);
+			if (lhs.isObj() && lhs.as.obj->isInstance())
+			{
+				auto instance = lhs.as.obj->asInstance();
+				auto optMethod = instance->class_->methods.get(m_modString);
+				if (optMethod.has_value())
+				{
+					if (callValue(**optMethod, 2, 0) == Result::RuntimeError)
+					{
+						return Result::RuntimeError;
+					}
+				}
+				else
+				{
+					return fatalError("no operator % for these types");
+				}
+			}
+			else
+			{
+				popStack();
+				popStack();
+				if (lhs.isInt() && rhs.isInt())
+				{
+					pushStack(Value(static_cast<Float>(lhs.as.intNumber) / static_cast<Float>(rhs.as.intNumber)));
+				}
+				else if (lhs.isFloat() && rhs.isFloat())
+				{
+					pushStack(Value(lhs.as.floatNumber /rhs.as.floatNumber));
+				}
+				else if (lhs.isFloat() && rhs.isInt())
+				{
+					pushStack(Value(lhs.as.floatNumber / static_cast<Float>(rhs.as.intNumber)));
+				}
+				else if (lhs.isInt() && rhs.isFloat())
+				{
+					pushStack(Value(static_cast<Float>(lhs.as.intNumber) / rhs.as.floatNumber));
+				}
+				else
+				{
+					return fatalError("no operator % for these types");
+				}
+			}
+			break;
+		}
 		case Op::Modulo: 
 		{
 			Value lhs = peekStack(1);

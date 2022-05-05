@@ -51,7 +51,7 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 
 #ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
 	std::cout << "----<script>\n";
-	disassembleByteCode(scriptFunction->byteCode);
+	disassembleByteCode(scriptFunction->byteCode, *m_allocator);
 #endif
 
 	return Result{ m_hadError, reinterpret_cast<ObjFunction*>(scriptFunction) };
@@ -173,7 +173,7 @@ Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 
 #ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
 	std::cout << "----" << stmt.name << '\n';
-	disassembleByteCode(function->byteCode);
+	disassembleByteCode(function->byteCode, *m_allocator);
 #endif
 
 	endScope();
@@ -343,7 +343,7 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 
 #ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
 		std::cout << "----" << stmt.name << '.' << method->name << '\n';
-		disassembleByteCode(function->byteCode);
+		disassembleByteCode(function->byteCode, *m_allocator);
 #endif
 
 		endScope();
