@@ -1,17 +1,17 @@
 class Vec2 {
 	$init(x, y) {
-		$.x = x;
-		$.y = y;
-		ret $;
+		$.x = x
+		$.y = y
+		ret $
 	}
 
 	$add(rhs) {
-		ret Vec2($.x + rhs.x, $.y + rhs.y);
+		ret Vec2($.x + rhs.x, $.y + rhs.y)
 	}
 
 	log() {
-		print("(" ++ $.x ++ ", " ++ $.y ++ ")");
+		print("(" ++ $.x ++ ", " ++ $.y ++ ")")
 	}
 }
 
-(Vec2(1, 2) + Vec2(2, 3) + Vec2(3, 4)).log();
+(Vec2(1, 2) + Vec2(2, 3) + Vec2(3, 4)).log()

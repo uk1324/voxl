@@ -15,6 +15,7 @@ enum class TokenType
 	// Operators
 	Plus,
 	Minus,
+	UnaryMinus,
 	Star,
 	Slash,
 	Percent,
@@ -75,6 +76,7 @@ enum class TokenType
 
 	// Special
 	Error,
+	Newline,
 	Eof
 };
 

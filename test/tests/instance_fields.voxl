@@ -1,9 +1,9 @@
 class X
 {}
 
-x : X();
+x : X()
 
-print(x.a);
-x.a = 4;
-print(x.a);
-print(x.b);
+print(x.a)
+x.a = 4
+print(x.a)
+print(x.b)

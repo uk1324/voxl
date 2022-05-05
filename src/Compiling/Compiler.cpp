@@ -66,17 +66,17 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 	switch (stmt.get()->type)
 	{
 		CASE_STMT_TYPE(Expr, exprStmt)
-			CASE_STMT_TYPE(Print, printStmt)
-			CASE_STMT_TYPE(VariableDeclaration, variableDeclarationStmt)
-			CASE_STMT_TYPE(Block, blockStmt)
-			CASE_STMT_TYPE(Fn, fnStmt)
-			CASE_STMT_TYPE(Ret, retStmt)
-			CASE_STMT_TYPE(If, ifStmt)
-			CASE_STMT_TYPE(Loop, loopStmt)
-			CASE_STMT_TYPE(Break, breakStmt)
-			CASE_STMT_TYPE(Class, classStmt)
-			CASE_STMT_TYPE(Try, tryStmt)
-			CASE_STMT_TYPE(Throw, throwStmt)
+		CASE_STMT_TYPE(Print, printStmt)
+		CASE_STMT_TYPE(VariableDeclaration, variableDeclarationStmt)
+		CASE_STMT_TYPE(Block, blockStmt)
+		CASE_STMT_TYPE(Fn, fnStmt)
+		CASE_STMT_TYPE(Ret, retStmt)
+		CASE_STMT_TYPE(If, ifStmt)
+		CASE_STMT_TYPE(Loop, loopStmt)
+		CASE_STMT_TYPE(Break, breakStmt)
+		CASE_STMT_TYPE(Class, classStmt)
+		CASE_STMT_TYPE(Try, tryStmt)
+		CASE_STMT_TYPE(Throw, throwStmt)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -111,15 +111,8 @@ Compiler::Status Compiler::variableDeclarationStmt(const VariableDeclarationStmt
 {
 	for (const auto& [name, initializer] : stmt.variables)
 	{
-		// Local variables are create by just leaving the result of the initializer on top of the stack.
-		if (initializer.has_value())
-		{
-			TRY(compile(*initializer));
-		}
-		else
-		{
-			emitOp(Op::LoadNull);
-		}
+		// Local variables are created by just leaving the result of the initializer on top of the stack.
+		TRY(compile(initializer));
 
 		// The initializer is evaluated before declaring the variable so a variable from an outer scope with the same name can be used.
 		TRY(declareVariable(name, stmt.start, stmt.end()));
@@ -482,7 +475,7 @@ Compiler::Status Compiler::unaryExpr(const UnaryExpr& expr)
 {
 	switch (expr.op)
 	{
-	case TokenType::Minus:
+	case TokenType::UnaryMinus:
 		TRY(compile(expr.expr));
 		emitOp(Op::Negate);
 		break;

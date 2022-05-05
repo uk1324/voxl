@@ -55,6 +55,16 @@ Token Scanner::token()
 
 			return makeToken(TokenType::Plus);
 		}
+		case '-': 
+		{
+			if ((peek() == ' ') || (peek() == '\n') || (peek() == '\r'))
+				return makeToken(TokenType::Minus);
+			
+			if (match('='))
+				return makeToken(TokenType::MinusEquals);
+
+			return makeToken(TokenType::UnaryMinus);
+		}
 		case '&': return match('&')
 			? makeToken(TokenType::AndAnd)
 			: makeToken(TokenType::And);
@@ -67,9 +77,6 @@ Token Scanner::token()
 		case '>': return match('=')
 			? makeToken(TokenType::MoreEquals)
 			: makeToken(TokenType::More);
-		case '-': return match('=') 
-			? makeToken(TokenType::MinusEquals)
-			: makeToken(TokenType::Minus);
 		case '/': return match('=')
 			? makeToken(TokenType::SlashEquals)
 			: makeToken(TokenType::Slash);
@@ -96,6 +103,9 @@ Token Scanner::token()
 		case ',': return makeToken(TokenType::Comma);
 		case '.': return makeToken(TokenType::Dot);
 		case '"': return string();
+		case '\n':
+			advanceLine();
+			return makeToken(TokenType::Newline);
 
 		default:
 			if (isDigit(c))
@@ -126,6 +136,8 @@ Token Scanner::number()
 		}
 	}
 
+	auto start = &m_sourceInfo->source[m_tokenStartIndex];
+
 	bool isInt = true;
 	while ((isAtEnd() == false))
 	{
@@ -147,11 +159,10 @@ Token Scanner::number()
 		advance();
 	}
 
-	auto start = &m_sourceInfo->source[m_tokenStartIndex];
 	if (isInt)
 	{
 		Int value;
-		auto result = std::from_chars(start, &m_sourceInfo->source.back(), value, base);
+		auto result = std::from_chars(start, &m_sourceInfo->source.back() + 1, value, base);
 		m_currentCharIndex = m_tokenStartIndex + (result.ptr - start);
 
 		if (result.ec == std::errc::invalid_argument)
@@ -368,11 +379,6 @@ void Scanner::skipWhitespace()
 			case '\r':
 			case '\f':
 				advance();
-				break;
-
-			case '\n':
-				advance();
-				advanceLine();
 				break;
 
 			case '/':

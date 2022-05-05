@@ -182,11 +182,9 @@ struct VariableDeclarationStmt final : public Stmt
 {
 public:
 	VariableDeclarationStmt(
-		std::vector<std::pair<std::string_view, std::optional<std::unique_ptr<Expr>>>> variables, 
-		size_t start, 
-		size_t end);
+		std::vector<std::pair<std::string_view, std::unique_ptr<Expr>>> variables, size_t start, size_t end);
 
-	std::vector<std::pair<std::string_view, std::optional<std::unique_ptr<Expr>>>> variables;
+	std::vector<std::pair<std::string_view, std::unique_ptr<Expr>>> variables;
 };
 
 struct BlockStmt final : public Stmt

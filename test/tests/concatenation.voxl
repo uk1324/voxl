@@ -1,1 +1,1 @@
-print("abc" ++ true ++ 2 ++ false);
+print("abc" ++ true ++ 2 ++ false)

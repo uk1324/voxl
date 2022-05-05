@@ -24,8 +24,17 @@ Parser::Result Parser::parse(const std::vector<Token>& tokens, const SourceInfo&
 		{
 			if (match(TokenType::Semicolon))
 				; // Null statement like this line
+			else if (peek().type == TokenType::Newline)
+			{
+				while ((isAtEnd() == false) && (peek().type == TokenType::Newline))
+					advance();
+			}
 			else
+			{
+				if (isAtEnd())
+					break;
 				ast.push_back(stmt());
+			}
 		}
 		catch (const ParsingError&)
 		{
@@ -64,11 +73,8 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return throwStmt();
 	else
 	{
-		if (check(TokenType::Identifier)
-			&& ((peekNext().type == TokenType::Semicolon)) || (peekNext().type == TokenType::Colon) || (peekNext().type == TokenType::Comma))
-		{
+		if (check(TokenType::Identifier) && (peekNext().type == TokenType::Colon))
 			return variableDeclarationStmt();
-		}
 
 		return exprStmt();
 	}
@@ -79,7 +85,7 @@ std::unique_ptr<Stmt> Parser::exprStmt()
 {
 	size_t start = peek().start;
 	auto expression = expr();
-	expect(TokenType::Semicolon, "expected ';'");
+	expectSemicolon();
 	size_t end = peekPrevious().end;
 
 	auto stmt = std::make_unique<ExprStmt>(std::move(expression), start, end);
@@ -92,7 +98,7 @@ std::unique_ptr<Stmt> Parser::printStmt()
 	expect(TokenType::LeftParen, "expected '('");
 	auto expression = expr();
 	expect(TokenType::RightParen, "expected ')'");
-	expect(TokenType::Semicolon, "expected ';'");
+	expectSemicolon();
 	auto stmt = std::make_unique<PrintStmt>(std::move(expression), start, peekPrevious().end);
 	return stmt;
 }
@@ -119,11 +125,11 @@ std::unique_ptr<Stmt> Parser::retStmt()
 	auto start = peekPrevious().start;
 
 	std::optional<std::unique_ptr<Expr>> returnValue = std::nullopt;
-	if (peek().type != TokenType::Semicolon)
+	if ((check(TokenType::Semicolon) == false) && (peek().type != TokenType::Newline))
 	{
 		returnValue = expr();
 	}
-	expect(TokenType::Semicolon, "expected ';'");
+	expectSemicolon();
 
 	return std::make_unique<RetStmt>(std::move(returnValue), start, peekPrevious().end);
 }
@@ -172,7 +178,7 @@ std::unique_ptr<Stmt> Parser::whileStmt()
 std::unique_ptr<Stmt> Parser::breakStmt()
 {
 	size_t start = peekPrevious().start;
-	expect(TokenType::Semicolon, "expected ';'");
+	expectSemicolon();
 	return std::make_unique<BreakStmt>(start, peekPrevious().end);
 }
 
@@ -213,7 +219,7 @@ std::unique_ptr<Stmt> Parser::tryStmt()
 	if (match(TokenType::LeftParen))
 	{
 		expect(TokenType::Identifier, "expected caught value name");
-		// TODO if (peek().type == TokenType::RightParen) hint("to ignore the caught value remove the parens");
+		// TODO if (check(TokenType::RightParen)) hint("to ignore the caught value remove the parens");
 		caughtValueName = peekPrevious().identifier;
 		expect(TokenType::RightParen, "expected ')'");
 	}
@@ -232,7 +238,7 @@ std::unique_ptr<Stmt> Parser::throwStmt()
 {
 	auto start = peekPrevious().end;
 	auto value = expr();
-	expect(TokenType::Semicolon, "expected ';'");
+	expectSemicolon();
 	return std::make_unique<ThrowStmt>(std::move(value), start, peekPrevious().end);
 }
 
@@ -246,15 +252,12 @@ std::unique_ptr<Stmt> Parser::variableDeclarationStmt()
 	{
 		expect(TokenType::Identifier, "expected variable name");
 		auto name = peekPrevious().identifier;
-		std::optional<std::unique_ptr<Expr>> initializer;
-		if (match(TokenType::Colon))
-		{
-			initializer = expr();
-		}
+		expect(TokenType::Colon, "expected ':'");
+		auto initializer = expr();
 		nameInitializerPairs.push_back({ name, std::move(initializer) });
 	} while ((isAtEnd() == false) && match(TokenType::Comma));
 
-	expect(TokenType::Semicolon, "expected ';'");
+	expectSemicolon();
 	return std::make_unique<VariableDeclarationStmt>(std::move(nameInitializerPairs), start, peekPrevious().end);
 }
 
@@ -265,7 +268,7 @@ std::unique_ptr<FnStmt> Parser::function(size_t start)
 
 	std::vector<std::string_view> arguments;
 	expect(TokenType::LeftParen, "expected '('");
-	if (peek().type != TokenType::RightParen)
+	if (check(TokenType::RightParen) == false)
 	{
 		do
 		{
@@ -358,6 +361,8 @@ std::unique_ptr<Expr> Parser::comparasion()
 		match(TokenType::Less) || match(TokenType::LessEquals) || match(TokenType::More) || match(TokenType::MoreEquals), factor)
 }
 
+// TODO: Could also allow unary minus to be used though that would be inconsistent.
+// Could raise an error if somebody tries to use the unary minus operator in place of the normal one.
 std::unique_ptr<Expr> Parser::factor()
 {
 	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::Plus) || match(TokenType::PlusPlus) || match(TokenType::Minus), term)
@@ -372,7 +377,7 @@ std::unique_ptr<Expr> Parser::unary()
 {
 	size_t start = peek().start;
 
-	if (match(TokenType::Minus) || match(TokenType::Not))
+	if (match(TokenType::UnaryMinus) || match(TokenType::Not))
 	{
 		auto op = peekPrevious().type;
 		auto expr = callOrFieldAccess();
@@ -392,7 +397,7 @@ std::unique_ptr<Expr> Parser::callOrFieldAccess()
 		if (match(TokenType::LeftParen))
 		{
 			std::vector<std::unique_ptr<Expr>> arguments;
-			if (peek().type != TokenType::RightParen)
+			if (check(TokenType::RightParen) == false)
 			{
 				do
 				{
@@ -499,7 +504,7 @@ const Token& Parser::peekNext() const
 
 bool Parser::match(TokenType type)
 {
-	if (peek().type == type)
+	if (check(type))
 	{
 		advance();
 		return true;
@@ -509,7 +514,18 @@ bool Parser::match(TokenType type)
 
 bool Parser::check(TokenType type)
 {
-	return (peek().type == type);
+	auto current = m_currentTokenIndex;
+	if (type != TokenType::LeftParen)
+	{
+		while ((isAtEnd() == false) && (peek().type == TokenType::Newline))
+			advance();
+	}
+
+	if (peek().type == type)
+		return true;
+
+	m_currentTokenIndex = current;
+	return false;
 }
 
 void Parser::expect(TokenType type, const char* format, ...)
@@ -526,6 +542,16 @@ void Parser::expect(TokenType type, const char* format, ...)
 
 void Parser::expectSemicolon()
 {
+	if (isAtEnd())
+		return;
+
+	if (peek().type == TokenType::Newline)
+	{
+		while ((isAtEnd() == false) && (peek().type == TokenType::Newline))
+			advance();
+
+		return;
+	}
 	expect(TokenType::Semicolon, "expected ';'");
 }
 
@@ -577,7 +603,7 @@ Parser::ParsingError Parser::errorAt(const Token& token, const char* format, ...
 void Parser::errorAtImplementation(size_t start, size_t end, const char* format, va_list args)
 {
 	m_hadError = true;
-	if (peek().type == TokenType::Error)
+	if (check(TokenType::Error))
 	{
 		return;
 	}

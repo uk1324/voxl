@@ -1,1 +1,31 @@
-print(1 + 5 / 5);
+foo : 5
+  -2
+print(foo)
+
+foo = 5
+  - 2
+print(foo)
+
+fn test() {
+	ret 
+	5
+}
+
+// error expected '('
+// fn abc
+// () {
+//		ret 5
+// }
+
+// Error expected expression 'test()'
+//								   ~
+// abc
+// ()
+
+test();
+
+// call()
+// (2 + 5).sqrt();
+
+// test()
+// [a, b] = array

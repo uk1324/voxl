@@ -1,16 +1,16 @@
 fn recursion(n)
 {
 	if n == 10 {
-		throw "catch";
+		throw "catch"
 	}
-	recursion(n + 1);
+	recursion(n + 1)
 }
 
 try {
-	recursion(0);
-	print("try");
+	recursion(0)
+	print("try")
 } catch (value) {
-	print(value);
+	print(value)
 } finally {
-	print("finally");
+	print("finally")
 }

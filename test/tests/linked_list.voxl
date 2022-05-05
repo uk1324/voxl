@@ -1,79 +1,79 @@
 class Node {
 	$init(value) {
-		$.value = value;
-		$.next = null;
-		ret $;
+		$.value = value
+		$.next = null
+		ret $
 	}
 }
 
 class LinkedList {
 	$init() {
-		$.data = null;
-		ret $;
+		$.data = null
+		ret $
 	}
 
 	push(value) {
 		if $.data == null {
-			$.data = Node(value);
+			$.data = Node(value)
 		} else {
-			node : $.data;
+			node : $.data
 			while node.next != null {
-				node = node.next;
+				node = node.next
 			}
-			node.next = Node(value);
+			node.next = Node(value)
 		}
 	}
 
 	pop() {
 		if $.data == null {
-			throw "list is empty";
+			throw "list is empty"
 		}
 
 		if $.data.next == null {
-			result : $.data.next;
-			$.data = null;
-			ret result;
+			result : $.data.next
+			$.data = null
+			ret result
 		}
 		else {
-			node : $.data;
+			node : $.data
 			while node.next.next != null {
-				node = node.next;
+				node = node.next
 			}
-			result : node.next;
-			node.next = null;
-			ret result;
+			result : node.next
+			node.next = null
+			ret result
 		}
 	}
 
 	clear() {
-		$.data = null;
+		$.data = null
 	}
 
 	log() {
-		print("[");
-		node : $.data;
+		print("[")
+		node : $.data
 		while node != null {
-			print(node.value);
+			print(node.value)
 			if node.next != null {
-				print(", ");
+				print(", ")
 			}
-			node = node.next;
+			node = node.next
 		}
-		print("] ");
+		print("] ")
 	}
 }
 
-x : LinkedList();
-x.push(7);
-x.pop();
+x : LinkedList()
+x.push(7)
+x.pop()
 try {
-	x.pop();
+	x.pop()
 } catch (error) {
-	print(error ++ " ");
+	print(error ++ " ")
 }
-x.push(1);
-x.push(2);
-x.push(3);
-x.log();
-x.clear();
-x.log();
+x.push(1)
+x.push(2)
+x.push(3)
+x.log()
+x.clear()
+x.log()
