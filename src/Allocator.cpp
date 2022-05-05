@@ -19,8 +19,6 @@ Allocator::Allocator()
 	m_nextAllocation = m_region1;
 }
 
-#include <iostream>
-
 Allocator::~Allocator()
 {
 	auto obj = m_head;
@@ -28,6 +26,15 @@ Allocator::~Allocator()
 	{
 		freeObj(obj);
 		obj = obj->next;
+	}
+
+	for (const auto& constant : m_constants)
+	{
+		if (constant.isObj())
+		{
+			freeObj(constant.as.obj);
+			::operator delete(constant.as.obj);
+		}
 	}
 
 	::operator delete(m_region1);
@@ -314,7 +321,10 @@ void Allocator::copyToNewLocation(HashTable& newTable, HashTable& oldTable)
 			if (newTable.isBucketEmpty(bucket) == false)
 			{
 				bucket.key = reinterpret_cast<ObjString*>(copyToNewLocation(reinterpret_cast<Obj*>(bucket.key)));
-				updateValue(bucket.value);
+				if (bucket.value.isObj())
+				{
+					bucket.value.as.obj = copyToNewLocation(reinterpret_cast<Obj*>(bucket.value.as.obj));
+				}
 			}
 		}
 	}
@@ -540,11 +550,6 @@ void Allocator::setMarked(Obj* obj)
 
 bool Allocator::isMarked(Obj* obj)
 {
-	// TODO??? Maybe just check if is not nullptr.
-	// What about constants they may have changing values that need to be marked like classes - static fields and methods.
-	// Could use a bitmask.
-	// Maybe make constants a special case and update them inside the allocator manually.
-	//return obj->newLocation == reinterpret_cast<Obj*>(1);
 	return obj->newLocation != nullptr;
 }
 

@@ -1,7 +1,7 @@
 class X
 {}
 
-let x = X();
+x : X();
 
 print(x.a);
 x.a = 4;

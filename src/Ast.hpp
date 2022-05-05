@@ -18,6 +18,7 @@ enum class ExprType
 	IntConstant,
 	FloatConstant,
 	BoolConstant,
+	Null,
 	StringConstant,
 	Binary,
 	Unary,
@@ -59,6 +60,11 @@ struct BoolConstantExpr final : public Expr
 	BoolConstantExpr(bool value, size_t start, size_t end);
 
 	bool value;
+};
+
+struct NullExpr final : public Expr
+{
+	NullExpr(size_t start, size_t end);
 };
 
 struct StringConstantExpr final : public Expr
@@ -131,7 +137,7 @@ enum class StmtType
 {
 	Expr,
 	Print,
-	Let,
+	VariableDeclaration,
 	Block,
 	Fn,
 	Ret,
@@ -172,13 +178,15 @@ public:
 	std::unique_ptr<Expr> expr;
 };
 
-struct LetStmt final : public Stmt
+struct VariableDeclarationStmt final : public Stmt
 {
 public:
-	LetStmt(std::string_view identifier, std::optional<std::unique_ptr<Expr>> initializer, size_t start, size_t end);
+	VariableDeclarationStmt(
+		std::vector<std::pair<std::string_view, std::optional<std::unique_ptr<Expr>>>> variables, 
+		size_t start, 
+		size_t end);
 
-	std::string_view identifier;
-	std::optional<std::unique_ptr<Expr>> initializer;
+	std::vector<std::pair<std::string_view, std::optional<std::unique_ptr<Expr>>>> variables;
 };
 
 struct BlockStmt final : public Stmt

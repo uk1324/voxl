@@ -1,11 +1,10 @@
-#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
 #include <iostream>
 
 #ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
-	#include <Debug/Disassembler.hpp>
+#include <Debug/Disassembler.hpp>
 #endif
 
 #define TRY(somethingThatReturnsStatus) \
@@ -67,17 +66,17 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 	switch (stmt.get()->type)
 	{
 		CASE_STMT_TYPE(Expr, exprStmt)
-		CASE_STMT_TYPE(Print, printStmt)
-		CASE_STMT_TYPE(Let, letStmt)
-		CASE_STMT_TYPE(Block, blockStmt)
-		CASE_STMT_TYPE(Fn, fnStmt)
-		CASE_STMT_TYPE(Ret, retStmt)
-		CASE_STMT_TYPE(If, ifStmt)
-		CASE_STMT_TYPE(Loop, loopStmt)
-		CASE_STMT_TYPE(Break, breakStmt)
-		CASE_STMT_TYPE(Class, classStmt)
-		CASE_STMT_TYPE(Try, tryStmt)
-		CASE_STMT_TYPE(Throw, throwStmt)
+			CASE_STMT_TYPE(Print, printStmt)
+			CASE_STMT_TYPE(VariableDeclaration, variableDeclarationStmt)
+			CASE_STMT_TYPE(Block, blockStmt)
+			CASE_STMT_TYPE(Fn, fnStmt)
+			CASE_STMT_TYPE(Ret, retStmt)
+			CASE_STMT_TYPE(If, ifStmt)
+			CASE_STMT_TYPE(Loop, loopStmt)
+			CASE_STMT_TYPE(Break, breakStmt)
+			CASE_STMT_TYPE(Class, classStmt)
+			CASE_STMT_TYPE(Try, tryStmt)
+			CASE_STMT_TYPE(Throw, throwStmt)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -108,28 +107,32 @@ Compiler::Status Compiler::printStmt(const PrintStmt& stmt)
 	return Status::Ok;
 }
 
-Compiler::Status Compiler::letStmt(const LetStmt& stmt)
+Compiler::Status Compiler::variableDeclarationStmt(const VariableDeclarationStmt& stmt)
 {
-	// TODO: This is a bad explanation. Fix it.
-	// Only the let statement leaves a side effect on the stack by leaving the value of the variable on top of the stack.
-	if (stmt.initializer != std::nullopt)
+	for (const auto& [name, initializer] : stmt.variables)
 	{
-		TRY(compile(*stmt.initializer));
-	}
-	else
-	{
-		emitOp(Op::LoadNull);
-	}
-	// The initializer is evaluated before declaring the variable so a variable from an oter scope with the same name can be used.
-	TRY(declareVariable(stmt.identifier, stmt.start, stmt.end()));
-	if (m_scopes.size() == 0)
-	{
-		const auto constant = m_allocator->allocateStringConstant(stmt.identifier).index;
-		TRY(loadConstant(constant));
-		emitOp(Op::CreateGlobal);
-	}
+		// Local variables are create by just leaving the result of the initializer on top of the stack.
+		if (initializer.has_value())
+		{
+			TRY(compile(*initializer));
+		}
+		else
+		{
+			emitOp(Op::LoadNull);
+		}
 
+		// The initializer is evaluated before declaring the variable so a variable from an outer scope with the same name can be used.
+		TRY(declareVariable(name, stmt.start, stmt.end()));
+		if (m_scopes.size() == 0)
+		{
+			const auto constant = m_allocator->allocateStringConstant(name).index;
+			TRY(loadConstant(constant));
+			emitOp(Op::CreateGlobal);
+		}
+
+	}
 	return Status::Ok;
+
 }
 
 Compiler::Status Compiler::blockStmt(const BlockStmt& stmt)
@@ -265,7 +268,7 @@ Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
 Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 {
 	ASSERT(stmt.catchBlock.has_value() || stmt.finallyBlock.has_value());
-	
+
 	emitOp(Op::TryBegin);
 	const auto tryJumpToCatch = currentLocation();
 	emitUint32(0);
@@ -327,7 +330,7 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 		beginScope();
 		m_scopes.back().functionDepth++;
 
-		TRY(declareVariable("this", method->start, method->end()));
+		TRY(declareVariable("$", method->start, method->end()));
 		for (const auto& argument : method->arguments)
 		{
 			// Could store the token for better error messages about redeclaration.
@@ -367,16 +370,17 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 	switch (expr.get()->type)
 	{
 		CASE_EXPR_TYPE(IntConstant, intConstantExpr)
-		CASE_EXPR_TYPE(FloatConstant, floatConstantExpr)
-		CASE_EXPR_TYPE(BoolConstant, boolConstantExpr)
-		CASE_EXPR_TYPE(Binary, binaryExpr)
-		CASE_EXPR_TYPE(StringConstant, stringConstantExpr)
-		CASE_EXPR_TYPE(Unary, unaryExpr)
-		CASE_EXPR_TYPE(Identifier, identifierExpr)
-		CASE_EXPR_TYPE(Call, callExpr)
-		CASE_EXPR_TYPE(Assignment, assignmentExpr)
-		CASE_EXPR_TYPE(Array, arrayExpr)
-		CASE_EXPR_TYPE(GetField, getFieldExpr)
+			CASE_EXPR_TYPE(FloatConstant, floatConstantExpr)
+			CASE_EXPR_TYPE(BoolConstant, boolConstantExpr)
+			CASE_EXPR_TYPE(Null, nullExpr)
+			CASE_EXPR_TYPE(StringConstant, stringConstantExpr)
+			CASE_EXPR_TYPE(Binary, binaryExpr)
+			CASE_EXPR_TYPE(Unary, unaryExpr)
+			CASE_EXPR_TYPE(Identifier, identifierExpr)
+			CASE_EXPR_TYPE(Call, callExpr)
+			CASE_EXPR_TYPE(Assignment, assignmentExpr)
+			CASE_EXPR_TYPE(Array, arrayExpr)
+			CASE_EXPR_TYPE(GetField, getFieldExpr)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -410,19 +414,20 @@ Compiler::Status Compiler::compileBinaryExpr(const std::unique_ptr<Expr>& lhs, T
 	TRY(compile(rhs));
 	switch (op)
 	{
-		case TokenType::Plus: emitOp(Op::Add); break;
-		case TokenType::PlusPlus: emitOp(Op::Concat); break;
-		case TokenType::Minus: emitOp(Op::Subtract); break;
-		case TokenType::Star: emitOp(Op::Multiply); break;
-		case TokenType::Slash: emitOp(Op::Divide); break;
-		case TokenType::Percent: emitOp(Op::Modulo); break;
-		case TokenType::EqualsEquals: emitOp(Op::Equals); break;
-		case TokenType::Less: emitOp(Op::Less); break;
-		case TokenType::LessEquals: emitOp(Op::LessEqual); break;
-		case TokenType::More: emitOp(Op::More); break;
-		case TokenType::MoreEquals: emitOp(Op::MoreEqual); break;
-		default:
-			ASSERT_NOT_REACHED();
+	case TokenType::Plus: emitOp(Op::Add); break;
+	case TokenType::PlusPlus: emitOp(Op::Concat); break;
+	case TokenType::Minus: emitOp(Op::Subtract); break;
+	case TokenType::Star: emitOp(Op::Multiply); break;
+	case TokenType::Slash: emitOp(Op::Divide); break;
+	case TokenType::Percent: emitOp(Op::Modulo); break;
+	case TokenType::EqualsEquals: emitOp(Op::Equals); break;
+	case TokenType::NotEquals: emitOp(Op::NotEquals); break;
+	case TokenType::Less: emitOp(Op::Less); break;
+	case TokenType::LessEquals: emitOp(Op::LessEqual); break;
+	case TokenType::More: emitOp(Op::More); break;
+	case TokenType::MoreEquals: emitOp(Op::MoreEqual); break;
+	default:
+		ASSERT_NOT_REACHED();
 	}
 
 	return Status::Ok;
@@ -455,6 +460,12 @@ Compiler::Status Compiler::boolConstantExpr(const BoolConstantExpr& expr)
 	return Status::Ok;
 }
 
+Compiler::Status Compiler::nullExpr(const NullExpr& expr)
+{
+	emitOp(Op::LoadNull);
+	return Status::Ok;
+}
+
 Compiler::Status Compiler::stringConstantExpr(const StringConstantExpr& expr)
 {
 	const auto constant = m_allocator->allocateStringConstant(expr.text, expr.length).index;
@@ -471,19 +482,19 @@ Compiler::Status Compiler::unaryExpr(const UnaryExpr& expr)
 {
 	switch (expr.op)
 	{
-		case TokenType::Minus:
-			TRY(compile(expr.expr));
-			emitOp(Op::Negate);
-			break;
+	case TokenType::Minus:
+		TRY(compile(expr.expr));
+		emitOp(Op::Negate);
+		break;
 
-		case TokenType::Not:
-			TRY(compile(expr.expr));
-			emitOp(Op::Not);
-			break;
+	case TokenType::Not:
+		TRY(compile(expr.expr));
+		emitOp(Op::Not);
+		break;
 
-		default:
-			ASSERT_NOT_REACHED();
-			return Status::Error;
+	default:
+		ASSERT_NOT_REACHED();
+		return Status::Error;
 	}
 
 	return Status::Ok;
@@ -676,7 +687,7 @@ void Compiler::emitJump(Op op, size_t location)
 
 void Compiler::setJumpToHere(size_t placeToPatch)
 {
-	auto jumpSize = static_cast<uint32_t>(currentLocation() - (placeToPatch + sizeof(uint32_t))) ;
+	auto jumpSize = static_cast<uint32_t>(currentLocation() - (placeToPatch + sizeof(uint32_t)));
 	patch(placeToPatch, jumpSize);
 }
 

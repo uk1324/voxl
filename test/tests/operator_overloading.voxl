@@ -1,16 +1,16 @@
 class Vec2 {
 	$init(x, y) {
-		this.x = x;
-		this.y = y;
-		ret this;
+		$.x = x;
+		$.y = y;
+		ret $;
 	}
 
 	$add(rhs) {
-		ret Vec2(this.x + rhs.x, this.y + rhs.y);
+		ret Vec2($.x + rhs.x, $.y + rhs.y);
 	}
 
 	log() {
-		print("(" ++ this.x ++ ", " ++ this.y ++ ")");
+		print("(" ++ $.x ++ ", " ++ $.y ++ ")");
 	}
 }
 

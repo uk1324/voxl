@@ -25,6 +25,7 @@ enum class TokenType
 	PercentEquals,
 	Not,
 	Equals,
+	NotEquals,
 	EqualsEquals,
 	Less,
 	LessEquals,
@@ -50,7 +51,6 @@ enum class TokenType
 
 	// Keywords
 	Print,
-	Let,
 	Class,
 	Fn,
 	Ret,

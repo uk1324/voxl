@@ -28,6 +28,10 @@ BoolConstantExpr::BoolConstantExpr(bool value, size_t start, size_t end)
 	, value(value)
 {}
 
+NullExpr::NullExpr(size_t start, size_t end)
+	: Expr(start, end, ExprType::Null)
+{};
+
 StringConstantExpr::StringConstantExpr(std::string_view text, size_t length, size_t start, size_t end)
 	: Expr(start, end, ExprType::StringConstant)
 	, text(text)
@@ -97,10 +101,12 @@ PrintStmt::PrintStmt(std::unique_ptr<Expr> expr, size_t start, size_t end)
 	, expr(std::move(expr))
 {}
 
-LetStmt::LetStmt(std::string_view identifier, std::optional<std::unique_ptr<Expr>> initializer, size_t start, size_t end)
-	: Stmt(start, end, StmtType::Let)
-	, identifier(identifier)
-	, initializer(std::move(initializer))
+VariableDeclarationStmt::VariableDeclarationStmt(
+	std::vector<std::pair<std::string_view, std::optional<std::unique_ptr<Expr>>>> variables,
+	size_t start,
+	size_t end)
+	: Stmt(start, end, StmtType::VariableDeclaration)
+	, variables(std::move(variables))
 {}
 
 BlockStmt::BlockStmt(std::vector<std::unique_ptr<Stmt>> stmts, size_t start, size_t end)

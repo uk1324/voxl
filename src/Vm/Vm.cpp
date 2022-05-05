@@ -256,6 +256,17 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::NotEquals:
+		{
+			auto& lhs = peekStack(1);
+			auto& rhs = peekStack(0);
+			Value result(!(lhs == rhs));
+			popStack();
+			popStack();
+			pushStack(result);
+			break;
+		}
+
 		case Op::Concat:
 		{
 			Value lhs = peekStack(1);
@@ -707,10 +718,10 @@ Vm::Result Vm::fatalError(const char* format, ...)
 	vsnprintf(errorBuffer, sizeof(errorBuffer), format, args);
 	va_end(args);
 	m_errorPrinter->outStream() << "fatal runtime error: " << errorBuffer << '\n';
-	for (CallFrame* callFrame = &callStackTop(); callFrame != m_callStack.data(); callFrame--)
+	for (CallFrame* callFrame = &callStackTop(); callFrame != (m_callStack.data() - 1); callFrame--)
 	{
 		size_t instructionOffset = callFrame->instructionPointer - callFrame->function->byteCode.code.data();
-		auto lineNumber = callFrame->function->byteCode.lineNumberAtOffset[instructionOffset];
+		auto lineNumber = callFrame->function->byteCode.lineNumberAtOffset[instructionOffset] + 1;
 		m_errorPrinter->outStream() << "line " << lineNumber << " in " << callFrame->function->name->chars << "()\n";
 	}
 	return Result::RuntimeError;

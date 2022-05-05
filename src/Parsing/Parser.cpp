@@ -1,9 +1,3 @@
-#include "Parser.hpp"
-#include "Parser.hpp"
-#include "Parser.hpp"
-#include "Parser.hpp"
-#include "Parser.hpp"
-#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -48,8 +42,6 @@ std::unique_ptr<Stmt> Parser::stmt()
 	// going back one token on default and returning exprStmt();
 	if (match(TokenType::Print))
 		return printStmt();
-	if (match(TokenType::Let))
-		return letStmt();
 	if (match(TokenType::LeftBrace))
 		return blockStmt();
 	if (match(TokenType::Fn))
@@ -71,7 +63,15 @@ std::unique_ptr<Stmt> Parser::stmt()
 	if (match(TokenType::Throw))
 		return throwStmt();
 	else
+	{
+		if (check(TokenType::Identifier)
+			&& ((peekNext().type == TokenType::Semicolon)) || (peekNext().type == TokenType::Colon) || (peekNext().type == TokenType::Comma))
+		{
+			return variableDeclarationStmt();
+		}
+
 		return exprStmt();
+	}
 
 }
 
@@ -95,24 +95,6 @@ std::unique_ptr<Stmt> Parser::printStmt()
 	expect(TokenType::Semicolon, "expected ';'");
 	auto stmt = std::make_unique<PrintStmt>(std::move(expression), start, peekPrevious().end);
 	return stmt;
-}
-
-std::unique_ptr<Stmt> Parser::letStmt()
-{
-	const auto start = peekPrevious().start;
-
-	expect(TokenType::Identifier, "expected variable name");
-	const auto name = peekPrevious().identifier;
-
-	if (match(TokenType::Semicolon))
-	{
-		return std::make_unique<LetStmt>(name, std::nullopt, start, peekPrevious().end);
-	}
-	expect(TokenType::Equals, "expected '='");
-	auto initializer = expr();
-	expect(TokenType::Semicolon, "expected ';'");
-
-	return std::make_unique<LetStmt>(name, std::move(initializer), start, peekPrevious().end);
 }
 
 std::unique_ptr<Stmt> Parser::blockStmt()
@@ -248,10 +230,32 @@ std::unique_ptr<Stmt> Parser::tryStmt()
 
 std::unique_ptr<Stmt> Parser::throwStmt()
 {
-	size_t start = peekPrevious().end;
+	auto start = peekPrevious().end;
 	auto value = expr();
 	expect(TokenType::Semicolon, "expected ';'");
 	return std::make_unique<ThrowStmt>(std::move(value), start, peekPrevious().end);
+}
+
+std::unique_ptr<Stmt> Parser::variableDeclarationStmt()
+{
+	const auto start = peek().start;
+
+	decltype (VariableDeclarationStmt::variables) nameInitializerPairs;
+
+	do
+	{
+		expect(TokenType::Identifier, "expected variable name");
+		auto name = peekPrevious().identifier;
+		std::optional<std::unique_ptr<Expr>> initializer;
+		if (match(TokenType::Colon))
+		{
+			initializer = expr();
+		}
+		nameInitializerPairs.push_back({ name, std::move(initializer) });
+	} while ((isAtEnd() == false) && match(TokenType::Comma));
+
+	expect(TokenType::Semicolon, "expected ';'");
+	return std::make_unique<VariableDeclarationStmt>(std::move(nameInitializerPairs), start, peekPrevious().end);
 }
 
 std::unique_ptr<FnStmt> Parser::function(size_t start)
@@ -345,7 +349,7 @@ std::unique_ptr<Expr> Parser:: or()
 
 std::unique_ptr<Expr> Parser::equality()
 {
-	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::EqualsEquals), comparasion)
+	PARSE_LEFT_RECURSIVE_BINARY_EXPR(match(TokenType::EqualsEquals) || match(TokenType::NotEquals), comparasion)
 }
 
 std::unique_ptr<Expr> Parser::comparasion()
@@ -437,6 +441,10 @@ std::unique_ptr<Expr> Parser::primary()
 	{
 		return std::make_unique<BoolConstantExpr>(false, peekPrevious().start, peekPrevious().end);
 	}
+	if (match(TokenType::Null))
+	{
+		return std::make_unique<NullExpr>(peekPrevious().start, peekPrevious().end);
+	}
 	if (match(TokenType::LeftBracket))
 	{
 		size_t start = peekPrevious().start;
@@ -481,6 +489,14 @@ const Token& Parser::peekPrevious() const
 	return (*m_tokens)[m_currentTokenIndex - 1];
 }
 
+const Token& Parser::peekNext() const
+{
+	if (isAtEnd())
+		return peek();
+
+	return (*m_tokens)[m_currentTokenIndex + 1];
+}
+
 bool Parser::match(TokenType type)
 {
 	if (peek().type == type)
@@ -508,6 +524,11 @@ void Parser::expect(TokenType type, const char* format, ...)
 	}
 }
 
+void Parser::expectSemicolon()
+{
+	expect(TokenType::Semicolon, "expected ';'");
+}
+
 void Parser::synchronize()
 {
 	while (isAtEnd() == false)
@@ -523,8 +544,7 @@ void Parser::synchronize()
 			case TokenType::Loop:
 			case TokenType::While:
 			case TokenType::If:
-			case TokenType::Let:
-			case TokenType::Ret:
+ 			case TokenType::Ret:
 			case TokenType::Break:
 			case TokenType::Continue:
 				return;
@@ -570,7 +590,7 @@ void Parser::advance()
 		m_currentTokenIndex++;
 }
 
-bool Parser::isAtEnd()
+bool Parser::isAtEnd() const
 {
 	return (peek().type == TokenType::Eof);
 }

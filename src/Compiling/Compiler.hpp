@@ -62,7 +62,7 @@ private:
 	Status compile(const std::vector<std::unique_ptr<Stmt>>& stmts);
 	Status exprStmt(const ExprStmt& stmt);
 	Status printStmt(const PrintStmt& stmt);
-	Status letStmt(const LetStmt& stmt);
+	Status variableDeclarationStmt(const VariableDeclarationStmt& stmt);
 	Status blockStmt(const BlockStmt& stmt);
 	Status fnStmt(const FnStmt& stmt);
 	Status retStmt(const RetStmt& stmt);
@@ -79,6 +79,7 @@ private:
 	Status intConstantExpr(const IntConstantExpr& expr);
 	Status floatConstantExpr(const FloatConstantExpr& expr);
 	Status boolConstantExpr(const BoolConstantExpr& expr);
+	Status nullExpr(const NullExpr& expr);
 	Status stringConstantExpr(const StringConstantExpr& expr);
 	Status binaryExpr(const BinaryExpr& expr);
 	Status unaryExpr(const UnaryExpr& expr);

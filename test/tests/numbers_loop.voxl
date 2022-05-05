@@ -1,4 +1,4 @@
-let x = 0;
+x : 0;
 loop {
 	if x == 10 {
 		break;

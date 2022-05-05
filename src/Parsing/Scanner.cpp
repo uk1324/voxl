@@ -48,13 +48,11 @@ Token Scanner::token()
 		case '+':
 		{
 			if (match('+'))
-			{
 				return makeToken(TokenType::PlusPlus);
-			}
+
 			if (match('='))
-			{
 				return makeToken(TokenType::PlusEquals);
-			}
+
 			return makeToken(TokenType::Plus);
 		}
 		case '&': return match('&')
@@ -63,9 +61,6 @@ Token Scanner::token()
 		case '|': return match('|')
 			? makeToken(TokenType::OrOr)
 			: makeToken(TokenType::Or);
-		case '=': return match('=')
-			? makeToken(TokenType::EqualsEquals)
-			: makeToken(TokenType::Equals);
 		case '<': return match('=')
 			? makeToken(TokenType::LessEquals)
 			: makeToken(TokenType::Less);
@@ -84,7 +79,12 @@ Token Scanner::token()
 		case '*': return match('=')
 			? makeToken(TokenType::StarEquals)
 			: makeToken(TokenType::Star);
-		case '!': return makeToken(TokenType::Not);
+		case '!': return match('=')
+			? makeToken(TokenType::NotEquals)
+			: makeToken(TokenType::Not);
+		case '=': return match('=')
+			? makeToken(TokenType::EqualsEquals)
+			: makeToken(TokenType::Equals);
 		case ';': return makeToken(TokenType::Semicolon);
 		case '(': return makeToken(TokenType::LeftParen);
 		case ')': return makeToken(TokenType::RightParen);
@@ -192,7 +192,6 @@ Token Scanner::keywordOrIdentifier()
 {
 	static const std::unordered_map<std::string_view, TokenType> keywords = {
 		{ "print", TokenType::Print },
-		{ "let", TokenType::Let },
 		{ "fn", TokenType::Fn },
 		{ "ret", TokenType::Ret },
 		{ "true", TokenType::True },

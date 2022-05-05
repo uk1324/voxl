@@ -1,8 +1,8 @@
-let n = 50;
-let i = 2;
+n : 50;
+i : 2;
 while i < n {
-	let j = 2;
-	let isPrime = true;
+	j : 2;
+	isPrime : true;
 	while j < i {
 		if (i % j) == 0 {
 			isPrime = false;

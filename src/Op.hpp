@@ -21,6 +21,7 @@ namespace Lang
 		More,
 		MoreEqual,
 		Equals,
+		NotEquals,
 		// }
 
 		// [value] -> [result]

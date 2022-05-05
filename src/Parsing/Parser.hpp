@@ -34,7 +34,6 @@ private:
 	std::unique_ptr<Stmt> stmt();
 	std::unique_ptr<Stmt> exprStmt();
 	std::unique_ptr<Stmt> printStmt();
-	std::unique_ptr<Stmt> letStmt();
 	std::unique_ptr<Stmt> blockStmt();
 	std::unique_ptr<Stmt> fnStmt();
 	std::unique_ptr<Stmt> retStmt();
@@ -45,6 +44,7 @@ private:
 	std::unique_ptr<Stmt> classStmt();
 	std::unique_ptr<Stmt> tryStmt();
 	std::unique_ptr<Stmt> throwStmt();
+	std::unique_ptr<Stmt> variableDeclarationStmt();
 
 	std::unique_ptr<FnStmt> function(size_t start);
 	std::vector<std::unique_ptr<Stmt>> block();
@@ -63,11 +63,13 @@ private:
 
 	const Token& peek() const;
 	const Token& peekPrevious() const;
+	const Token& peekNext() const;
 	void advance();
-	bool isAtEnd();
+	bool isAtEnd() const;
 	bool match(TokenType type);
 	bool check(TokenType type);
 	void expect(TokenType type, const char* format, ...);
+	void expectSemicolon();
 	void synchronize();
 	ParsingError errorAt(size_t start, size_t end, const char* format, ...);
 	ParsingError errorAt(const Token& token, const char* format, ...);
