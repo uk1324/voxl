@@ -45,6 +45,22 @@ class LinkedList {
 		}
 	}
 
+	reverse() {
+		list : $.data;
+		if $.data == null {
+			ret;
+		}
+		new : Node(list.value);
+		list = list.next;
+		while list != null {
+			temp : new;
+			new = Node(list.value);
+			new.next = temp;
+			list = list.next;
+		}
+		$.data = new;
+	}
+
 	clear() {
 		$.data = null;
 	}
@@ -74,6 +90,8 @@ try {
 x.push(1);
 x.push(2);
 x.push(3);
+x.log();
+x.reverse();
 x.log();
 x.clear();
 x.log();

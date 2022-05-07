@@ -13,27 +13,28 @@ namespace Lang
 // Could just store the constant pool inside the allocator.
 // Consants would also need to store the GcNode they could set newLocation that just points to itself so updating pointers works.
 
-	template<typename Key, typename Value, typename KeyTraits>
-	class HashMap;
-	using HashTable = HashMap<ObjString*, Value, ObjStringKeyTraits>;
+template<typename Key, typename Value, typename KeyTraits>
+class HashMap;
+class Vm;
+using HashTable = HashMap<ObjString*, Value, ObjStringKeyTraits>;
+using NativeFunction = NativeFunctionResult(*)(Value* /*arguments*/, int /*argumentCount*/, Vm&, Allocator&);
 
 class Allocator
 {
 public:
-	struct RootMarkingFunctionHandle
+	struct MarkingFunctionHandle
 	{
-		~RootMarkingFunctionHandle();
+		~MarkingFunctionHandle();
 
 		Allocator& allocator;
 		size_t id;
 	};
 
 private:
-	using RootMarkingFunction = void (*)(void*, Allocator&);
 
-	struct RootMarkingFunctionEntry
+	struct MarkingFunctionEntry
 	{
-		RootMarkingFunction function;
+		MarkingFunction function;
 		void* data;
 		size_t id;
 	};
@@ -48,8 +49,6 @@ public:
 	};
 
 private:
-	using UpdateFunction = void (*)(void*);
-
 	struct UpdateFunctionEntry
 	{
 		UpdateFunction function;
@@ -67,8 +66,8 @@ public:
 	~Allocator();
 
 	template<typename T>
-	RootMarkingFunctionHandle registerRootMarkingFunction(T* data, void (*function)(T*, Allocator&));
-	void unregisterRootMarkingFunction(size_t id);
+	MarkingFunctionHandle registerMarkingFunction(T* data, void (*function)(T*, Allocator&));
+	void unregisterMarkingFunction(size_t id);
 	template<typename T>
 	UpdateFunctionHandle registerUpdateFunction(T* data, void (*function)(T*));
 	void unregisterUpdateFunction(size_t id);
@@ -80,10 +79,10 @@ public:
 	ObjString* allocateString(std::string_view chars);
 	ObjString* allocateString(std::string_view chars, size_t length);
 	ObjFunction* allocateFunction(ObjString* name, int argCount);
-	ObjForeignFunction* allocateForeignFunction(ObjString* name, ForeignFunction function, int argCount);
-	ObjClass* allocateClass(ObjString* name);
-	ObjInstance* allocateInstance(ObjClass* class_);
-	ObjBoundFunction* allocateBoundFunction(ObjFunction* function, ObjInstance* instance);
+	ObjNativeFunction* allocateForeignFunction(ObjString* name, NativeFunction function, int argCount);
+	ObjClass* allocateClass(ObjString* name, size_t instanceSize, MarkingFunction mark, UpdateFunction update);
+	ObjInstanceHead* allocateInstance(ObjClass* class_);
+	ObjBoundFunction* allocateBoundFunction(ObjFunction* function, const Value& value);
 
 	struct StringConstant
 	{
@@ -111,6 +110,8 @@ public:
 	static Obj* newObjLocation(Obj* value);
 	const Value& getConstant(size_t id) const;
 
+	void copyToNewLocation(HashTable& newTable, HashTable& oldTable);
+
 private:
 	static uint8_t* alignUp(uint8_t* ptr, size_t alignment);
 	static void setMarked(Obj* obj);
@@ -119,7 +120,6 @@ private:
 
 	void markObj(Obj* obj);
 	Obj* copyToNewLocation(Obj* obj);
-	void copyToNewLocation(HashTable& newTable, HashTable& oldTable);
 	void freeObj(Obj* obj);
 
 private:
@@ -133,7 +133,7 @@ private:
 
 	uint8_t* m_nextAllocation;
 
-	std::vector<RootMarkingFunctionEntry> m_rootMarkingFunctions;
+	std::vector<MarkingFunctionEntry> m_markingFunctions;
 	std::vector<UpdateFunctionEntry> m_updateFunctions;
 	
 	size_t m_allocationThatTriggeredGcSize;
@@ -168,19 +168,19 @@ private:
 }
 
 template<typename T>
-Lang::Allocator::RootMarkingFunctionHandle Lang::Allocator::registerRootMarkingFunction(T* data, void(*function)(T*, Allocator&))
+Lang::Allocator::MarkingFunctionHandle Lang::Allocator::registerMarkingFunction(T* data, void(*function)(T*, Allocator&))
 {
-	size_t id = m_rootMarkingFunctions.empty()
+	size_t id = m_markingFunctions.empty()
 		? 0
-		: m_rootMarkingFunctions.back().id + 1;
+		: m_markingFunctions.back().id + 1;
 
-	m_rootMarkingFunctions.push_back(RootMarkingFunctionEntry{ 
-		reinterpret_cast<RootMarkingFunction>(function),
+	m_markingFunctions.push_back(MarkingFunctionEntry{ 
+		reinterpret_cast<MarkingFunction>(function),
 		data,
 		id
 	});
 
-	return RootMarkingFunctionHandle{ *this, id };
+	return MarkingFunctionHandle{ *this, id };
 }
 
 template<typename T>

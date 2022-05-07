@@ -39,7 +39,7 @@ public:
 	Result execute(ObjFunction* program, ErrorPrinter& errorPrinter);
 	void reset();
 
-	void createForeignFunction(std::string_view name, ForeignFunction function, int argCount);
+	void defineNativeFunction(std::string_view name, NativeFunction function, int argCount);
 
 	//Value add(Value lhs, Value rhs);
 
@@ -76,6 +76,8 @@ public:
 	ErrorPrinter* m_errorPrinter;
 
 	ObjString* m_initString;
+	ObjString* m_getFieldString;
+	ObjString* m_setFieldString;
 	ObjString* m_addString;
 	ObjString* m_subString;
 	ObjString* m_mulString;
@@ -86,7 +88,7 @@ public:
 	ObjString* m_gtString;
 	ObjString* m_geString;
 
-	Allocator::RootMarkingFunctionHandle m_rootMarkingFunctionHandle;
+	Allocator::MarkingFunctionHandle m_rootMarkingFunctionHandle;
 	Allocator::UpdateFunctionHandle m_updateFunctionHandle;
 };
 

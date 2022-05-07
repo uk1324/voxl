@@ -1,4 +1,5 @@
 #include <Vm/Vm.hpp>
+#include <Vm/VoxlInstance.hpp>
 #include <Utf8.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -16,11 +17,13 @@ Vm::Vm(Allocator& allocator)
 	, m_errorPrinter(nullptr)
 	, m_stackTop(nullptr)
 	, m_callStackSize(0)
-	, m_rootMarkingFunctionHandle(allocator.registerRootMarkingFunction(this, mark))
+	, m_rootMarkingFunctionHandle(allocator.registerMarkingFunction(this, mark))
 	, m_updateFunctionHandle(allocator.registerUpdateFunction(this, update))
 {
 	HashTable::init(m_globals);
 	m_initString = m_allocator->allocateStringConstant("$init").value;
+	m_getFieldString = m_allocator->allocateStringConstant("$get_field").value;
+	m_setFieldString = m_allocator->allocateStringConstant("$set_field").value;
 	m_addString = m_allocator->allocateStringConstant("$add").value;
 	m_subString = m_allocator->allocateStringConstant("$sub").value;
 	m_mulString = m_allocator->allocateStringConstant("$mul").value;
@@ -86,7 +89,7 @@ Vm::Result Vm::run()
 		if (lhs.isObj() && lhs.as.obj->isInstance()) \
 		{ \
 			auto instance = lhs.as.obj->asInstance(); \
-			auto optMethod = instance->class_->methods.get(overloadNameString); \
+			auto optMethod = instance->class_->fields.get(overloadNameString); \
 			if (optMethod.has_value()) \
 			{ \
 				if (callValue(**optMethod, 2, 0) == Result::RuntimeError) \
@@ -138,7 +141,7 @@ Vm::Result Vm::run()
 			if (lhs.isObj() && lhs.as.obj->isInstance())
 			{
 				auto instance = lhs.as.obj->asInstance();
-				auto optMethod = instance->class_->methods.get(m_modString);
+				auto optMethod = instance->class_->fields.get(m_modString);
 				if (optMethod.has_value())
 				{
 					if (callValue(**optMethod, 2, 0) == Result::RuntimeError)
@@ -185,7 +188,7 @@ Vm::Result Vm::run()
 			if (lhs.isObj() && lhs.as.obj->isInstance())
 			{
 				auto instance = lhs.as.obj->asInstance();
-				auto optMethod = instance->class_->methods.get(m_modString);
+				auto optMethod = instance->class_->fields.get(m_modString);
 				if (optMethod.has_value())
 				{
 					if (callValue(**optMethod, 2, 0) == Result::RuntimeError)
@@ -243,7 +246,7 @@ Vm::Result Vm::run()
 			else if (lhs.as.obj->isInstance()) \
 			{ \
 				auto instance = lhs.as.obj->asInstance(); \
-				auto optMethod = instance->class_->methods.get(overloadNameString); \
+				auto optMethod = instance->class_->fields.get(overloadNameString); \
 				if (optMethod.has_value()) \
 				{ \
 					if (callValue(**optMethod, 2, 0) == Result::RuntimeError) \
@@ -540,7 +543,9 @@ Vm::Result Vm::run()
 
 			ASSERT((nameValue.type == ValueType::Obj) && (nameValue.as.obj->isString()));
 			auto name = nameValue.as.obj->asString();
-			auto class_ = m_allocator->allocateClass(name);
+			auto class_ = m_allocator->allocateClass(name, sizeof(VoxlInstance), (MarkingFunction)VoxlInstance::mark, (UpdateFunction)VoxlInstance::update);
+			class_->fields.insert(*m_allocator, m_getFieldString, Value(reinterpret_cast<Obj*>(m_allocator->allocateForeignFunction(m_getFieldString, VoxlInstance::get_field, 2))));
+			class_->fields.insert(*m_allocator, m_setFieldString, Value(reinterpret_cast<Obj*>(m_allocator->allocateForeignFunction(m_setFieldString, VoxlInstance::set_field, 3))));
 			popStack();
 			class_->name = name;
 			pushStack(Value(reinterpret_cast<Obj*>(class_)));
@@ -561,26 +566,26 @@ Vm::Result Vm::run()
 			if (obj->isInstance())
 			{
 				auto instance = obj->asInstance();
-				auto optResult = instance->fields.get(fieldName);
-				
-				if (optResult.has_value())
+				auto optMethod = instance->class_->fields.get(fieldName);
+				if (optMethod.has_value())
 				{
+					ASSERT((*optMethod)->isObj());
+					ASSERT((*optMethod)->as.obj->type == ObjType::Function);
+					auto function = reinterpret_cast<ObjFunction*>((*optMethod)->as.obj);
+					auto method = m_allocator->allocateBoundFunction(function, lhs);
 					popStack();
 					popStack();
-					pushStack(**optResult);
+					pushStack(Value(reinterpret_cast<Obj*>(method)));
 				}
 				else
 				{
-					auto optMethod = instance->class_->methods.get(fieldName);
-					if (optMethod.has_value())
+					auto optResult = instance->class_->fields.get(m_getFieldString);
+					if (optResult.has_value())
 					{
-						ASSERT((*optMethod)->isObj());
-						ASSERT((*optMethod)->as.obj->type == ObjType::Function);
-						auto function = reinterpret_cast<ObjFunction*>((*optMethod)->as.obj);
-						auto method = m_allocator->allocateBoundFunction(function, instance);
-						popStack();
-						popStack();
-						pushStack(Value(reinterpret_cast<Obj*>(method)));
+						if (callValue(**optResult, 2, 0) == Result::RuntimeError)
+						{
+							return fatalError("call failed");
+						}
 					}
 					else
 					{
@@ -590,7 +595,6 @@ Vm::Result Vm::run()
 						popStack();
 						pushStack(Value::null());
 					}
-
 				}
 			}
 			else if (obj->isClass())
@@ -632,9 +636,14 @@ Vm::Result Vm::run()
 			if (obj->isInstance())
 			{
 				auto instance = obj->asInstance();
-				instance->fields.insert(*m_allocator, fieldName, rhs);
-				popStack();
-				popStack();
+				auto optSetField = instance->class_->fields.get(m_setFieldString);
+				if (optSetField.has_value())
+				{
+					if (callValue(**optSetField, 3, 0) == Result::RuntimeError)
+					{
+						return fatalError("call failed");
+					}
+				}
 			}
 			else if (obj->isClass())
 			{
@@ -661,7 +670,7 @@ Vm::Result Vm::run()
 			ASSERT(classValue.isObj());
 			ASSERT(classValue.as.obj->isClass());
 			auto class_ = classValue.as.obj->asClass();
-			class_->methods.insert(*m_allocator, fieldName, methodValue);
+			class_->fields.insert(*m_allocator, fieldName, methodValue);
 			popStack();
 			popStack();
 			break;
@@ -712,7 +721,7 @@ Vm::Result Vm::run()
 	}
 }
 
-void Vm::createForeignFunction(std::string_view name, ForeignFunction function, int argCount)
+void Vm::defineNativeFunction(std::string_view name, NativeFunction function, int argCount)
 {
 	auto nameObj = m_allocator->allocateString(name);
 	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount);
@@ -811,9 +820,16 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			{
 				return fatalError("expected %d arguments but got %d", calle->argCount, argCount);
 			} 
-			auto result = calle->function(m_stackTop - argCount, argCount);
-			m_stackTop -= numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount);
-			pushStack(result);
+			const auto result = calle->function(m_stackTop - argCount, argCount, *this, *m_allocator);
+			if (result.type == NativeFunctionResultType::Ok)
+			{
+				m_stackTop -= numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount);
+				pushStack(result.value);
+			}
+			else
+			{
+				ASSERT_NOT_REACHED();
+			}
 			break;
 		}
 
@@ -822,17 +838,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			auto calle = obj->asClass();
 			auto instance = m_allocator->allocateInstance(calle);
 			instance->class_ = calle;
-			auto optInitalizer = calle->methods.get(m_initString);
-			auto hashTable = instance->class_->methods;
-			for (size_t i = 0; i < hashTable.capacity(); i++)
-			{
-				auto& bucket = hashTable.data()[i];
-
-				if (hashTable.isBucketEmpty(bucket) == false)
-				{
-					//std::cout << "key: " << reinterpret_cast<Obj*>(bucket.key) << " value: " << bucket.value << '\n';
-				}
-			}
+			auto optInitalizer = calle->fields.get(m_initString);
 			ASSERT(numberOfValuesToPopOffExceptArgs == 1);
 			m_stackTop[-argCount - 1] = Value(reinterpret_cast<Obj*>(instance)); // Replace the class with the instance.
 			if (optInitalizer.has_value())
@@ -841,6 +847,9 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 				{
 					return Result::RuntimeError;
 				}
+				// Could just replace the class with the instance here again so it looks like the call always returns the instance.
+				// Python just throws a TypeError if __init__ returns something else than None.
+				// Javascript just ignores it and always returns this.
 			}
 			else if (argCount != 0)
 			{
@@ -852,7 +861,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 		case ObjType::BoundFunction:
 		{
 			auto calle = obj->asBoundFunction();
-			m_stackTop[-argCount - 1] = Value(reinterpret_cast<Obj*>(calle->instance));
+			m_stackTop[-argCount - 1] = calle->value;
 			auto function = calle->function;
 			if (callValue(Value(reinterpret_cast<Obj*>(function)), argCount + 1, 0) == Result::RuntimeError)
 			{

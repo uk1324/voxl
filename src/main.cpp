@@ -52,11 +52,12 @@ Value print2(Value* args, int argCount)
 	return Value::null();
 }
 
-Value add(Value* args, int argCount)
+//NativeFunctionResult add(Value* args, int argCount, Vm& vm, Allocator& allocator)
+VOXL_NATIVE_FN(add)
 {
-	if ((argCount < 2) || (args[0].type != ValueType::Int) || (args[1].type != ValueType::Int))
+	if ((args[0].type != ValueType::Int) || (args[1].type != ValueType::Int))
 	{
-		return Value::integer(5);
+		return NativeFunctionResult::exception(Value(Int(5)));
 	}
 	return Value(args[0].as.intNumber + args[1].as.intNumber);
 }
@@ -115,6 +116,7 @@ int main()
 	if (compilerResult.hadError == false)
 	{
 		auto vm = std::make_unique<Vm>(allocator);
+		vm->defineNativeFunction("add", add, 2);
 		auto result = vm->execute(compilerResult.program, errorPrinter);
 	}
 }

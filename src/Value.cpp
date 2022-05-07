@@ -120,7 +120,7 @@ std::ostream& operator<< (std::ostream& os, Lang::Obj* obj)
 
 		case ObjType::ForeignFunction:
 		{
-			const auto function = reinterpret_cast<ObjForeignFunction*>(obj);
+			const auto function = reinterpret_cast<ObjNativeFunction*>(obj);
 			os << '<' << reinterpret_cast<Obj*>(function->name) << '>';
 			break;
 		}
@@ -205,10 +205,10 @@ bool Obj::isForeignFunction()
 	return type == ObjType::ForeignFunction;
 }
 
-ObjForeignFunction* Obj::asForeignFunction()
+ObjNativeFunction* Obj::asForeignFunction()
 {
 	ASSERT(isForeignFunction());
-	return reinterpret_cast<ObjForeignFunction*>(this);
+	return reinterpret_cast<ObjNativeFunction*>(this);
 }
 
 bool Obj::isAllocation()
@@ -238,10 +238,10 @@ bool Obj::isInstance()
 	return type == ObjType::Instance;
 }
 
-ObjInstance* Obj::asInstance()
+ObjInstanceHead* Obj::asInstance()
 {
 	ASSERT(isInstance());
-	return reinterpret_cast<ObjInstance*>(this);
+	return reinterpret_cast<ObjInstanceHead*>(this);
 }
 
 bool Obj::isBoundFunction()
@@ -253,4 +253,24 @@ ObjBoundFunction* Obj::asBoundFunction()
 {
 	ASSERT(isBoundFunction());
 	return reinterpret_cast<ObjBoundFunction*>(this);
+}
+
+NativeFunctionResult::NativeFunctionResult(const Value& value)
+	: type(NativeFunctionResultType::Ok)
+	, value(value)
+{}
+
+NativeFunctionResult NativeFunctionResult::exception(const Value& value)
+{
+	NativeFunctionResult result;
+	result.type = NativeFunctionResultType::Exception;
+	result.value = value;
+	return result;
+}
+
+NativeFunctionResult NativeFunctionResult::fatal()
+{
+	NativeFunctionResult result;
+	result.type = NativeFunctionResultType::Fatal;
+	return result;
 }

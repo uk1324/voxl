@@ -125,29 +125,18 @@ ObjFunction* Allocator::allocateFunction(ObjString* name, int argCount)
 	return obj;
 }
 
-ObjClass* Allocator::allocateClass(ObjString* name)
+ObjInstanceHead* Allocator::allocateInstance(ObjClass* class_)
 {
-	auto obj = allocateObj(sizeof(ObjClass), ObjType::Class)->asClass();
-	obj->name = name;
-	HashTable::init(obj->fields);
-	HashTable::init(obj->methods);
-	return obj;
-}
-
-ObjInstance* Allocator::allocateInstance(ObjClass* class_)
-{
-	auto obj = allocateObj(sizeof(ObjInstance), ObjType::Instance)->asInstance();
+	auto obj = allocateObj(class_->instanceSize, ObjType::Instance)->asInstance();
 	obj->class_ = class_;
-	HashTable::init(obj->fields);
-	// Cannot init the fields hash table here because the allocator doesn't know about obj so it would collect it.
 	return obj;
 }
 
-ObjBoundFunction* Allocator::allocateBoundFunction(ObjFunction* function, ObjInstance* instance)
+ObjBoundFunction* Allocator::allocateBoundFunction(ObjFunction* function, const Value& value)
 {
 	auto obj = allocateObj(sizeof(ObjBoundFunction), ObjType::BoundFunction)->asBoundFunction();
 	obj->function = function;
-	obj->instance = instance;
+	obj->value = value;
 	return obj;
 }
 
@@ -191,13 +180,25 @@ Allocator::FunctionConstant Allocator::allocateFunctionConstant(ObjString* name,
 	return { createConstant(Value(reinterpret_cast<Obj*>(obj))), obj };
 }
 
-ObjForeignFunction* Allocator::allocateForeignFunction(ObjString* name, ForeignFunction function, int argCount)
+ObjNativeFunction* Allocator::allocateForeignFunction(ObjString* name, NativeFunction function, int argCount)
 {
-	auto obj = reinterpret_cast<ObjForeignFunction*>(allocateObj(sizeof(ObjForeignFunction), ObjType::ForeignFunction));
+	auto obj = reinterpret_cast<ObjNativeFunction*>(allocateObj(sizeof(ObjNativeFunction), ObjType::ForeignFunction));
 	obj->obj.type = ObjType::ForeignFunction;
 	obj->name = name;
 	obj->function = function;
 	obj->argCount = argCount;
+	return obj;
+}
+
+ObjClass* Allocator::allocateClass(ObjString* name, size_t instanceSize, MarkingFunction mark, UpdateFunction update)
+{
+	auto obj = allocateObj(sizeof(ObjClass), ObjType::Class)->asClass();
+	obj->name = name;
+	obj->instanceSize = instanceSize;
+	obj->mark = mark;
+	obj->update = update;
+
+	HashTable::init(obj->fields);
 	return obj;
 }
 
@@ -250,9 +251,9 @@ Obj* Allocator::copyToNewLocation(Obj* obj)
 
 		case ObjType::ForeignFunction:
 		{
-			auto function = reinterpret_cast<ObjForeignFunction*>(obj);
-			auto newFunction = reinterpret_cast<ObjForeignFunction*>(allocateObj(sizeof(ObjForeignFunction), ObjType::ForeignFunction));
-			copyObj(newFunction, function, sizeof(ObjForeignFunction));
+			auto function = reinterpret_cast<ObjNativeFunction*>(obj);
+			auto newFunction = reinterpret_cast<ObjNativeFunction*>(allocateObj(sizeof(ObjNativeFunction), ObjType::ForeignFunction));
+			copyObj(newFunction, function, sizeof(ObjNativeFunction));
 			newFunction->name = reinterpret_cast<ObjString*>(copyToNewLocation(reinterpret_cast<Obj*>(function->name)));
 			obj->newLocation = reinterpret_cast<Obj*>(newFunction);
 			break;
@@ -274,7 +275,6 @@ Obj* Allocator::copyToNewLocation(Obj* obj)
 			auto newClass = allocateObj(sizeof(ObjClass), ObjType::Class)->asClass();
 			copyObj(newClass, class_, sizeof(ObjClass));
 			copyToNewLocation(newClass->fields, class_->fields);
-			copyToNewLocation(newClass->methods, class_->methods);
 			newClass->name = reinterpret_cast<ObjString*>(copyToNewLocation(reinterpret_cast<Obj*>(class_->name)));
 			obj->newLocation = reinterpret_cast<Obj*>(newClass);
 			break;
@@ -283,10 +283,10 @@ Obj* Allocator::copyToNewLocation(Obj* obj)
 		case ObjType::Instance:
 		{
 			auto instance = obj->asInstance();
-			auto newInstance = allocateObj(sizeof(ObjInstance), ObjType::Instance)->asInstance();
-			copyObj(newInstance, instance, sizeof(ObjInstance));
-			copyToNewLocation(newInstance->fields, instance->fields);
+			auto newInstance = allocateObj(instance->class_->instanceSize, ObjType::Instance)->asInstance();
+			copyObj(newInstance, instance, instance->class_->instanceSize);
 			newInstance->class_ = reinterpret_cast<ObjClass*>(copyToNewLocation(reinterpret_cast<Obj*>(instance->class_)));
+			newInstance->class_->update(instance, newInstance, *this);
 			obj->newLocation = reinterpret_cast<Obj*>(newInstance);
 			break;
 		}
@@ -296,8 +296,10 @@ Obj* Allocator::copyToNewLocation(Obj* obj)
 			auto function = obj->asBoundFunction();
 			auto newFunction = allocateObj(sizeof(ObjBoundFunction), ObjType::BoundFunction)->asBoundFunction();
 			copyObj(newFunction, function, sizeof(ObjBoundFunction));
-			newFunction->instance = reinterpret_cast<ObjInstance*>(copyToNewLocation(reinterpret_cast<Obj*>(function->instance)));
-			newFunction->function = reinterpret_cast<ObjFunction*>(copyToNewLocation(reinterpret_cast<Obj*>(function->function)));
+			if (function->value.isObj())
+			{
+				newFunction->value.as.obj = copyToNewLocation(reinterpret_cast<Obj*>(function->value.as.obj));
+			}
 			obj->newLocation = reinterpret_cast<Obj*>(newFunction);
 			break;
 		}
@@ -356,9 +358,9 @@ void Allocator::markObj(Obj* obj)
 
 		case ObjType::ForeignFunction:
 		{
-			const auto function = reinterpret_cast<ObjForeignFunction*>(obj);
+			const auto function = reinterpret_cast<ObjNativeFunction*>(obj);
 			addObj(reinterpret_cast<Obj*>(function->name));
-			m_markedMemorySize += sizeof(ObjForeignFunction) + WORST_CASE_SIZE_FOR_ALIGNMENT;
+			m_markedMemorySize += sizeof(ObjNativeFunction) + WORST_CASE_SIZE_FOR_ALIGNMENT;
 			return;
 		}
 
@@ -373,7 +375,6 @@ void Allocator::markObj(Obj* obj)
 		{
 			const auto class_ = obj->asClass();
 			addHashTable(class_->fields);
-			addHashTable(class_->methods);
 			addObj(reinterpret_cast<Obj*>(class_->name));
 			m_markedMemorySize += sizeof(ObjClass) + WORST_CASE_SIZE_FOR_ALIGNMENT;
 			return;
@@ -382,16 +383,16 @@ void Allocator::markObj(Obj* obj)
 		case ObjType::Instance:
 		{
 			const auto instance = obj->asInstance();
-			addHashTable(instance->fields);
 			addObj(reinterpret_cast<Obj*>(instance->class_));
-			m_markedMemorySize += sizeof(ObjInstance) + WORST_CASE_SIZE_FOR_ALIGNMENT;
+			instance->class_->mark(instance, *this);
+			m_markedMemorySize += instance->class_->instanceSize + WORST_CASE_SIZE_FOR_ALIGNMENT;
 			return;
 		}
 
 		case ObjType::BoundFunction:
 		{
 			const auto function = obj->asBoundFunction();
-			addObj(reinterpret_cast<Obj*>(function->instance));
+			addValue(function->value);
 			addObj(reinterpret_cast<Obj*>(function->function));
 			m_markedMemorySize += sizeof(ObjBoundFunction) + WORST_CASE_SIZE_FOR_ALIGNMENT;
 			return;
@@ -441,7 +442,7 @@ void Allocator::runGc()
 {
 	m_markedObjs.clear();
 	m_markedMemorySize = 0;
-	for (auto& [function, data, _] : m_rootMarkingFunctions)
+	for (auto& [function, data, _] : m_markingFunctions)
 	{
 		function(data, *this);
 	}
@@ -484,7 +485,7 @@ void Allocator::runGc()
 
 	for (auto& [function, data, _] : m_updateFunctions)
 	{
-		function(data);
+		function(data, data, *this);
 	}
 
 #ifdef VOXL_DEBUG_STRESS_TEST_GC
@@ -558,10 +559,10 @@ bool Allocator::hasBeenMoved(Obj* obj)
 	return (obj->newLocation != nullptr) && (obj->newLocation != reinterpret_cast<Obj*>(1));
 }
 
-void Allocator::unregisterRootMarkingFunction(size_t id)
+void Allocator::unregisterMarkingFunction(size_t id)
 {
-	m_rootMarkingFunctions.erase(
-		std::find_if(m_rootMarkingFunctions.begin(), m_rootMarkingFunctions.end(), [id](const RootMarkingFunctionEntry& entry)
+	m_markingFunctions.erase(
+		std::find_if(m_markingFunctions.begin(), m_markingFunctions.end(), [id](const MarkingFunctionEntry& entry)
 		{
 			return entry.id == id;
 		})
@@ -614,9 +615,9 @@ const Value& Allocator::getConstant(size_t id) const
 	return m_constants[id];
 }
 
-Allocator::RootMarkingFunctionHandle::~RootMarkingFunctionHandle()
+Allocator::MarkingFunctionHandle::~MarkingFunctionHandle()
 {
-	allocator.unregisterRootMarkingFunction(id);
+	allocator.unregisterMarkingFunction(id);
 }
 
 Allocator::UpdateFunctionHandle::~UpdateFunctionHandle()

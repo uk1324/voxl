@@ -20,11 +20,15 @@ enum class ObjType
 
 struct ObjString;
 struct ObjFunction;
-struct ObjForeignFunction;
+struct ObjNativeFunction;
 struct ObjAllocation;
 struct ObjClass;
-struct ObjInstance;
+struct ObjInstanceHead;
 struct ObjBoundFunction;
+
+class Allocator;
+using MarkingFunction = void (*)(void*, Allocator&);
+using UpdateFunction = void (*)(void*, void*, Allocator&);
 
 struct Obj
 {
@@ -38,13 +42,13 @@ struct Obj
 	bool isFunction();
 	ObjFunction* asFunction();
 	bool isForeignFunction();
-	ObjForeignFunction* asForeignFunction();
+	ObjNativeFunction* asForeignFunction();
 	bool isAllocation();
 	ObjAllocation* asAllocation();
 	bool isClass();
 	ObjClass* asClass();
 	bool isInstance();
-	ObjInstance* asInstance();
+	ObjInstanceHead* asInstance();
 	bool isBoundFunction();
 	ObjBoundFunction* asBoundFunction();
 };
@@ -64,16 +68,6 @@ struct ObjFunction
 	ObjString* name;
 	int argCount;
 	ByteCode byteCode;
-};
-
-using ForeignFunction = Value (*)(Value* /*arguments*/, int /*argumentCount*/);
-
-struct ObjForeignFunction
-{
-	Obj obj;
-	ObjString* name;
-	int argCount;
-	ForeignFunction function;
 };
 
 struct ObjAllocation
@@ -126,12 +120,46 @@ public:
 	} as;
 };
 
+enum class NativeFunctionResultType
+{
+	Ok,
+	Exception,
+	Fatal,
+};
+
+struct NativeFunctionResult
+{
+	/* implicit */ NativeFunctionResult(const Value& value);
+	[[nodiscard]] static NativeFunctionResult exception(const Value& value);
+	[[nodiscard]] static NativeFunctionResult fatal();
+
+	NativeFunctionResultType type;
+	Value value;
+
+private:
+	// Can't just use struct initialization becuase a constructor is defined.
+	NativeFunctionResult() = default;
+};
+
 }
 
 #include <HashMap.hpp>
 
 namespace Lang
 {
+
+class Vm;
+class Alloactor;
+#define VOXL_NATIVE_FN(name) NativeFunctionResult name(Value* args, int argCount, Vm& vm, Allocator& allocator)
+using NativeFunction = NativeFunctionResult(*)(Value* /*arguments*/, int /*argumentCount*/, Vm&, Allocator&);
+
+struct ObjNativeFunction
+{
+	Obj obj;
+	ObjString* name;
+	int argCount;
+	NativeFunction function;
+};
 
 using HashTable = HashMap<ObjString*, Value, ObjStringKeyTraits>;
 
@@ -140,21 +168,28 @@ struct ObjClass
 	Obj obj;
 	ObjString* name;
 	HashTable fields;
-	HashTable methods;
+	
+	size_t instanceSize;
+	MarkingFunction mark;
+	UpdateFunction update;
 };
 
-struct ObjInstance
+struct ObjInstanceHead
 {
 	Obj obj;
 	ObjClass* class_;
-	HashTable fields;
 };
 
 struct ObjBoundFunction
 {
 	Obj obj;
 	ObjFunction* function;
-	ObjInstance* instance;
+	Value value;
+};
+
+struct ObjForeignInstance
+{
+	Obj obj;
 };
 
 }
