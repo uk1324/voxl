@@ -1,3 +1,5 @@
+#include "Compiler.hpp"
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -57,6 +59,61 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 #endif
 
 	return Result{ m_hadError, reinterpret_cast<ObjFunction*>(scriptFunction) };
+}
+
+Compiler::Status Compiler::compileFunction(
+	std::string_view functionName, 
+	ObjFunction* function,
+	const std::vector<std::string_view>& arguments, 
+	const StmtList& stmts, 
+	size_t start, 
+	size_t end)
+{
+	m_functionByteCodeStack.push_back(&function->byteCode);
+	m_functions.push_back(Function{});
+
+	beginScope();
+	m_scopes.back().functionDepth++;
+
+	for (const auto& argumentName : arguments)
+	{
+		// Could store the token for better error messages about redeclaration.
+		TRY(createVariable(argumentName, start, end));
+	}
+
+	TRY(compile(stmts));
+	emitOp(Op::LoadNull);
+	emitOp(Op::Return);
+
+#ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
+	std::cout << "----" << functionName << '\n';
+	disassembleByteCode(function->byteCode, *m_allocator);
+#endif
+
+	endScope();
+	m_functionByteCodeStack.pop_back();
+
+	const auto& upvalues = m_functions.back().upvalues;
+	function->upvalueCount = static_cast<int>(upvalues.size());
+	if (upvalues.size() != 0)
+	{
+		emitOp(Op::Closure);
+		if (upvalues.size() > UINT8_MAX)
+		{
+			ASSERT_NOT_REACHED();
+		}
+		emitUint8(static_cast<uint8_t>(upvalues.size()));
+		for (const auto upvalue : upvalues)
+		{
+
+			emitUint8(static_cast<uint8_t>(upvalue.index));
+			emitUint8(static_cast<uint8_t>(upvalue.isLocal));
+		}
+	}
+
+	m_functions.pop_back();
+
+	return Status::Ok;
 }
 
 Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
@@ -146,51 +203,7 @@ Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 	const auto [functionConstant, function] = m_allocator->allocateFunctionConstant(name, static_cast<int>(stmt.arguments.size()));
 	TRY(loadConstant(functionConstant));
 	TRY(createVariable(stmt.name, stmt.start, stmt.end()));
-	m_functionByteCodeStack.push_back(&function->byteCode);
-	m_functions.push_back(Function{});
-
-	beginScope();
-	m_scopes.back().functionDepth++;
-
-	for (const auto& argumentName : stmt.arguments)
-	{
-		// Could store the token for better error messages about redeclaration.
-		TRY(createVariable(argumentName, stmt.start, stmt.end()));
-	}
-
-	TRY(compile(stmt.stmts));
-	emitOp(Op::LoadNull);
-	emitOp(Op::Return);
-
-#ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
-	std::cout << "----" << stmt.name << '\n';
-	disassembleByteCode(function->byteCode, *m_allocator);
-#endif
-
-	endScope();
-	m_functionByteCodeStack.pop_back();
-
-	const auto& upvalues = m_functions.back().upvalues;
-	function->upvalueCount = static_cast<int>(upvalues.size());
-	if (upvalues.size() != 0)
-	{
-		emitOp(Op::Closure);
-		if (upvalues.size() > UINT8_MAX)
-		{
-			ASSERT_NOT_REACHED();
-		}
-		emitUint8(static_cast<uint8_t>(upvalues.size()));
-		for (const auto upvalue : upvalues)
-		{
-			
-			emitUint8(static_cast<uint8_t>(upvalue.index));
-			emitUint8(static_cast<uint8_t>(upvalue.isLocal));
-		}
-	}
-
-	m_functions.pop_back();	
-
-	return Status::Ok;
+	return compileFunction(stmt.name, function, stmt.arguments, stmt.stmts, stmt.start, stmt.end());
 }
 
 Compiler::Status Compiler::retStmt(const RetStmt& stmt)
@@ -333,35 +346,13 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 
 	for (const auto& method : stmt.methods)
 	{
+		auto arguments = method->arguments;
+		arguments.insert(arguments.begin(), "$");
 		const auto [nameConstant, name] = m_allocator->allocateStringConstant(std::string(stmt.name) + '.' + std::string(method->name));
 		const auto [functionConstant, function] =
-			m_allocator->allocateFunctionConstant(name, static_cast<int>(method->arguments.size() + 1));
+			m_allocator->allocateFunctionConstant(name, static_cast<int>(arguments.size()));
 
-		m_functionByteCodeStack.push_back(&function->byteCode);
-		m_functions.push_back(Function{});
-
-		beginScope();
-		m_scopes.back().functionDepth++;
-
-		TRY(createVariable("$", method->start, method->end()));
-		for (const auto& argument : method->arguments)
-		{
-			// Could store the token for better error messages about redeclaration.
-			TRY(createVariable(argument, stmt.start, stmt.end()));
-		}
-		TRY(compile(method->stmts));
-
-		emitOp(Op::LoadNull);
-		emitOp(Op::Return);
-
-#ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
-		std::cout << "----" << stmt.name << '.' << method->name << '\n';
-		disassembleByteCode(function->byteCode, *m_allocator);
-#endif
-
-		endScope();
-		m_functionByteCodeStack.pop_back();
-		m_functions.pop_back();
+		TRY(compileFunction(method->name, function, arguments, method->stmts, method->start, method->end()));
 
 		const auto methodNameConstant = m_allocator->allocateStringConstant(method->name).constant;
 		TRY(loadConstant(functionConstant));
@@ -396,6 +387,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 		CASE_EXPR_TYPE(Assignment, assignmentExpr)
 		CASE_EXPR_TYPE(Array, arrayExpr)
 		CASE_EXPR_TYPE(GetField, getFieldExpr)
+		CASE_EXPR_TYPE(Lambda, lambdaExpr)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -574,6 +566,16 @@ Compiler::Status Compiler::arrayExpr(const ArrayExpr& expr)
 	}
 	TRY(emitOpArg(Op::CreateArray, expr.values.size(), expr.start, expr.end()));*/
 	return Status::Error;
+}
+
+Compiler::Status Compiler::lambdaExpr(const LambdaExpr& expr)
+{
+	std::string_view anonymousFunctionName = "";
+	const auto [nameConstant, name] = m_allocator->allocateStringConstant(anonymousFunctionName);
+	const auto [functionConstant, function] = m_allocator->allocateFunctionConstant(name, static_cast<int>(expr.arguments.size()));
+	TRY(compileFunction(anonymousFunctionName, function, expr.arguments, expr.stmts, expr.start, expr.end()));
+	TRY(loadConstant(functionConstant));
+	return Status::Ok;
 }
 
 Compiler::Status Compiler::getFieldExpr(const GetFieldExpr& expr)

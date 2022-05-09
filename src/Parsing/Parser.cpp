@@ -475,6 +475,39 @@ std::unique_ptr<Expr> Parser::primary()
 		expect(TokenType::RightParen, "expected ')'");
 		return expression;
 	}
+	else if (match(TokenType::Or) || match(TokenType::OrOr))
+	{
+		const auto start = peekPrevious().start;
+		decltype (LambdaExpr::arguments) arguments;
+		if ((peekPrevious().type != TokenType::OrOr) && (match(TokenType::Or) == false))
+		{
+			do
+			{
+				expect(TokenType::Identifier, "expected argument name");
+				arguments.push_back(peekPrevious().identifier);
+			} while (match(TokenType::Comma));
+		}
+		if (arguments.size() != 0)
+			expect(TokenType::Or, "expected '|'");
+
+		if (check(TokenType::LeftBrace) == false)
+		{
+			const auto retStart = peek().start;
+			auto retVal = expr();
+			auto ret = std::make_unique<RetStmt>(std::move(retVal), retStart, peekPrevious().end);
+			// Doing it this way because c++ can't infer the types.
+			StmtList stmts;
+			stmts.push_back(std::move(ret));
+			return std::make_unique<LambdaExpr>(
+				std::move(arguments), 
+				std::move(stmts),
+				start,
+				peekPrevious().end);
+		}
+
+		auto stmts = block();
+		return std::make_unique<LambdaExpr>(std::move(arguments), std::move(stmts), start, peekPrevious().end);
+	}
 	// TODO: Check if this error location is good or should it maybe be token.
 	throw errorAt(peek(), "expected expression");
 }

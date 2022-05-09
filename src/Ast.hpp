@@ -27,6 +27,7 @@ enum class ExprType
 	Assignment,
 	GetField,
 	Array,
+	Lambda,
 };
 
 struct Expr
@@ -282,6 +283,14 @@ struct ThrowStmt final : public Stmt
 	ThrowStmt(std::unique_ptr<Expr> expr, size_t start, size_t end);
 
 	std::unique_ptr<Expr> expr;
+};
+
+struct LambdaExpr final : public Expr
+{
+	LambdaExpr(std::vector<std::string_view> arguments, StmtList stmts, size_t start, size_t end);
+
+	std::vector<std::string_view> arguments;
+	StmtList stmts;
 };
 
 }

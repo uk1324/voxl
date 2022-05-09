@@ -67,6 +67,13 @@ public:
 	Result compile(const std::vector<std::unique_ptr<Stmt>>& ast, ErrorPrinter& errorPrinter, Allocator& allocator);
 
 private:
+	Status compileFunction(
+		std::string_view functionName,
+		ObjFunction* function,
+		const std::vector<std::string_view>& arguments, 
+		const StmtList& stmts, 
+		size_t start, 
+		size_t end);
 	Status compile(const std::unique_ptr<Stmt>& stmt);
 	Status compile(const std::vector<std::unique_ptr<Stmt>>& stmts);
 	Status exprStmt(const ExprStmt& stmt);
@@ -97,6 +104,7 @@ private:
 	Status assignmentExpr(const AssignmentExpr& expr);
 	Status arrayExpr(const ArrayExpr& expr);
 	Status getFieldExpr(const GetFieldExpr& expr);
+	Status lambdaExpr(const LambdaExpr& expr);
 
 	// Expects the variable initializer to be on top of the stack.
 	Status createVariable(std::string_view name, size_t start, size_t end);

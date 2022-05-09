@@ -80,6 +80,13 @@ ArrayExpr::ArrayExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, si
 	, values(std::move(values))
 {}
 
+//LambdaExpr::LambdaExpr(std::vector<std::string_view> arguments, std::vector<std::unique_ptr<Stmt>> stmts, size_t start, size_t end)
+//	: Expr(start, end, ExprType::Lambda)
+//	, arguments(std::move(arguments))
+//	, stmts(std::move(stmts))
+//{}
+
+
 Stmt::Stmt(size_t start, size_t end, StmtType type)
 	: start(start)
 	, length(end - start)
@@ -185,4 +192,10 @@ TryStmt::TryStmt(
 ThrowStmt::ThrowStmt(std::unique_ptr<Expr> expr, size_t start, size_t end)
 	: Stmt(start, end, StmtType::Throw)
 	, expr(std::move(expr))
+{}
+
+LambdaExpr::LambdaExpr(std::vector<std::string_view> arguments, StmtList stmts, size_t start, size_t end)
+	: Expr(start, end, ExprType::Lambda)
+	, arguments(std::move(arguments))
+	, stmts(std::move(stmts))
 {}

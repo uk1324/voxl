@@ -86,6 +86,7 @@ VOXL_NATIVE_FN(add)
 
 // TODO: Add dead code elimintation and warnings. Expr is just a compile time expression. Expr is just a single identifier load. Expr is just a field access (this might not work if 
 // I allow to overload it).
+// If a lambda is created but nothing is done with it though does technically have side effects.
 // If a local variable is created but never used issue a warning.
 // Add Unreachable code detection
 // when a break, continue or return is compiled set a flag in the scope and each time a new statement is compiled after that issue a warning.
@@ -97,8 +98,13 @@ VOXL_NATIVE_FN(add)
 // Don't know if it makes sense to allow backwards gotos or not it may be useful for state machines.
 // Backwards gotos would need to pop the values they skip so they don't get redeclared and mess up the stack.
 
+// TODO make generic function for parsing arguments
+
+// Maybe add elif
+
 int main()
 {
+
 	bool shouldCompile = true;
 
 	std::string filename = "../../../src/test2.voxl";
