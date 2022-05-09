@@ -147,6 +147,13 @@ std::ostream& operator<< (std::ostream& os, Lang::Obj* obj)
 			os << reinterpret_cast<Obj*>(obj->asBoundFunction()->function);
 			break;
 
+		case ObjType::Closure:
+		{
+			auto closure = obj->asClosure();
+			os << '<' << "closure of " << reinterpret_cast<Obj*>(closure->function->name) << '>';
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 	}
@@ -198,6 +205,28 @@ ObjFunction* Obj::asFunction()
 {
 	ASSERT(isFunction());
 	return reinterpret_cast<ObjFunction*>(this);
+}
+
+bool Obj::isClosure()
+{
+	return type == ObjType::Closure;
+}
+
+ObjClosure* Obj::asClosure()
+{
+	ASSERT(isClosure());
+	return reinterpret_cast<ObjClosure*>(this);
+}
+
+bool Obj::isUpvalue()
+{
+	return type == ObjType::Upvalue;
+}
+
+ObjUpvalue* Obj::asUpvalue()
+{
+	ASSERT(isUpvalue());
+	return reinterpret_cast<ObjUpvalue*>(this);
 }
 
 bool Obj::isForeignFunction()

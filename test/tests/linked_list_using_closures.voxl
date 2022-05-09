@@ -1,0 +1,26 @@
+fn linked_list(value, next) {
+	fn instance(n) {
+		if n == 0 {
+			ret value;
+		} else if n == 1 {
+			ret next;
+		}
+	}
+
+	ret instance;
+}
+
+fn for_each(func, list) {
+	node : list;
+	while node != null {
+		func(node(0));
+		node = node(1);
+	}
+}
+
+fn log(value) {
+	print(value);
+}
+
+list : linked_list(1, linked_list(2, linked_list(3, linked_list(4, null))));
+for_each(log, list);

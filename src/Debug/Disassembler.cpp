@@ -56,6 +56,29 @@ static size_t jump(std::string_view name, const ByteCode& byteCode, size_t offse
 	return 5;
 }
 
+static size_t closureOp(std::string name, const ByteCode& byteCode, size_t offset)
+{
+	auto& count = byteCode.code[offset + 1];
+	auto value = &count;
+	std::cout << name;
+	for (size_t i = 0; i < count; i++)
+	{
+		value++;
+		auto index = *value;
+		value++;
+		auto isLocal = *value;
+		std::cout << " |" << (isLocal ? "local" : "upvalue") << '-' << static_cast<int>(index);
+	}
+	return 2 + static_cast<size_t>(count) * 2;
+}
+
+static size_t closeUpvalueOp(std::string name, const ByteCode& byteCode, size_t offset)
+{
+	auto& index = byteCode.code[offset + 1];
+	std::cout << name << ' ' << static_cast<int>(index);
+	return 2;
+}
+
 void Lang::debugPrintValue(const Value& value)
 {
 	if ((value.type == ValueType::Obj) && (value.as.obj->type == ObjType::String))
@@ -101,6 +124,7 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::StoreMethod: return justOp("storeMethod");
 		case Op::Concat: return justOp("concat");
 		case Op::Equals: return justOp("equals");
+		case Op::NotEquals: return justOp("notEquals");
 		case Op::LoadConstant: return opConstant("loadConstant", byteCode, offset, allocator);
 		case Op::LoadLocal: return opNumber("loadLocal", byteCode, offset);
 		case Op::SetLocal: return opNumber("setLocal", byteCode, offset);
@@ -121,6 +145,10 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::Negate: return justOp("negate");
 		case Op::PopStack: return justOp("popStack");
 		case Op::Return: return justOp("return");
+		case Op::Closure: return closureOp("closure", byteCode, offset);
+		case Op::LoadUpvalue: return opNumber("getUpvalue", byteCode, offset);
+		case Op::SetUpvalue: return opNumber("setUpvalue", byteCode, offset);
+		case Op::CloseUpvalue: return closeUpvalueOp("closeUpvalue", byteCode, offset);
 
 		default:
 			std::cout << "invalid op";

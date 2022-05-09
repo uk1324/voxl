@@ -1,97 +1,58 @@
-class Node {
-	$init(value) {
-		$.value = value;
-		$.next = null;
-		ret $;
+/*set : null;
+get : null;
+
+fn init() {
+	x : null;
+	
+	fn localSet(value) {
+		x = value;
+	}
+
+	fn localGet() {
+		ret x;
+	}
+
+	set = localSet;
+	get = localGet;
+}
+
+init();
+print(get());
+set(5);
+print(get());*/
+
+fn linkedList(value, next) {
+	fn instance(n) {
+		if n == 0 {
+			ret value;
+		} else if n == 1 {
+			ret next;
+		}
+	}
+
+	ret instance;
+}
+
+fn value(list) {
+	ret list(0);
+}
+
+fn next(list) {
+	ret list(1);
+}
+
+fn forEach(func, list) {
+	node : list;
+	while node != null {
+		func(node(0));
+		node = node(1);
 	}
 }
 
-class LinkedList {
-	$init() {
-		$.data = null;
-		ret $;
-	}
-
-	push(value) {
-		if $.data == null {
-			$.data = Node(value);
-		} else {
-			node : $.data;
-			while node.next != null {
-				node = node.next;
-			}
-			node.next = Node(value);
-		}
-	}
-
-	pop() {
-		if $.data == null {
-			throw "list is empty";
-		}
-
-		if $.data.next == null {
-			result : $.data.next;
-			$.data = null;
-			ret result;
-		}
-		else {
-			node : $.data;
-			while node.next.next != null {
-				node = node.next;
-			}
-			result : node.next;
-			node.next = null;
-			ret result;
-		}
-	}
-
-	reverse() {
-		list : $.data;
-		if $.data == null {
-			ret;
-		}
-		new : Node(list.value);
-		list = list.next;
-		while list != null {
-			temp : new;
-			new = Node(list.value);
-			new.next = temp;
-			list = list.next;
-		}
-		$.data = new;
-	}
-
-	clear() {
-		$.data = null;
-	}
-
-	log() {
-		print("[");
-		node : $.data;
-		while node != null {
-			print(node.value);
-			if node.next != null {
-				print(", ");
-			}
-			node = node.next;
-		}
-		print("] ");
-	}
+fn log(value) {
+	print(value);
 }
 
-x : LinkedList();
-x.push(7);
-x.pop();
-try {
-	x.pop();
-} catch (error) {
-	print(error ++ " ");
-}
-x.push(1);
-x.push(2);
-x.push(3);
-x.log();
-x.reverse();
-x.log();
-x.clear();
-x.log();
+list : linkedList(1, null);
+//forEach(log, list);
+print(list(1));

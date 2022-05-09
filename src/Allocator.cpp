@@ -125,6 +125,23 @@ ObjFunction* Allocator::allocateFunction(ObjString* name, int argCount)
 	return obj;
 }
 
+ObjClosure* Allocator::allocateClosure(ObjFunction* function)
+{
+	auto obj = reinterpret_cast<ObjClosure*>(allocateObj(sizeof(ObjClosure), ObjType::Closure));
+	obj->function = function;
+	obj->upvalueCount = function->upvalueCount;
+	obj->upvalues = reinterpret_cast<ObjUpvalue**>(::operator new(sizeof(ObjUpvalue*) * obj->upvalueCount));
+	return obj;
+}
+
+ObjUpvalue* Allocator::allocateUpvalue(Value* localVariable)
+{
+	auto obj = reinterpret_cast<ObjUpvalue*>(allocateObj(sizeof(ObjUpvalue), ObjType::Upvalue));
+	obj->location = localVariable;
+	obj->value = Value::null();
+	return obj;
+}
+
 ObjInstanceHead* Allocator::allocateInstance(ObjClass* class_)
 {
 	auto obj = allocateObj(class_->instanceSize, ObjType::Instance)->asInstance();
@@ -304,6 +321,38 @@ Obj* Allocator::copyToNewLocation(Obj* obj)
 			break;
 		}
 
+		case ObjType::Closure:
+		{
+			auto closure = obj->asClosure();
+			auto newClosure = allocateObj(sizeof(ObjClosure), ObjType::Closure)->asClosure();
+			copyObj(newClosure, closure, sizeof(ObjClosure));
+			for (size_t i = 0; i < newClosure->upvalueCount; i++)
+			{
+				auto& upvalue = newClosure->upvalues[i];
+				upvalue = reinterpret_cast<ObjUpvalue*>(copyToNewLocation(reinterpret_cast<Obj*>(upvalue)));
+			}
+			newClosure->function = reinterpret_cast<ObjFunction*>(copyToNewLocation(reinterpret_cast<Obj*>(closure->function)));
+			obj->newLocation = reinterpret_cast<Obj*>(newClosure);
+			break;
+		}
+
+		case ObjType::Upvalue:
+		{
+			auto upvalue = obj->asUpvalue();
+			auto newUpvalue = allocateObj(sizeof(ObjUpvalue), ObjType::Upvalue)->asUpvalue();
+			copyObj(newUpvalue, upvalue, sizeof(ObjUpvalue));
+			if (upvalue->value.isObj())
+			{
+				newUpvalue->value.as.obj = copyToNewLocation(reinterpret_cast<Obj*>(newUpvalue->value.as.obj));
+			}
+			if (upvalue->location == &upvalue->value)
+			{
+				newUpvalue->location = &newUpvalue->value;
+			}
+			obj->newLocation = reinterpret_cast<Obj*>(newUpvalue);
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 	}
@@ -397,6 +446,27 @@ void Allocator::markObj(Obj* obj)
 			m_markedMemorySize += sizeof(ObjBoundFunction) + WORST_CASE_SIZE_FOR_ALIGNMENT;
 			return;
 		}
+
+		case ObjType::Closure:
+		{
+			const auto closure = obj->asClosure();
+			for (size_t i = 0; i < closure->upvalueCount; i++)
+			{
+				addObj(reinterpret_cast<Obj*>(closure->upvalues[i]));
+			}
+			addObj(reinterpret_cast<Obj*>(closure->function));
+			m_markedMemorySize += sizeof(ObjClosure) + WORST_CASE_SIZE_FOR_ALIGNMENT;
+			return;
+		}
+		
+		case ObjType::Upvalue:
+		{
+			const auto upvalue = obj->asUpvalue();
+			addValue(upvalue->value);
+			m_markedMemorySize += sizeof(ObjUpvalue) + WORST_CASE_SIZE_FOR_ALIGNMENT;
+			return;
+		}
+
 	}
 
 	ASSERT_NOT_REACHED();

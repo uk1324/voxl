@@ -28,6 +28,8 @@ public:
 		int numberOfValuesToPopOffExceptArgs;
 		uint32_t absoluteJumpToCatch;
 		bool isTrySet;
+		ObjUpvalue** upvalues;
+		ObjClosure* closure;
 	};
 
 private:
@@ -74,6 +76,8 @@ public:
 	Allocator* m_allocator;
 
 	ErrorPrinter* m_errorPrinter;
+
+	std::vector<ObjUpvalue*> m_openUpvalues;
 
 	ObjString* m_initString;
 	ObjString* m_getFieldString;

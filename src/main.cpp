@@ -84,6 +84,19 @@ VOXL_NATIVE_FN(add)
 
 // Don't know if i shoud use // for comments or for integer division.
 
+// TODO: Add dead code elimintation and warnings. Expr is just a compile time expression. Expr is just a single identifier load. Expr is just a field access (this might not work if 
+// I allow to overload it).
+// If a local variable is created but never used issue a warning.
+// Add Unreachable code detection
+// when a break, continue or return is compiled set a flag in the scope and each time a new statement is compiled after that issue a warning.
+// This only works if there are no gotos.
+// If I decide to add gotos.
+// When a label is created just clear the flag.
+// When a scope is created save the vector of stmts
+// If there is a goto check if it skips over any variable declarations by taking the pointer of the currently compiled statement and check all the statements in the range for declarations.
+// Don't know if it makes sense to allow backwards gotos or not it may be useful for state machines.
+// Backwards gotos would need to pop the values they skip so they don't get redeclared and mess up the stack.
+
 int main()
 {
 	bool shouldCompile = true;
@@ -116,7 +129,7 @@ int main()
 	if (compilerResult.hadError == false)
 	{
 		auto vm = std::make_unique<Vm>(allocator);
-		vm->defineNativeFunction("add", add, 2);
+		//vm->defineNativeFunction("add", add, 2);
 		auto result = vm->execute(compilerResult.program, errorPrinter);
 	}
 }

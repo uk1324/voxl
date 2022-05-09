@@ -11,6 +11,8 @@ enum class ObjType
 {
 	String,
 	Function,
+	Closure,
+	Upvalue,
 	ForeignFunction,
 	Allocation,
 	Class,
@@ -20,6 +22,8 @@ enum class ObjType
 
 struct ObjString;
 struct ObjFunction;
+struct ObjClosure;
+struct ObjUpvalue;
 struct ObjNativeFunction;
 struct ObjAllocation;
 struct ObjClass;
@@ -41,6 +45,10 @@ struct Obj
 	ObjString* asString();
 	bool isFunction();
 	ObjFunction* asFunction();
+	bool isClosure();
+	ObjClosure* asClosure();
+	bool isUpvalue();
+	ObjUpvalue* asUpvalue();
 	bool isForeignFunction();
 	ObjNativeFunction* asForeignFunction();
 	bool isAllocation();
@@ -68,6 +76,7 @@ struct ObjFunction
 	ObjString* name;
 	int argCount;
 	ByteCode byteCode;
+	int upvalueCount;
 };
 
 struct ObjAllocation
@@ -190,6 +199,21 @@ struct ObjBoundFunction
 struct ObjForeignInstance
 {
 	Obj obj;
+};
+
+struct ObjUpvalue
+{
+	Obj obj;
+	Value value;
+	Value* location;
+};
+
+struct ObjClosure
+{
+	Obj obj;
+	ObjFunction* function;
+	ObjUpvalue** upvalues;
+	int upvalueCount;
 };
 
 }

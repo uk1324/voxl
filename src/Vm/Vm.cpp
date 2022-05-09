@@ -69,7 +69,7 @@ Vm::Result Vm::run()
 		std::cout << "]\n";
 		disassembleInstruction(
 			callStackTop().function->byteCode,
-			callStackTop().instructionPointer - callStackTop().function->byteCode.code.data());
+			callStackTop().instructionPointer - callStackTop().function->byteCode.code.data(), *m_allocator);
 		std::cout << '\n';
 	#endif
 
@@ -360,8 +360,7 @@ Vm::Result Vm::run()
 			bool doesNotAlreadyExist = m_globals.insert(*m_allocator, name, value);
 			if (doesNotAlreadyExist == false)
 			{
-				m_errorPrinter->outStream() << "redeclaration of '" << name->chars << '\'';
-				return Result::RuntimeError;
+				return fatalError("redeclaration of '%s'", name->chars);
 			}
 			popStack();
 			popStack();
@@ -471,6 +470,25 @@ Vm::Result Vm::run()
 				Value result = peekStack();
 				m_stackTop = callStackTop().values;
 				m_stackTop -= callStackTop().numberOfValuesToPopOffExceptArgs;
+
+				auto isLocal = [this](ObjUpvalue* upvalue)
+				{
+					return upvalue->location >= callStackTop().values;
+				};
+
+				for (;;)
+				{
+					auto it = std::find_if(m_openUpvalues.begin(), m_openUpvalues.end(), isLocal);
+					if (it == m_openUpvalues.end())
+					{
+						break;
+					}
+					auto upvalue = *it;
+					upvalue->value = *upvalue->location;
+					upvalue->location = &upvalue->value;
+					m_openUpvalues.erase(it);
+				}
+
 				m_callStackSize--;
 				pushStack(result);
 			}
@@ -714,6 +732,64 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::Closure:
+		{
+			auto function = peekStack(0).as.obj->asFunction();
+			auto closure = m_allocator->allocateClosure(function);
+			const auto upvalueCount = readUint8();
+			for (uint8_t i = 0; i < upvalueCount; i++)
+			{
+				auto index = readUint8();
+				auto isLocal = readUint8();
+
+				if (isLocal)
+				{
+					auto upvalue = m_allocator->allocateUpvalue(callStackTop().values + index);
+					m_openUpvalues.push_back(upvalue);
+					closure->upvalues[i] = upvalue;
+				}
+				else
+				{
+					closure->upvalues[i] = callStackTop().upvalues[index];
+				}
+			}
+			popStack();
+			pushStack(Value(reinterpret_cast<Obj*>(closure)));
+			break;
+		}
+
+		case Op::CloseUpvalue:
+		{
+			const auto index = readUint8();
+			for (auto it = m_openUpvalues.begin(); it != m_openUpvalues.end(); it++)
+			{
+				auto& upvalue = *it;
+				auto& local = callStackTop().values[index];
+				if (upvalue->location == &local)
+				{
+					upvalue->value = local;
+					upvalue->location = &upvalue->value;
+					m_openUpvalues.erase(it);
+					break;
+				}
+			}
+			break;
+		}
+
+		case Op::LoadUpvalue:
+		{
+			const auto index = readUint32();
+			pushStack(*callStackTop().upvalues[index]->location);
+			break;
+		}
+
+		case Op::SetUpvalue:
+		{
+			const auto index = readUint32();
+			*callStackTop().upvalues[index]->location = peekStack(0);
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 			return Result::RuntimeError;
@@ -807,7 +883,37 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 				calle->byteCode.code.data(), 
 				m_stackTop - argCount, 
 				calle, 
-				numberOfValuesToPopOffExceptArgs 
+				numberOfValuesToPopOffExceptArgs,
+				0,
+				false,
+				nullptr,
+				nullptr
+			};
+			m_callStackSize++;
+			break;
+		}
+
+		case ObjType::Closure:
+		{
+			auto calle = obj->asClosure();
+
+			if (argCount != calle->function->argCount)
+			{
+				return fatalError("expected %d arguments but got %d", calle->function->argCount, argCount);
+			}
+			if ((m_callStackSize + 1) == m_callStack.size())
+			{
+				return fatalError("call stack overflow");
+			}
+			m_callStack[m_callStackSize] = CallFrame{
+				calle->function->byteCode.code.data(),
+				m_stackTop - argCount,
+				calle->function,
+				numberOfValuesToPopOffExceptArgs,
+				0,
+				false,
+				calle->upvalues,
+				calle
 			};
 			m_callStackSize++;
 			break;
@@ -890,6 +996,11 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 	{
 		allocator.addObj(reinterpret_cast<Obj*>(frame->function));
 	}
+
+	for (auto upvalue : vm->m_openUpvalues)
+	{
+		allocator.addObj(reinterpret_cast<Obj*>(upvalue));
+	}
 }
 
 void Vm::update(Vm* vm)
@@ -904,6 +1015,11 @@ void Vm::update(Vm* vm)
 	for (auto frame = vm->m_callStack.data(); frame != &vm->callStackTop() + 1; frame++)
 	{
 		frame->function = reinterpret_cast<ObjFunction*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(frame->function)));
+	}
+
+	for (auto& upvalue : vm->m_openUpvalues)
+	{
+		upvalue = reinterpret_cast<ObjUpvalue*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(upvalue)));
 	}
 }
 

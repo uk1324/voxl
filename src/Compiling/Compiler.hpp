@@ -27,23 +27,32 @@ public:
 private:
 	struct Local
 	{
-	public:
 		uint32_t index;
+		bool isCaptured;
 	};
 
 	struct Scope
 	{
-	public:
 		std::unordered_map<std::string_view, Local> localVariables;
 		int functionDepth;
 	};
 
 	struct Loop
 	{
-	public:
 		size_t loopStartLocation;
 		std::vector<size_t> breakJumpLocations;
 		std::vector<size_t> continueJumpLocations;
+	};
+
+	struct Upvalue
+	{
+		size_t index;
+		bool isLocal;
+	};
+
+	struct Function
+	{
+		std::vector<Upvalue> upvalues;
 	};
 
 	enum class [[nodiscard]] Status
@@ -89,15 +98,18 @@ private:
 	Status arrayExpr(const ArrayExpr& expr);
 	Status getFieldExpr(const GetFieldExpr& expr);
 
-	Status declareVariable(std::string_view name, size_t start, size_t end);
+	// Expects the variable initializer to be on top of the stack.
+	Status createVariable(std::string_view name, size_t start, size_t end);
 	// Could make a RAII class
 	void beginScope();
 	void endScope();
-
+	enum class VariableOp { Get, Set };
+	Status variable(std::string_view name, VariableOp op);
 	Status loadConstant(size_t index);
 	ByteCode& currentByteCode();
 	void emitOp(Op op);
 	Status emitOpArg(Op op, size_t arg, size_t start, size_t end);
+	void emitUint8(uint8_t value);
 	void emitUint32(uint32_t value);
 	size_t emitJump(Op op);
 	void emitJump(Op op, size_t location);
@@ -117,6 +129,7 @@ private:
 	// For example converting m_loops into multiple arrays. Each entry would store a depth.
 	std::vector<Scope> m_scopes;
 	std::vector<Loop> m_loops;
+	std::vector<Function> m_functions;
 
 	// Stores the line numbers of the currently compiled things. Because expressions might be on a different lines
 	// the the statements they are in a stack has to be used. 

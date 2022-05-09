@@ -79,6 +79,8 @@ public:
 	ObjString* allocateString(std::string_view chars);
 	ObjString* allocateString(std::string_view chars, size_t length);
 	ObjFunction* allocateFunction(ObjString* name, int argCount);
+	ObjClosure* allocateClosure(ObjFunction* function);
+	ObjUpvalue* allocateUpvalue(Value* localVariable);
 	ObjNativeFunction* allocateForeignFunction(ObjString* name, NativeFunction function, int argCount);
 	ObjClass* allocateClass(ObjString* name, size_t instanceSize, MarkingFunction mark, UpdateFunction update);
 	ObjInstanceHead* allocateInstance(ObjClass* class_);
@@ -86,7 +88,7 @@ public:
 
 	struct StringConstant
 	{
-		size_t index;
+		size_t constant;
 		ObjString* value;
 	}
 	allocateStringConstant(std::string_view chars),

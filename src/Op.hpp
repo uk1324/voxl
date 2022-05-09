@@ -33,6 +33,8 @@ namespace Lang
 		LoadConstant,
 		LoadLocal,
 		SetLocal,
+		LoadUpvalue,
+		SetUpvalue,
 		LoadGlobal, // [name]
 		SetGlobal, // [value, name]
 		CreateGlobal, // [initializer, name]
@@ -54,7 +56,8 @@ namespace Lang
 		StoreMethod, // [class function name]
 		TryBegin, // absolute jump to catch stmt.
 		TryEnd,
-		Throw // [value]
-
+		Throw, // [value]
+		Closure,
+		CloseUpvalue,
 	};
 }

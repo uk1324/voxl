@@ -33,6 +33,7 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 	const auto scriptName = m_allocator->allocateStringConstant("script").value;
 	auto scriptFunction = m_allocator->allocateFunctionConstant(scriptName, 0).value;
 	m_functionByteCodeStack.push_back(&scriptFunction->byteCode);
+	m_functions.push_back(Function{});
 
 	for (const auto& stmt : ast)
 	{
@@ -48,6 +49,7 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 	m_lineNumberStack.pop_back();
 
 	m_functionByteCodeStack.pop_back();
+	m_functions.pop_back();
 
 #ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
 	std::cout << "----<script>\n";
@@ -66,17 +68,17 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 	switch (stmt.get()->type)
 	{
 		CASE_STMT_TYPE(Expr, exprStmt)
-			CASE_STMT_TYPE(Print, printStmt)
-			CASE_STMT_TYPE(VariableDeclaration, variableDeclarationStmt)
-			CASE_STMT_TYPE(Block, blockStmt)
-			CASE_STMT_TYPE(Fn, fnStmt)
-			CASE_STMT_TYPE(Ret, retStmt)
-			CASE_STMT_TYPE(If, ifStmt)
-			CASE_STMT_TYPE(Loop, loopStmt)
-			CASE_STMT_TYPE(Break, breakStmt)
-			CASE_STMT_TYPE(Class, classStmt)
-			CASE_STMT_TYPE(Try, tryStmt)
-			CASE_STMT_TYPE(Throw, throwStmt)
+		CASE_STMT_TYPE(Print, printStmt)
+		CASE_STMT_TYPE(VariableDeclaration, variableDeclarationStmt)
+		CASE_STMT_TYPE(Block, blockStmt)
+		CASE_STMT_TYPE(Fn, fnStmt)
+		CASE_STMT_TYPE(Ret, retStmt)
+		CASE_STMT_TYPE(If, ifStmt)
+		CASE_STMT_TYPE(Loop, loopStmt)
+		CASE_STMT_TYPE(Break, breakStmt)
+		CASE_STMT_TYPE(Class, classStmt)
+		CASE_STMT_TYPE(Try, tryStmt)
+		CASE_STMT_TYPE(Throw, throwStmt)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -122,13 +124,7 @@ Compiler::Status Compiler::variableDeclarationStmt(const VariableDeclarationStmt
 		}
 
 		// The initializer is evaluated before declaring the variable so a variable from an outer scope with the same name can be used.
-		TRY(declareVariable(name, stmt.start, stmt.end()));
-		if (m_scopes.size() == 0)
-		{
-			const auto constant = m_allocator->allocateStringConstant(name).index;
-			TRY(loadConstant(constant));
-			emitOp(Op::CreateGlobal);
-		}
+		TRY(createVariable(name, stmt.start, stmt.end()));
 
 	}
 	return Status::Ok;
@@ -146,25 +142,20 @@ Compiler::Status Compiler::blockStmt(const BlockStmt& stmt)
 
 Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 {
-	if ((m_scopes.size() > 0) && (m_scopes.back().functionDepth > 0))
-		return errorAt(stmt, "nested functions not allowed"); // declareVariable(stmt.name, stmt.start, stmt.end());
-
-	TRY(declareVariable(stmt.name, stmt.start, stmt.end()));
-
 	const auto [nameConstant, name] = m_allocator->allocateStringConstant(stmt.name);
 	const auto [functionConstant, function] = m_allocator->allocateFunctionConstant(name, static_cast<int>(stmt.arguments.size()));
 	TRY(loadConstant(functionConstant));
-	TRY(loadConstant(nameConstant));
-	emitOp(Op::CreateGlobal);
+	TRY(createVariable(stmt.name, stmt.start, stmt.end()));
 	m_functionByteCodeStack.push_back(&function->byteCode);
+	m_functions.push_back(Function{});
 
 	beginScope();
 	m_scopes.back().functionDepth++;
 
-	for (const auto& argument : stmt.arguments)
+	for (const auto& argumentName : stmt.arguments)
 	{
 		// Could store the token for better error messages about redeclaration.
-		TRY(declareVariable(argument, stmt.start, stmt.end()));
+		TRY(createVariable(argumentName, stmt.start, stmt.end()));
 	}
 
 	TRY(compile(stmt.stmts));
@@ -178,6 +169,26 @@ Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 
 	endScope();
 	m_functionByteCodeStack.pop_back();
+
+	const auto& upvalues = m_functions.back().upvalues;
+	function->upvalueCount = static_cast<int>(upvalues.size());
+	if (upvalues.size() != 0)
+	{
+		emitOp(Op::Closure);
+		if (upvalues.size() > UINT8_MAX)
+		{
+			ASSERT_NOT_REACHED();
+		}
+		emitUint8(static_cast<uint8_t>(upvalues.size()));
+		for (const auto upvalue : upvalues)
+		{
+			
+			emitUint8(static_cast<uint8_t>(upvalue.index));
+			emitUint8(static_cast<uint8_t>(upvalue.isLocal));
+		}
+	}
+
+	m_functions.pop_back();	
 
 	return Status::Ok;
 }
@@ -282,9 +293,10 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 		patch(tryJumpToCatch, static_cast<int32_t>(currentLocation()));
 
 		beginScope();
-		// Always declare a variable so the VM catch doesn't have to handle it as a special case.
+
+		// Declare a variable even if unused so the VM catch doesn't have to handle it as a special case.
 		auto name = stmt.caughtValueName.has_value() ? *stmt.caughtValueName : "";
-		TRY(declareVariable(name, stmt.start, stmt.end()));
+		TRY(createVariable(name, stmt.start, stmt.end()));
 
 		TRY(compile(*stmt.catchBlock));
 
@@ -309,12 +321,12 @@ Compiler::Status Compiler::throwStmt(const ThrowStmt& stmt)
 
 Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 {
-	if ((m_scopes.size() > 0) && (m_scopes.back().functionDepth > 0))
-		return errorAt(stmt, "nested functions not allowed");
+	// If classes outside the global scope were allowed they would need to be created each time the scope is executed.
+	// Creating the class at compile time would require registering it to the GC so it doesn't get deleted.
+	if (m_scopes.size() > 0)
+		return errorAt(stmt, "classes can only be created at global scope");
 
 	const auto [classNameConstant, className] = m_allocator->allocateStringConstant(stmt.name);
-
-	TRY(declareVariable(stmt.name, stmt.start, stmt.end()));
 
 	TRY(loadConstant(classNameConstant));
 	emitOp(Op::CreateClass);
@@ -326,15 +338,16 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 			m_allocator->allocateFunctionConstant(name, static_cast<int>(method->arguments.size() + 1));
 
 		m_functionByteCodeStack.push_back(&function->byteCode);
+		m_functions.push_back(Function{});
 
 		beginScope();
 		m_scopes.back().functionDepth++;
 
-		TRY(declareVariable("$", method->start, method->end()));
+		TRY(createVariable("$", method->start, method->end()));
 		for (const auto& argument : method->arguments)
 		{
 			// Could store the token for better error messages about redeclaration.
-			TRY(declareVariable(argument, stmt.start, stmt.end()));
+			TRY(createVariable(argument, stmt.start, stmt.end()));
 		}
 		TRY(compile(method->stmts));
 
@@ -348,15 +361,17 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 
 		endScope();
 		m_functionByteCodeStack.pop_back();
+		m_functions.pop_back();
 
-		const auto methodNameConstant = m_allocator->allocateStringConstant(method->name).index;
+		const auto methodNameConstant = m_allocator->allocateStringConstant(method->name).constant;
 		TRY(loadConstant(functionConstant));
 		TRY(loadConstant(methodNameConstant));
 		emitOp(Op::StoreMethod);
 	}
 
-	TRY(loadConstant(classNameConstant));
-	emitOp(Op::CreateGlobal);
+	// If I allow classes to be created in local scope then this code needs to change becuase else the class wouldn't
+	// be able to access itself.
+	TRY(createVariable(stmt.name, stmt.start, stmt.end()));
 
 	return Status::Ok;
 }
@@ -370,17 +385,17 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 	switch (expr.get()->type)
 	{
 		CASE_EXPR_TYPE(IntConstant, intConstantExpr)
-			CASE_EXPR_TYPE(FloatConstant, floatConstantExpr)
-			CASE_EXPR_TYPE(BoolConstant, boolConstantExpr)
-			CASE_EXPR_TYPE(Null, nullExpr)
-			CASE_EXPR_TYPE(StringConstant, stringConstantExpr)
-			CASE_EXPR_TYPE(Binary, binaryExpr)
-			CASE_EXPR_TYPE(Unary, unaryExpr)
-			CASE_EXPR_TYPE(Identifier, identifierExpr)
-			CASE_EXPR_TYPE(Call, callExpr)
-			CASE_EXPR_TYPE(Assignment, assignmentExpr)
-			CASE_EXPR_TYPE(Array, arrayExpr)
-			CASE_EXPR_TYPE(GetField, getFieldExpr)
+		CASE_EXPR_TYPE(FloatConstant, floatConstantExpr)
+		CASE_EXPR_TYPE(BoolConstant, boolConstantExpr)
+		CASE_EXPR_TYPE(Null, nullExpr)
+		CASE_EXPR_TYPE(StringConstant, stringConstantExpr)
+		CASE_EXPR_TYPE(Binary, binaryExpr)
+		CASE_EXPR_TYPE(Unary, unaryExpr)
+		CASE_EXPR_TYPE(Identifier, identifierExpr)
+		CASE_EXPR_TYPE(Call, callExpr)
+		CASE_EXPR_TYPE(Assignment, assignmentExpr)
+		CASE_EXPR_TYPE(Array, arrayExpr)
+		CASE_EXPR_TYPE(GetField, getFieldExpr)
 	}
 	m_lineNumberStack.pop_back();
 
@@ -468,7 +483,7 @@ Compiler::Status Compiler::nullExpr(const NullExpr& expr)
 
 Compiler::Status Compiler::stringConstantExpr(const StringConstantExpr& expr)
 {
-	const auto constant = m_allocator->allocateStringConstant(expr.text, expr.length).index;
+	const auto constant = m_allocator->allocateStringConstant(expr.text, expr.length).constant;
 	TRY(loadConstant(constant));
 	return Status::Ok;
 }
@@ -502,23 +517,7 @@ Compiler::Status Compiler::unaryExpr(const UnaryExpr& expr)
 
 Compiler::Status Compiler::identifierExpr(const IdentifierExpr& expr)
 {
-	for (auto it = m_scopes.crbegin(); it != m_scopes.crend(); it++)
-	{
-		const auto& scope = *it;
-		const auto local = scope.localVariables.find(expr.identifier);
-		if (local != scope.localVariables.end())
-		{
-			emitOp(Op::LoadLocal);
-			emitUint32(local->second.index);
-			return Status::Ok;
-		}
-	}
-
-	const auto constant = m_allocator->allocateStringConstant(expr.identifier).index;
-	TRY(loadConstant(constant));
-	emitOp(Op::LoadGlobal);
-
-	return Status::Ok;
+	return variable(expr.identifier, VariableOp::Get);
 }
 
 Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
@@ -535,28 +534,14 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 	if (expr.lhs->type == ExprType::Identifier)
 	{
 		const auto lhs = static_cast<IdentifierExpr&>(*expr.lhs.get()).identifier;
-
-		for (auto it = m_scopes.crbegin(); it != m_scopes.crend(); it++)
-		{
-			const auto& scope = *it;
-			const auto local = scope.localVariables.find(lhs);
-			if (local != scope.localVariables.end())
-			{
-				emitOp(Op::SetLocal);
-				emitUint32(local->second.index);
-				return Status::Ok;
-			}
-		}
-		const auto constant = m_allocator->allocateStringConstant(lhs).index;
-		TRY(loadConstant(constant));
-		emitOp(Op::SetGlobal);
+		TRY(variable(lhs, VariableOp::Set));
 		return Status::Ok;
 	}
 	else if (expr.lhs->type == ExprType::GetField)
 	{
 		const auto lhs = static_cast<GetFieldExpr*>(expr.lhs.get());
 		TRY(compile(lhs->lhs));
-		const auto fieldNameConstant = m_allocator->allocateStringConstant(lhs->fieldName).index;
+		const auto fieldNameConstant = m_allocator->allocateStringConstant(lhs->fieldName).constant;
 		TRY(loadConstant(fieldNameConstant));
 		emitOp(Op::SetProperty);
 		return Status::Ok;
@@ -594,16 +579,20 @@ Compiler::Status Compiler::arrayExpr(const ArrayExpr& expr)
 Compiler::Status Compiler::getFieldExpr(const GetFieldExpr& expr)
 {
 	TRY(compile(expr.lhs));
-	auto fieldNameConstant = m_allocator->allocateStringConstant(expr.fieldName).index;
+	auto fieldNameConstant = m_allocator->allocateStringConstant(expr.fieldName).constant;
 	TRY(loadConstant(fieldNameConstant));
 	emitOp(Op::GetProperty);
 	return Status::Ok;
 }
 
-Compiler::Status Compiler::declareVariable(std::string_view name, size_t start, size_t end)
+Compiler::Status Compiler::createVariable(std::string_view name, size_t start, size_t end)
 {
 	if (m_scopes.size() == 0)
+	{
+		TRY(loadConstant(m_allocator->allocateStringConstant(name).constant));
+		emitOp(Op::CreateGlobal);
 		return Status::Ok;
+	}
 
 	auto& locals = m_scopes.back().localVariables;
 	auto variable = locals.find(name);
@@ -620,8 +609,100 @@ Compiler::Status Compiler::declareVariable(std::string_view name, size_t start, 
 			break;
 		localsCount += scope->localVariables.size();
 	}
-	locals[name] = Local{ static_cast<uint32_t>(localsCount) };
+	locals[name] = Local{ static_cast<uint32_t>(localsCount), false };
 
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::variable(std::string_view name, VariableOp op)
+{
+	for (auto it = m_scopes.rbegin(); it != m_scopes.rend(); it++)
+	{
+		auto& scope = *it;
+		auto local = scope.localVariables.find(name);
+		if (local != scope.localVariables.end())
+		{
+			auto& variable = local->second;
+			if (scope.functionDepth != m_scopes.back().functionDepth)
+			{
+				variable.isCaptured = true;
+
+				//m_functions[scope.functionDepth].upvalues.push_back(Upvalue{ variable.index, true });
+				auto depth = scope.functionDepth + 1;
+
+				auto& localUpvalues = m_functions[depth].upvalues;
+				auto lastIndex = localUpvalues.size();
+				for (size_t i = 0; i < localUpvalues.size(); i++)
+				{
+					if ((localUpvalues[i].index == variable.index) && (localUpvalues[i].isLocal == true))
+					{
+						lastIndex = i;
+						break;
+					}
+				}
+				if (lastIndex == localUpvalues.size())
+				{
+					localUpvalues.push_back(Upvalue{ variable.index, true });
+				}
+				depth++;
+
+				for (; depth < m_functions.size(); depth++)
+				{
+					auto& upvalues = m_functions[depth].upvalues;
+					auto newLastIndex = upvalues.size();
+					for (size_t i = 0; i < upvalues.size(); i++)
+					{
+						if ((upvalues[i].index == lastIndex))
+						{
+							newLastIndex = i;
+							break;
+						}
+					}
+					if (newLastIndex == upvalues.size())
+					{
+						upvalues.push_back(Upvalue{ newLastIndex, false });
+					}
+
+					lastIndex = newLastIndex;
+				}
+
+				if (op == VariableOp::Set)
+				{
+					emitOp(Op::SetUpvalue);
+				}
+				else if (op == VariableOp::Get)
+				{
+					emitOp(Op::LoadUpvalue);
+				}
+				emitUint32(static_cast<uint32_t>(lastIndex));
+			}
+			else
+			{
+				if (op == VariableOp::Set)
+				{
+					emitOp(Op::SetLocal);
+				}
+				else if (op == VariableOp::Get)
+				{
+					emitOp(Op::LoadLocal);
+				}
+				emitUint32(static_cast<uint32_t>(local->second.index));
+			}
+			
+			return Status::Ok;
+		}
+	}
+
+	const auto constant = m_allocator->allocateStringConstant(name).constant;
+	TRY(loadConstant(constant));
+	if (op == VariableOp::Set)
+	{
+		emitOp(Op::SetGlobal);
+	}
+	else if (op == VariableOp::Get)
+	{
+		emitOp(Op::LoadGlobal);
+	}
 	return Status::Ok;
 }
 
@@ -654,6 +735,13 @@ Compiler::Status Compiler::emitOpArg(Op op, size_t arg, size_t start, size_t end
 	emitOp(op);
 	emitUint32(static_cast<uint32_t>(arg));
 	return Status::Ok;
+}
+
+void Compiler::emitUint8(uint8_t value)
+{
+	auto& code = currentByteCode();
+	code.code.push_back(value);
+	code.lineNumberAtOffset.push_back(m_lineNumberStack.back());
 }
 
 void Compiler::emitUint32(uint32_t value)
@@ -720,10 +808,22 @@ void Compiler::beginScope()
 void Compiler::endScope()
 {
 	ASSERT(m_scopes.size() > 0);
-	for (size_t _ = 0; _ < m_scopes.back().localVariables.size(); _++)
+
+	// No need to pop the values if the function return pops them.
+	if ((m_scopes.back().functionDepth == 0)
+		|| ((m_scopes.size() > 1) && (m_scopes.back().functionDepth == (&m_scopes.back())[-1].functionDepth)))
 	{
-		emitOp(Op::PopStack);
+		for (const auto& [_, local] : m_scopes.back().localVariables)
+		{
+			emitOp(Op::PopStack);
+			if (local.isCaptured)
+			{
+				emitOp(Op::CloseUpvalue);
+				emitUint8(static_cast<uint8_t>(local.index));
+			}
+		}
 	}
+
 	m_scopes.pop_back();
 }
 
