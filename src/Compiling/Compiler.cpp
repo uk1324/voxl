@@ -1,5 +1,3 @@
-#include "Compiler.hpp"
-#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -597,14 +595,14 @@ Compiler::Status Compiler::createVariable(std::string_view name, size_t start, s
 	}
 
 	auto& locals = m_scopes.back().localVariables;
-	auto variable = locals.find(name);
+	const auto variable = locals.find(name);
 	if (variable != locals.end())
 	{
 		return errorAt(start, end, "redeclaration of variable '%.*s'", name.size(), name.data());
 	}
 	// TODO: Make this better maybe change scopes to store the count or maybe store it with a local.
 	size_t localsCount = 0;
-	auto functionDepth = m_scopes.back().functionDepth;
+	const auto functionDepth = m_scopes.back().functionDepth;
 	for (auto scope = m_scopes.crbegin(); scope != m_scopes.crend(); scope++)
 	{
 		if (scope->functionDepth != functionDepth)

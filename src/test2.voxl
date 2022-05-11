@@ -1,27 +1,4 @@
-fn print_range(f, start, end) {
-	if start > end {
-		ret;
-	}
-	current : start;
-	while current <= end {
-		print(f(current) ++ " ");
-		current += 1;
-	}
-	print("\n");
+{
+	2 +;
+	2 -;
 }
-
-|| {
-	print_range(|x| x * x, 0, 10);
-	print_range(|x| { 
-		if x <= 1 {
-			ret 1;
-		}
-		result : 2;
-		i : 3;
-		while i <= x {
-			result *= i;
-			i += 1;
-		}
-		ret result;
-	}, 0, 10);
-}();

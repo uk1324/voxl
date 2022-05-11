@@ -103,7 +103,14 @@ std::unique_ptr<Stmt> Parser::blockStmt()
 	StmtList stmts;
 	while ((isAtEnd() == false) && (match(TokenType::RightBrace) == false))
 	{
-		stmts.push_back(stmt());
+		try 
+		{
+			stmts.push_back(stmt());
+		}
+		catch (const ParsingError& error)
+		{
+			synchronize();
+		}
 	}
 
 	return std::make_unique<BlockStmt>(std::move(stmts), start, peekPrevious().end);
@@ -286,7 +293,14 @@ std::vector<std::unique_ptr<Stmt>> Parser::block()
 	StmtList stmts;
 	while ((isAtEnd() == false) && (match(TokenType::RightBrace) == false))
 	{
-		stmts.push_back(stmt());
+		try 
+		{
+			stmts.push_back(stmt());
+		}
+		catch (const ParsingError& error)
+		{
+			synchronize();
+		}
 	}
 	return stmts;
 }
@@ -486,9 +500,9 @@ std::unique_ptr<Expr> Parser::primary()
 				expect(TokenType::Identifier, "expected argument name");
 				arguments.push_back(peekPrevious().identifier);
 			} while (match(TokenType::Comma));
-		}
-		if (arguments.size() != 0)
 			expect(TokenType::Or, "expected '|'");
+
+		}
 
 		if (check(TokenType::LeftBrace) == false)
 		{
@@ -508,7 +522,6 @@ std::unique_ptr<Expr> Parser::primary()
 		auto stmts = block();
 		return std::make_unique<LambdaExpr>(std::move(arguments), std::move(stmts), start, peekPrevious().end);
 	}
-	// TODO: Check if this error location is good or should it maybe be token.
 	throw errorAt(peek(), "expected expression");
 }
 
@@ -569,6 +582,8 @@ void Parser::synchronize()
 		switch (peek().type)
 		{
 			case TokenType::Semicolon:
+				advance();
+				[[fallthrough]];
 			case TokenType::Class:
 			case TokenType::Try:
 			case TokenType::Throw:
