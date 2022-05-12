@@ -64,8 +64,7 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return throwStmt();
 	else
 	{
-		if (check(TokenType::Identifier)
-			&& ((peekNext().type == TokenType::Semicolon)) || (peekNext().type == TokenType::Colon) || (peekNext().type == TokenType::Comma))
+		if (check(TokenType::Identifier) && (peekNext().type == TokenType::Colon))
 		{
 			return variableDeclarationStmt();
 		}
@@ -217,12 +216,10 @@ std::unique_ptr<Stmt> Parser::tryStmt()
 	expect(TokenType::Catch, "expected catch block");
 
 	std::optional<std::string_view> caughtValueName;
-	if (match(TokenType::LeftParen))
+	if (check(TokenType::LeftBrace) == false)
 	{
 		expect(TokenType::Identifier, "expected caught value name");
-		// TODO if (peek().type == TokenType::RightParen) hint("to ignore the caught value remove the parens");
 		caughtValueName = peekPrevious().identifier;
-		expect(TokenType::RightParen, "expected ')'");
 	}
 	auto catchBlock = block();
 

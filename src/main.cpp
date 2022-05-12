@@ -53,14 +53,6 @@ Value print2(Value* args, int argCount)
 }
 
 //NativeFunctionResult add(Value* args, int argCount, Vm& vm, Allocator& allocator)
-VOXL_NATIVE_FN(add)
-{
-	if ((args[0].type != ValueType::Int) || (args[1].type != ValueType::Int))
-	{
-		return NativeFunctionResult::exception(Value(Int(5)));
-	}
-	return Value(args[0].as.intNumber + args[1].as.intNumber);
-}
 
 // TODO: Function shouldn't call end scope because it pops all the values off the stack. This is pointless
 // because the function return will pop them anyway.
@@ -102,6 +94,15 @@ VOXL_NATIVE_FN(add)
 
 // Maybe add elif
 
+VOXL_NATIVE_FN(add)
+{
+	if ((args[0].type != ValueType::Int) || (args[1].type != ValueType::Int))
+	{
+		return NativeFunctionResult::exception(Value(Int(5)));
+	}
+	return Value(args[0].as.intNumber + args[1].as.intNumber);
+}
+
 int main()
 {
 
@@ -135,7 +136,7 @@ int main()
 	if (compilerResult.hadError == false)
 	{
 		auto vm = std::make_unique<Vm>(allocator);
-		//vm->defineNativeFunction("add", add, 2);
+		vm->defineNativeFunction("add", add, 2);
 		auto result = vm->execute(compilerResult.program, errorPrinter);
 	}
 }
