@@ -533,7 +533,7 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 		TRY(compile(lhs->lhs));
 		const auto fieldNameConstant = m_allocator->allocateStringConstant(lhs->fieldName).constant;
 		TRY(loadConstant(fieldNameConstant));
-		emitOp(Op::SetProperty);
+		emitOp(Op::SetField);
 		return Status::Ok;
 	}
 
@@ -581,7 +581,7 @@ Compiler::Status Compiler::getFieldExpr(const GetFieldExpr& expr)
 	TRY(compile(expr.lhs));
 	auto fieldNameConstant = m_allocator->allocateStringConstant(expr.fieldName).constant;
 	TRY(loadConstant(fieldNameConstant));
-	emitOp(Op::GetProperty);
+	emitOp(Op::GetField);
 	return Status::Ok;
 }
 

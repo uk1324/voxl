@@ -51,8 +51,8 @@ namespace Lang
 		Jump,
 		JumpBack, // 
 		CreateClass, // name
-		GetProperty, // instance name
-		SetProperty, // [rhs instance name]
+		GetField, // instance name
+		SetField, // [rhs instance name]
 		StoreMethod, // [class function name]
 		TryBegin, // absolute jump to catch stmt.
 		TryEnd,

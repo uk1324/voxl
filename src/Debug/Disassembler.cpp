@@ -119,8 +119,8 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::TryBegin: return opNumber("tryBegin", byteCode, offset);
 		case Op::TryEnd: return justOp("tryEnd");
 		case Op::CreateClass: return justOp("createClass");
-		case Op::GetProperty: return justOp("getProperty");
-		case Op::SetProperty: return justOp("setProperty");
+		case Op::GetField: return justOp("getProperty");
+		case Op::SetField: return justOp("setProperty");
 		case Op::StoreMethod: return justOp("storeMethod");
 		case Op::Concat: return justOp("concat");
 		case Op::Equals: return justOp("equals");

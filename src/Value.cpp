@@ -125,10 +125,6 @@ std::ostream& operator<< (std::ostream& os, Lang::Obj* obj)
 			break;
 		}
 
-		case ObjType::Allocation:
-			os << "<memory*>";
-			break;
-
 		case ObjType::Class:
 		{
 			auto class_ = obj->asClass();
@@ -178,11 +174,6 @@ bool operator==(const Value& lhs, const Value& rhs)
 			ASSERT_NOT_REACHED();
 			return false;
 	}
-}
-
-void* ObjAllocation::data()
-{
-	return reinterpret_cast<char*>(this) + sizeof(ObjAllocation);
 }
 
 bool Obj::isString()
@@ -240,17 +231,6 @@ ObjNativeFunction* Obj::asForeignFunction()
 	return reinterpret_cast<ObjNativeFunction*>(this);
 }
 
-bool Obj::isAllocation()
-{
-	return type == ObjType::Allocation;
-}
-
-ObjAllocation* Obj::asAllocation()
-{
-	ASSERT(isAllocation());
-	return reinterpret_cast<ObjAllocation*>(this);
-}
-
 bool Obj::isClass()
 {
 	return type == ObjType::Class;
@@ -267,10 +247,10 @@ bool Obj::isInstance()
 	return type == ObjType::Instance;
 }
 
-ObjInstanceHead* Obj::asInstance()
+ObjInstance* Obj::asInstance()
 {
 	ASSERT(isInstance());
-	return reinterpret_cast<ObjInstanceHead*>(this);
+	return reinterpret_cast<ObjInstance*>(this);
 }
 
 bool Obj::isBoundFunction()

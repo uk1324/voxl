@@ -106,7 +106,7 @@ std::unique_ptr<Stmt> Parser::blockStmt()
 		{
 			stmts.push_back(stmt());
 		}
-		catch (const ParsingError& error)
+		catch (const ParsingError&)
 		{
 			synchronize();
 		}

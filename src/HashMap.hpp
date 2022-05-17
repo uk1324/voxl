@@ -18,9 +18,6 @@ struct KeyTraits
 namespace Lang
 {
 
-class Allocator;
-struct ObjAllocation;
-
 template<typename Key, typename Value, typename KeyTraits>
 class HashMap
 {
@@ -32,8 +29,8 @@ public:
 	};
 
 public:
-	static void init(HashMap& map);
-	bool insert(Allocator& allocator, const Key& key, Value value);
+	HashMap();
+	bool set(const Key& key, Value value);
 	bool remove(const Key& key);
 	std::optional<Value*> get(const Key& key);
 	Bucket& findBucket(const Key& key);
@@ -50,38 +47,32 @@ public:
 private:
 	void setAllKeysToNull();
 
-public:
-	ObjAllocation* allocation;
 private:
+	Bucket* m_data;
+	size_t m_capacity;
 	size_t m_size;
 };
 
 }
 
-#include <Allocator.hpp>
-
 template<typename Key, typename Value, typename KeyTraits>
-void Lang::HashMap<Key, Value, KeyTraits>::init(HashMap& map)
+Lang::HashMap<Key, Value, KeyTraits>::HashMap()
 {
-	map.allocation = nullptr;
-	map.m_size = 0;
-	// Cannot allocate an initial size becuase the GC might run and update the pointers on the stack.
-	// This map would still refer to the old instance and the new instance would be left in an invalid state.
-	// It may be possible way to fix this by setting allocation to nullptr and the size to zero 
-	// before doing the allocation so even if the GC happens the new one will copy the old ones valid state.
-	// TODO: A better way to fix this would be to merge the allocation for the instance and the hash map.
-	// This would allow to remove the nullptr checks in other HashMap functions.
+	m_size = 0;
+	m_capacity = 0;
+	m_data = nullptr;
 }
 
 template<typename Key, typename Value, typename KeyTraits>
-bool Lang::HashMap<Key, Value, KeyTraits>::insert(Allocator& allocator, const Key& newKey, Value newValue)
+bool Lang::HashMap<Key, Value, KeyTraits>::set(const Key& newKey, Value newValue)
 {
-	if ((allocation == nullptr) || ((static_cast<float>(m_size + 1) / static_cast<float>(capacity())) > MAX_LOAD_FACTOR))
+	if ((static_cast<float>(m_size + 1) / static_cast<float>(m_capacity)) > MAX_LOAD_FACTOR)
 	{
-		const auto oldData = (allocation == nullptr) ? nullptr : data();
-		const auto oldCapacity = (allocation == nullptr) ? 0 : capacity();
-		auto newCapacity = (allocation == nullptr) ? INITIAL_SIZE : capacity() * 2;
-		allocation = allocator.allocateRawMemory(sizeof(Bucket) * newCapacity);
+		const auto oldData = m_data;
+		const auto oldCapacity = m_capacity;
+		m_capacity = (m_data == nullptr) ? INITIAL_SIZE : capacity() * 2;
+		m_data = reinterpret_cast<Bucket*>(::operator new(sizeof(Bucket) * m_capacity));
+		m_size = 0;
 		setAllKeysToNull();
 
 		for (size_t i = 0; i < oldCapacity; i++)
@@ -89,13 +80,13 @@ bool Lang::HashMap<Key, Value, KeyTraits>::insert(Allocator& allocator, const Ke
 			const auto& [key, value] = oldData[i];
 			if ((KeyTraits::isKeyNull(key) == false) && (KeyTraits::isKeyTombstone(key) == false))
 			{
-				insert(allocator, key, value);
+				set(key, value);
 			}
 		}
 	}
 
 	auto& bucket = findBucket(newKey);
-	bool wasNotAlreadySet = isBucketEmpty(bucket);
+	const auto wasNotAlreadySet = isBucketEmpty(bucket);
 	if (wasNotAlreadySet)
 		m_size++;
 
@@ -121,9 +112,8 @@ bool Lang::HashMap<Key, Value, KeyTraits>::remove(const Key& key)
 template<typename Key, typename Value, typename KeyTraits>
 std::optional<Value*> Lang::HashMap<Key, Value, KeyTraits>::get(const Key& key)
 {
-	if (allocation == nullptr)
+	if (m_size == 0)
 		return std::nullopt;
-
 	auto& bucket = findBucket(key);
 	if (KeyTraits::isKeyNull(bucket.key) || KeyTraits::isKeyTombstone(bucket.key))
 	{
@@ -135,7 +125,7 @@ std::optional<Value*> Lang::HashMap<Key, Value, KeyTraits>::get(const Key& key)
 template<typename Key, typename Value, typename KeyTraits>
 typename Lang::HashMap<Key, Value, KeyTraits>::Bucket& Lang::HashMap<Key, Value, KeyTraits>::findBucket(const Key& key)
 {
-	auto index = KeyTraits::hashKey(key) % capacity();
+	auto index = KeyTraits::hashKey(key) % m_capacity;
 	
 	Bucket* grave = nullptr;
 
@@ -182,7 +172,7 @@ void Lang::HashMap<Key, Value, KeyTraits>::print()
 template<typename Key, typename Value, typename KeyTraits>
 typename Lang::HashMap<Key, Value, KeyTraits>::Bucket* Lang::HashMap<Key, Value, KeyTraits>::data()
 {
-	return reinterpret_cast<Bucket*>(allocation->data());
+	return m_data;
 }
 
 template<typename Key, typename Value, typename KeyTraits>
@@ -198,9 +188,7 @@ void Lang::HashMap<Key, Value, KeyTraits>::clear()
 template<typename Key, typename Value, typename KeyTraits>
 size_t Lang::HashMap<Key, Value, KeyTraits>::capacity() const
 {
-	return (allocation == nullptr)
-		? 0
-		: allocation->size / sizeof(Bucket);
+	return m_capacity;
 }
 
 template<typename Key, typename Value, typename KeyTraits>

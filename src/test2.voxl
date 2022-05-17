@@ -1,1 +1,18 @@
-print(add(1, 2));
+n : 50;
+i : 2;
+while i < n {
+	j : 2;
+	isPrime : true;
+	while j < i {
+		if (i % j) == 0 {
+			isPrime = false;
+			break;
+		}
+		j += 1;
+	}
+	
+	if isPrime {
+		print(i ++ " ");
+	}
+	i += 1;
+}

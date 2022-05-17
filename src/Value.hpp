@@ -2,6 +2,7 @@
 
 #include <ByteCode.hpp>
 #include <KeyTraits.hpp>
+#include <HashMap.hpp>
 #include <ostream>
 
 namespace Lang
@@ -14,7 +15,6 @@ enum class ObjType
 	Closure,
 	Upvalue,
 	ForeignFunction,
-	Allocation,
 	Class,
 	Instance,
 	BoundFunction,
@@ -25,20 +25,19 @@ struct ObjFunction;
 struct ObjClosure;
 struct ObjUpvalue;
 struct ObjNativeFunction;
-struct ObjAllocation;
 struct ObjClass;
-struct ObjInstanceHead;
+//struct ObjInstanceHead;
+struct ObjInstance;
 struct ObjBoundFunction;
 
 class Allocator;
 using MarkingFunction = void (*)(void*, Allocator&);
-using UpdateFunction = void (*)(void*, void*, Allocator&);
 
 struct Obj
 {
 	ObjType type;
 	Obj* next; // nullptr if it is the newest allocation
-	Obj* newLocation; // nullptr if value hasn't been copied to the other region.
+	bool isMarked;
 
 	// TODO maybe inline these.
 	bool isString();
@@ -51,12 +50,10 @@ struct Obj
 	ObjUpvalue* asUpvalue();
 	bool isForeignFunction();
 	ObjNativeFunction* asForeignFunction();
-	bool isAllocation();
-	ObjAllocation* asAllocation();
 	bool isClass();
 	ObjClass* asClass();
 	bool isInstance();
-	ObjInstanceHead* asInstance();
+	ObjInstance* asInstance();
 	bool isBoundFunction();
 	ObjBoundFunction* asBoundFunction();
 };
@@ -77,13 +74,6 @@ struct ObjFunction
 	int argCount;
 	ByteCode byteCode;
 	int upvalueCount;
-};
-
-struct ObjAllocation
-{
-	Obj obj;
-	size_t size;
-	void* data();
 };
 
 enum class ValueType
@@ -150,13 +140,6 @@ private:
 	NativeFunctionResult() = default;
 };
 
-}
-
-#include <HashMap.hpp>
-
-namespace Lang
-{
-
 class Vm;
 class Alloactor;
 #define VOXL_NATIVE_FN(name) NativeFunctionResult name(Value* args, int argCount, Vm& vm, Allocator& allocator)
@@ -178,16 +161,20 @@ struct ObjClass
 	ObjString* name;
 	HashTable fields;
 	
-	size_t instanceSize;
 	MarkingFunction mark;
-	UpdateFunction update;
 };
 
-struct ObjInstanceHead
+struct ObjInstance
 {
 	Obj obj;
 	ObjClass* class_;
+	HashTable fields;
 };
+
+//struct ObjInstanceHead
+//{
+//	Obj obj;
+//	ObjClass* class_;
 
 struct ObjBoundFunction
 {

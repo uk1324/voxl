@@ -1,5 +1,5 @@
 #include <../test/tests.hpp>
-#include <HashMap.hpp>
+#include <Allocator.hpp>
 
 // TODO: Add tests that check the return value of insert and remove.
 
@@ -7,10 +7,9 @@ using namespace Lang;
 
 #define INIT() \
 	Allocator _a; \
-	HashMap<ObjString*, int, ObjStringKeyTraits> _m;  \
-	_m.init(_m);
+	HashMap<ObjString*, int, ObjStringKeyTraits> _m; \
 
-#define PUT(k, v) _m.insert(_a, _a.allocateString(k), v)
+#define PUT(k, v) _m.set(_a.allocateString(k), v)
 #define GET(k) (_m.get(_a.allocateString(k)))
 #define DEL(k) (_m.remove(_a.allocateString(k)))
 

@@ -13,12 +13,6 @@ namespace Lang
 // Could just store the constant pool inside the allocator.
 // Consants would also need to store the GcNode they could set newLocation that just points to itself so updating pointers works.
 
-template<typename Key, typename Value, typename KeyTraits>
-class HashMap;
-class Vm;
-using HashTable = HashMap<ObjString*, Value, ObjStringKeyTraits>;
-using NativeFunction = NativeFunctionResult(*)(Value* /*arguments*/, int /*argumentCount*/, Vm&, Allocator&);
-
 class Allocator
 {
 public:
@@ -39,23 +33,6 @@ private:
 		size_t id;
 	};
 
-public:
-	struct UpdateFunctionHandle
-	{
-		~UpdateFunctionHandle();
-
-		Allocator& allocator;
-		size_t id;
-	};
-
-private:
-	struct UpdateFunctionEntry
-	{
-		UpdateFunction function;
-		void* data;
-		size_t id;
-	};
-
 private:
 	// Not sure if I should put the Node inside the Obj struct. Having the struct seperate from the Obj makes it possible to choose a GC at
 	// runtime. But there are many differences between different collectors. A simple mark and sweep doesn't need to update pointers.
@@ -68,22 +45,18 @@ public:
 	template<typename T>
 	MarkingFunctionHandle registerMarkingFunction(T* data, void (*function)(T*, Allocator&));
 	void unregisterMarkingFunction(size_t id);
-	template<typename T>
-	UpdateFunctionHandle registerUpdateFunction(T* data, void (*function)(T*));
-	void unregisterUpdateFunction(size_t id);
 
 	Obj* allocateObj(size_t size, ObjType type);
 
 	// Function allocating constants should return const Obj because they shouldn't be marked.
-	ObjAllocation* allocateRawMemory(size_t size);
 	ObjString* allocateString(std::string_view chars);
 	ObjString* allocateString(std::string_view chars, size_t length);
 	ObjFunction* allocateFunction(ObjString* name, int argCount);
 	ObjClosure* allocateClosure(ObjFunction* function);
 	ObjUpvalue* allocateUpvalue(Value* localVariable);
 	ObjNativeFunction* allocateForeignFunction(ObjString* name, NativeFunction function, int argCount);
-	ObjClass* allocateClass(ObjString* name, size_t instanceSize, MarkingFunction mark, UpdateFunction update);
-	ObjInstanceHead* allocateInstance(ObjClass* class_);
+	ObjClass* allocateClass(ObjString* name, MarkingFunction mark);
+	ObjInstance* allocateInstance(ObjClass* class_);
 	ObjBoundFunction* allocateBoundFunction(ObjFunction* function, const Value& value);
 
 	struct StringConstant
@@ -107,43 +80,20 @@ public:
 	void addObj(Obj* obj);
 	void addValue(Value& value);
 	void addHashTable(HashTable& hashTable);
-	static void updateHashTable(HashTable& hashTable);
-	static void updateValue(Value& value);
-	static Obj* newObjLocation(Obj* value);
 	const Value& getConstant(size_t id) const;
 
-	void copyToNewLocation(HashTable& newTable, HashTable& oldTable);
-
 private:
-	static uint8_t* alignUp(uint8_t* ptr, size_t alignment);
-	static void setMarked(Obj* obj);
-	static bool isMarked(Obj* obj);
-	static bool hasBeenMoved(Obj* obj);
-
 	void markObj(Obj* obj);
-	Obj* copyToNewLocation(Obj* obj);
 	void freeObj(Obj* obj);
 
 private:
 	Obj* m_tail;
 	Obj* m_head;
 
-	uint8_t* m_region1;
-	size_t m_region1Size;
-	uint8_t* m_region2;
-	size_t m_region2Size;
-
-	uint8_t* m_nextAllocation;
-
 	std::vector<MarkingFunctionEntry> m_markingFunctions;
-	std::vector<UpdateFunctionEntry> m_updateFunctions;
 	
-	size_t m_allocationThatTriggeredGcSize;
 	// A stack is used instread of recursion to avoid stack overflow.
 	std::vector<Obj*> m_markedObjs;
-	size_t m_markedMemorySize;
-
-	static constexpr size_t ALIGNMENT = 8;
 
 	std::vector<Value> m_constants;
 
@@ -183,20 +133,4 @@ Lang::Allocator::MarkingFunctionHandle Lang::Allocator::registerMarkingFunction(
 	});
 
 	return MarkingFunctionHandle{ *this, id };
-}
-
-template<typename T>
-Lang::Allocator::UpdateFunctionHandle Lang::Allocator::registerUpdateFunction(T* data, void(*function)(T*))
-{
-	size_t id = m_updateFunctions.empty()
-		? 0
-		: m_updateFunctions.back().id + 1;
-
-	m_updateFunctions.push_back(UpdateFunctionEntry{
-		reinterpret_cast<UpdateFunction>(function),
-		data,
-		id
-	});
-
-	return UpdateFunctionHandle{ *this, id };
 }

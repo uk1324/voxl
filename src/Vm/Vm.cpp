@@ -1,5 +1,4 @@
 #include <Vm/Vm.hpp>
-#include <Vm/VoxlInstance.hpp>
 #include <Utf8.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -18,12 +17,8 @@ Vm::Vm(Allocator& allocator)
 	, m_stackTop(nullptr)
 	, m_callStackSize(0)
 	, m_rootMarkingFunctionHandle(allocator.registerMarkingFunction(this, mark))
-	, m_updateFunctionHandle(allocator.registerUpdateFunction(this, update))
 {
-	HashTable::init(m_globals);
 	m_initString = m_allocator->allocateStringConstant("$init").value;
-	m_getFieldString = m_allocator->allocateStringConstant("$get_field").value;
-	m_setFieldString = m_allocator->allocateStringConstant("$set_field").value;
 	m_addString = m_allocator->allocateStringConstant("$add").value;
 	m_subString = m_allocator->allocateStringConstant("$sub").value;
 	m_mulString = m_allocator->allocateStringConstant("$mul").value;
@@ -357,7 +352,7 @@ Vm::Result Vm::run()
 			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
 			ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
 			Value value = peekStack(1);
-			bool doesNotAlreadyExist = m_globals.insert(*m_allocator, name, value);
+			bool doesNotAlreadyExist = m_globals.set(name, value);
 			if (doesNotAlreadyExist == false)
 			{
 				return fatalError("redeclaration of '%s'", name->chars);
@@ -385,7 +380,7 @@ Vm::Result Vm::run()
 			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
 			ObjString* name = reinterpret_cast<ObjString*>(peekStack(0).as.obj);
 			Value value = peekStack(1);
-			bool doesNotAlreadyExist = m_globals.insert(*m_allocator, name, value);
+			bool doesNotAlreadyExist = m_globals.set(name, value);
 			if (doesNotAlreadyExist)
 			{
 				m_errorPrinter->outStream() << '\'' << name->chars << "' is not defined\n";
@@ -561,119 +556,90 @@ Vm::Result Vm::run()
 
 			ASSERT((nameValue.type == ValueType::Obj) && (nameValue.as.obj->isString()));
 			auto name = nameValue.as.obj->asString();
-			auto class_ = m_allocator->allocateClass(name, sizeof(VoxlInstance), (MarkingFunction)VoxlInstance::mark, (UpdateFunction)VoxlInstance::update);
-			class_->fields.insert(*m_allocator, m_getFieldString, Value(reinterpret_cast<Obj*>(m_allocator->allocateForeignFunction(m_getFieldString, VoxlInstance::get_field, 2))));
-			class_->fields.insert(*m_allocator, m_setFieldString, Value(reinterpret_cast<Obj*>(m_allocator->allocateForeignFunction(m_setFieldString, VoxlInstance::set_field, 3))));
+			auto class_ = m_allocator->allocateClass(name, nullptr);
 			popStack();
-			class_->name = name;
 			pushStack(Value(reinterpret_cast<Obj*>(class_)));
 			break;
 		}
 
-		case Op::GetProperty:
+		case Op::GetField:
 		{
-			auto fieldNameValue = peekStack(0);
-			ASSERT(fieldNameValue.as.obj->isString());
-			auto fieldName = fieldNameValue.as.obj->asString();
+			auto fieldName = peekStack(0).as.obj->asString();
 			auto lhs = peekStack(1);
+
+			if (auto class_ = getClassOrNullptr(lhs); class_ != nullptr)
+			{
+				if (auto function = class_->fields.get(fieldName); 
+					function.has_value() && (*function)->isObj() && (*function)->as.obj->isFunction())
+				{
+					auto boundFunction = m_allocator->allocateBoundFunction((*function)->as.obj->asFunction(), lhs);
+					popStack();
+					popStack();
+					pushStack(Value(reinterpret_cast<Obj*>(boundFunction)));
+					break;
+				}
+			}
+
 			if ((lhs.isObj() == false))
 			{
-				return fatalError("can only use field access operator on objects");
+				return fatalError("type has no field '%s'", fieldName->chars);
 			}
+
 			auto obj = lhs.as.obj;
+			popStack();
+			popStack();
 			if (obj->isInstance())
 			{
-				auto instance = obj->asInstance();
-				auto optMethod = instance->class_->fields.get(fieldName);
-				if (optMethod.has_value())
+				if (auto value = obj->asInstance()->fields.get(fieldName); value.has_value())
 				{
-					ASSERT((*optMethod)->isObj());
-					ASSERT((*optMethod)->as.obj->type == ObjType::Function);
-					auto function = reinterpret_cast<ObjFunction*>((*optMethod)->as.obj);
-					auto method = m_allocator->allocateBoundFunction(function, lhs);
-					popStack();
-					popStack();
-					pushStack(Value(reinterpret_cast<Obj*>(method)));
+					pushStack(**value);
 				}
 				else
 				{
-					auto optResult = instance->class_->fields.get(m_getFieldString);
-					if (optResult.has_value())
-					{
-						if (callValue(**optResult, 2, 0) == Result::RuntimeError)
-						{
-							return fatalError("call failed");
-						}
-					}
-					else
-					{
-						// TODO Maybe don't allow access of non existent fields. Then I would have to add a special method for checking
-						// if the field exists.
-						popStack();
-						popStack();
-						pushStack(Value::null());
-					}
+					pushStack(Value::null());
 				}
+				break;
 			}
 			else if (obj->isClass())
 			{
-				auto class_ = obj->asClass();
-				auto optResult = class_->fields.get(fieldName);
-				popStack();
-				popStack();
-				if (optResult.has_value())
+				if (auto value = obj->asClass()->fields.get(fieldName); value.has_value())
 				{
-					pushStack(**optResult);
+					pushStack(**value);
 				}
 				else
 				{
-					// TODO Maybe don't allow access of non existent fields. Then I would have to add a special method for checking
-					// if the field exists.
 					pushStack(Value::null());
 				}
+				break;
 			}
-			else
-			{
-				return fatalError("cannot use field access operator on this kind of object");
-			}
+			
 			break;
 		}
 
-		case Op::SetProperty:
+		case Op::SetField:
 		{
-			auto fieldNameValue = peekStack(0);
-			ASSERT(fieldNameValue.as.obj->isString());
-			auto fieldName = fieldNameValue.as.obj->asString();
+			auto fieldName = peekStack(0).as.obj->asString();
 			auto lhs = peekStack(1);
 			auto rhs = peekStack(2);
 			if ((lhs.isObj() == false))
 			{
-				return fatalError("can only use field access operator on objects");
+				return fatalError("cannot use field access on this type");
 			}
 			auto obj = lhs.as.obj;
+			popStack();
+			popStack();
 			if (obj->isInstance())
 			{
-				auto instance = obj->asInstance();
-				auto optSetField = instance->class_->fields.get(m_setFieldString);
-				if (optSetField.has_value())
-				{
-					if (callValue(**optSetField, 3, 0) == Result::RuntimeError)
-					{
-						return fatalError("call failed");
-					}
-				}
+				obj->asInstance()->fields.set(fieldName, rhs);
+				break;
 			}
 			else if (obj->isClass())
 			{
-				auto class_ = obj->asClass();
-				class_->fields.insert(*m_allocator, fieldName, rhs);
-				popStack();
-				popStack();
+				obj->asClass()->fields.set(fieldName, rhs);
+				break;
 			}
-			else
-			{
-				return fatalError("cannot use field access operator on this kind of object");
-			}
+			
+			return fatalError("cannot use field access on this type");
 			break;
 		}
 
@@ -688,7 +654,10 @@ Vm::Result Vm::run()
 			ASSERT(classValue.isObj());
 			ASSERT(classValue.as.obj->isClass());
 			auto class_ = classValue.as.obj->asClass();
-			class_->fields.insert(*m_allocator, fieldName, methodValue);
+			//std::cout << "before" << '\n';
+			class_->fields.set(fieldName, methodValue);
+			//std::cout << "after" << '\n';
+			//class_->fields.print();;
 			popStack();
 			popStack();
 			break;
@@ -801,7 +770,7 @@ void Vm::defineNativeFunction(std::string_view name, NativeFunction function, in
 {
 	auto nameObj = m_allocator->allocateString(name);
 	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount);
-	m_globals.insert(*m_allocator, nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
+	m_globals.set(nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
 }
 
 uint8_t Vm::readUint8()
@@ -943,7 +912,9 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 		{
 			auto calle = obj->asClass();
 			auto instance = m_allocator->allocateInstance(calle);
+			auto voxlInstance = Value(reinterpret_cast<Obj*>(instance));
 			instance->class_ = calle;
+
 			auto optInitalizer = calle->fields.get(m_initString);
 			ASSERT(numberOfValuesToPopOffExceptArgs == 1);
 			m_stackTop[-argCount - 1] = Value(reinterpret_cast<Obj*>(instance)); // Replace the class with the instance.
@@ -983,6 +954,15 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 	return Result::Success;
 }
 
+ObjClass* Vm::getClassOrNullptr(const Value& value)
+{
+	if (value.isObj() && value.as.obj->isInstance())
+	{
+		return value.as.obj->asInstance()->class_;
+	}
+	return nullptr;
+}
+
 void Vm::mark(Vm* vm, Allocator& allocator)
 {
 	for (auto value = vm->m_stack.data(); value != vm->m_stackTop; value++)
@@ -1000,26 +980,6 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 	for (auto upvalue : vm->m_openUpvalues)
 	{
 		allocator.addObj(reinterpret_cast<Obj*>(upvalue));
-	}
-}
-
-void Vm::update(Vm* vm)
-{
-	for (auto value = vm->m_stack.data(); value != vm->m_stackTop; value++)
-	{
-		Allocator::updateValue(*value);
-	}
-
-	Allocator::updateHashTable(vm->m_globals);
-
-	for (auto frame = vm->m_callStack.data(); frame != &vm->callStackTop() + 1; frame++)
-	{
-		frame->function = reinterpret_cast<ObjFunction*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(frame->function)));
-	}
-
-	for (auto& upvalue : vm->m_openUpvalues)
-	{
-		upvalue = reinterpret_cast<ObjUpvalue*>(Allocator::newObjLocation(reinterpret_cast<Obj*>(upvalue)));
 	}
 }
 

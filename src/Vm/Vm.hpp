@@ -59,10 +59,10 @@ private:
 	const CallFrame& callStackTop() const;
 	Result fatalError(const char* format, ...);
 	Result callValue(Value value, int argCount, int numberOfValuesToPopOffExceptArgs);
+	ObjClass* getClassOrNullptr(const Value& value);
 
 private:
 	static void mark(Vm* vm, Allocator& allocator);
-	static void update(Vm* vm);
 
 public:
 	HashTable m_globals;
@@ -80,8 +80,6 @@ public:
 	std::vector<ObjUpvalue*> m_openUpvalues;
 
 	ObjString* m_initString;
-	ObjString* m_getFieldString;
-	ObjString* m_setFieldString;
 	ObjString* m_addString;
 	ObjString* m_subString;
 	ObjString* m_mulString;
@@ -93,7 +91,6 @@ public:
 	ObjString* m_geString;
 
 	Allocator::MarkingFunctionHandle m_rootMarkingFunctionHandle;
-	Allocator::UpdateFunctionHandle m_updateFunctionHandle;
 };
 
 }
