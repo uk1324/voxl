@@ -8,27 +8,27 @@
 namespace Lang
 {
 
+#define OBJ_TYPE_LIST(macro) \
+	macro(String) \
+	macro(Function) \
+	macro(Closure) \
+	macro(Upvalue) \
+	macro(NativeFunction) \
+	macro(NativeInstance) \
+	macro(Class) \
+	macro(Instance) \
+	macro(BoundFunction)	
+
 enum class ObjType
 {
-	String,
-	Function,
-	Closure,
-	Upvalue,
-	ForeignFunction,
-	Class,
-	Instance,
-	BoundFunction,
+#define COMMA(type) type,
+	OBJ_TYPE_LIST(COMMA)
+#undef COMMA
 };
 
-struct ObjString;
-struct ObjFunction;
-struct ObjClosure;
-struct ObjUpvalue;
-struct ObjNativeFunction;
-struct ObjClass;
-//struct ObjInstanceHead;
-struct ObjInstance;
-struct ObjBoundFunction;
+#define FORWARD_DECLARE(type) struct Obj##type;
+OBJ_TYPE_LIST(FORWARD_DECLARE)
+#undef FORWARD_DECLARE
 
 class Allocator;
 using MarkingFunction = void (*)(void*, Allocator&);
@@ -39,23 +39,20 @@ struct Obj
 	Obj* next; // nullptr if it is the newest allocation
 	bool isMarked;
 
-	// TODO maybe inline these.
-	bool isString();
-	ObjString* asString();
-	bool isFunction();
-	ObjFunction* asFunction();
-	bool isClosure();
-	ObjClosure* asClosure();
-	bool isUpvalue();
-	ObjUpvalue* asUpvalue();
-	bool isForeignFunction();
-	ObjNativeFunction* asForeignFunction();
-	bool isClass();
-	ObjClass* asClass();
-	bool isInstance();
-	ObjInstance* asInstance();
-	bool isBoundFunction();
-	ObjBoundFunction* asBoundFunction();
+#define GENERATE_HELPERS(objType) \
+	bool is##objType() \
+	{ \
+		return type == ObjType::objType; \
+	} \
+	Obj##objType* as##objType() \
+	{ \
+		ASSERT(is##objType()); \
+		return reinterpret_cast<Obj##objType*>(this); \
+	}
+
+	OBJ_TYPE_LIST(GENERATE_HELPERS)
+
+#undef GENERATE_HELPERS
 };
 
 struct ObjString
@@ -142,7 +139,11 @@ private:
 
 class Vm;
 class Alloactor;
-#define VOXL_NATIVE_FN(name) NativeFunctionResult name(Value* args, int argCount, Vm& vm, Allocator& allocator)
+#define VOXL_NATIVE_FN(name) NativeFunctionResult name( \
+	[[maybe_unused]] Value* args, \
+	[[maybe_unused]] int argCount, \
+	[[maybe_unused]] Vm& vm, \
+	[[maybe_unused]] Allocator& allocator)
 using NativeFunction = NativeFunctionResult(*)(Value* /*arguments*/, int /*argumentCount*/, Vm&, Allocator&);
 
 struct ObjNativeFunction
@@ -160,7 +161,8 @@ struct ObjClass
 	Obj obj;
 	ObjString* name;
 	HashTable fields;
-	
+	size_t instanceSize;
+
 	MarkingFunction mark;
 };
 
@@ -171,21 +173,17 @@ struct ObjInstance
 	HashTable fields;
 };
 
-//struct ObjInstanceHead
-//{
-//	Obj obj;
-//	ObjClass* class_;
+struct ObjNativeInstance
+{
+	Obj obj;
+	ObjClass* class_;
+};
 
 struct ObjBoundFunction
 {
 	Obj obj;
-	ObjFunction* function;
+	Obj* callable;
 	Value value;
-};
-
-struct ObjForeignInstance
-{
-	Obj obj;
 };
 
 struct ObjUpvalue

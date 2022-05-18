@@ -118,7 +118,7 @@ std::ostream& operator<< (std::ostream& os, Lang::Obj* obj)
 			break;
 		}
 
-		case ObjType::ForeignFunction:
+		case ObjType::NativeFunction:
 		{
 			const auto function = reinterpret_cast<ObjNativeFunction*>(obj);
 			os << '<' << reinterpret_cast<Obj*>(function->name) << '>';
@@ -139,8 +139,15 @@ std::ostream& operator<< (std::ostream& os, Lang::Obj* obj)
 			break;
 		}
 
+		case ObjType::NativeInstance:
+		{
+			auto instance = obj->asNativeInstance();
+			os << "<native instance of '" << reinterpret_cast<Obj*>(instance->class_->name) << "'>";
+			break;
+		}
+
 		case ObjType::BoundFunction:
-			os << reinterpret_cast<Obj*>(obj->asBoundFunction()->function);
+			os << obj->asBoundFunction()->callable;
 			break;
 
 		case ObjType::Closure:
@@ -174,94 +181,6 @@ bool operator==(const Value& lhs, const Value& rhs)
 			ASSERT_NOT_REACHED();
 			return false;
 	}
-}
-
-bool Obj::isString()
-{
-	return type == ObjType::String;
-}
-
-ObjString* Obj::asString()
-{
-	ASSERT(isString());
-	return reinterpret_cast<ObjString*>(this);
-}
-
-bool Obj::isFunction()
-{
-	return type == ObjType::Function;
-}
-
-ObjFunction* Obj::asFunction()
-{
-	ASSERT(isFunction());
-	return reinterpret_cast<ObjFunction*>(this);
-}
-
-bool Obj::isClosure()
-{
-	return type == ObjType::Closure;
-}
-
-ObjClosure* Obj::asClosure()
-{
-	ASSERT(isClosure());
-	return reinterpret_cast<ObjClosure*>(this);
-}
-
-bool Obj::isUpvalue()
-{
-	return type == ObjType::Upvalue;
-}
-
-ObjUpvalue* Obj::asUpvalue()
-{
-	ASSERT(isUpvalue());
-	return reinterpret_cast<ObjUpvalue*>(this);
-}
-
-bool Obj::isForeignFunction()
-{
-	return type == ObjType::ForeignFunction;
-}
-
-ObjNativeFunction* Obj::asForeignFunction()
-{
-	ASSERT(isForeignFunction());
-	return reinterpret_cast<ObjNativeFunction*>(this);
-}
-
-bool Obj::isClass()
-{
-	return type == ObjType::Class;
-}
-
-ObjClass* Obj::asClass()
-{
-	ASSERT(isClass());
-	return reinterpret_cast<ObjClass*>(this);
-}
-
-bool Obj::isInstance()
-{
-	return type == ObjType::Instance;
-}
-
-ObjInstance* Obj::asInstance()
-{
-	ASSERT(isInstance());
-	return reinterpret_cast<ObjInstance*>(this);
-}
-
-bool Obj::isBoundFunction()
-{
-	return type == ObjType::BoundFunction;
-}
-
-ObjBoundFunction* Obj::asBoundFunction()
-{
-	ASSERT(isBoundFunction());
-	return reinterpret_cast<ObjBoundFunction*>(this);
 }
 
 NativeFunctionResult::NativeFunctionResult(const Value& value)

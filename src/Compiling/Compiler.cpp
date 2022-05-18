@@ -52,8 +52,11 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 	m_functions.pop_back();
 
 #ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
-	std::cout << "----<script>\n";
-	disassembleByteCode(scriptFunction->byteCode, *m_allocator);
+	if (m_hadError == false)
+	{
+		std::cout << "----<script>\n";
+		disassembleByteCode(scriptFunction->byteCode, *m_allocator);
+	}
 #endif
 
 	return Result{ m_hadError, reinterpret_cast<ObjFunction*>(scriptFunction) };
@@ -224,7 +227,9 @@ Compiler::Status Compiler::ifStmt(const IfStmt& stmt)
 
 	auto jumpToElse = emitJump(Op::JumpIfFalseAndPop);
 
+	beginScope();
 	TRY(compile(stmt.ifThen));
+	endScope();
 
 	size_t jumpToEndOfElse = 0;
 	if (stmt.elseThen.has_value())
@@ -236,7 +241,9 @@ Compiler::Status Compiler::ifStmt(const IfStmt& stmt)
 
 	if (stmt.elseThen.has_value())
 	{
+		beginScope();
 		TRY(compile(*stmt.elseThen));
+		endScope();
 		setJumpToHere(jumpToEndOfElse);
 	}
 
@@ -246,7 +253,7 @@ Compiler::Status Compiler::ifStmt(const IfStmt& stmt)
 Compiler::Status Compiler::loopStmt(const LoopStmt& stmt)
 {
 	auto beginning = currentLocation();
-	m_loops.push_back(Loop{ beginning });
+	m_loops.push_back(Loop{ beginning, m_scopes.size() });
 	size_t jumpToEnd = 0; // Won't be used if there is no condition.
 	if (stmt.condition.has_value())
 	{
@@ -282,8 +289,16 @@ Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
 	{
 		return errorAt(stmt, "cannot use break outside of a loop");
 	}
+	auto& loop = m_loops.back();
+	for (auto scope = m_scopes.begin() + loop.scopeDepth; scope != m_scopes.end(); scope++)
+	{
+		for (size_t _ = 0; _ < scope->localVariables.size(); _++)
+		{
+			emitOp(Op::PopStack);
+		}
+	}
 	auto jump = emitJump(Op::Jump);
-	m_loops.back().breakJumpLocations.push_back(jump);
+	loop.breakJumpLocations.push_back(jump);
 	return Status::Ok;
 }
 
@@ -431,6 +446,7 @@ Compiler::Status Compiler::compileBinaryExpr(const std::unique_ptr<Expr>& lhs, T
 	case TokenType::LessEquals: emitOp(Op::LessEqual); break;
 	case TokenType::More: emitOp(Op::More); break;
 	case TokenType::MoreEquals: emitOp(Op::MoreEqual); break;
+	case TokenType::LeftBracket: emitOp(Op::GetIndex); break;
 	default:
 		ASSERT_NOT_REACHED();
 	}
@@ -521,6 +537,7 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 		TRY(compile(expr.rhs));
 	}
 
+	// TODO: Lhs get evaluted twice - improve this
 	if (expr.lhs->type == ExprType::Identifier)
 	{
 		const auto lhs = static_cast<IdentifierExpr&>(*expr.lhs.get()).identifier;
@@ -535,6 +552,17 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 		TRY(loadConstant(fieldNameConstant));
 		emitOp(Op::SetField);
 		return Status::Ok;
+	}
+	else if (expr.lhs->type == ExprType::Binary)
+	{
+		const auto lhs = static_cast<BinaryExpr*>(expr.lhs.get());
+		if (lhs->op == TokenType::LeftBracket)
+		{
+			TRY(compile(lhs->lhs));
+			TRY(compile(lhs->rhs));
+			emitOp(Op::SetIndex);
+			return Status::Ok;
+		}
 	}
 
 	return errorAt(expr, "invalid left side of assignment");

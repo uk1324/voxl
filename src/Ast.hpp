@@ -17,10 +17,10 @@ enum class ExprType
 {
 	IntConstant,
 	FloatConstant,
+	Binary,
 	BoolConstant,
 	Null,
 	StringConstant,
-	Binary,
 	Unary,
 	Identifier,
 	Call,
@@ -117,7 +117,7 @@ struct AssignmentExpr final : public Expr
 	std::optional<TokenType> op;
 };
 
-class GetFieldExpr final : public Expr
+struct GetFieldExpr final : public Expr
 {
 public:
 	GetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName, size_t start, size_t end);

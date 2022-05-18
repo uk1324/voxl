@@ -52,6 +52,7 @@ std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "linked_list", "list is empty [1, 2, 3] [3, 2, 1] [] " },
 	{ "linked_list_using_closures", "1234" },
 	{ "lambdas", "0 1 4 9 16 25 36 49 64 81 100 \n1 1 2 6 24 120 720 5040 40320 362880 3628800 \n" },
+	{ "sorting", "0 1 2 3 4 5 6 7 8 9 \n0 1 2 3 4 5 6 7 8 9 \n0 1 2 3 4 5 6 7 8 9 \n0 1 2 3 4 5 6 7 8 9 \n" },
 };
 
 void testFailed(std::string_view name)

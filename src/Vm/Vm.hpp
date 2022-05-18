@@ -89,6 +89,9 @@ public:
 	ObjString* m_leString;
 	ObjString* m_gtString;
 	ObjString* m_geString;
+	ObjString* m_getIndexString;
+	ObjString* m_setIndexString;
+	ObjClass* m_listType;
 
 	Allocator::MarkingFunctionHandle m_rootMarkingFunctionHandle;
 };

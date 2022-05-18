@@ -40,6 +40,7 @@ private:
 	struct Loop
 	{
 		size_t loopStartLocation;
+		size_t scopeDepth;
 		std::vector<size_t> breakJumpLocations;
 		std::vector<size_t> continueJumpLocations;
 	};

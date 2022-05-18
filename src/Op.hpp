@@ -30,6 +30,8 @@ namespace Lang
 		Not,
 		// }
 
+		GetIndex, // [value, index]
+		SetIndex, // [value, index, rhs]
 		LoadConstant,
 		LoadLocal,
 		SetLocal,

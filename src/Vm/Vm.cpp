@@ -1,4 +1,5 @@
 #include <Vm/Vm.hpp>
+#include <Vm/List.hpp>
 #include <Utf8.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -10,6 +11,19 @@
 #endif
 
 using namespace Lang;
+
+static VOXL_NATIVE_FN(floor)
+{
+	if (args[0].isInt())
+	{
+		return args[0];
+	}
+	if (args[0].isFloat())
+	{
+		return Value(static_cast<Int>(::floor(args[0].as.floatNumber)));
+	}
+	return NativeFunctionResult::exception(Value(false));
+}
 
 Vm::Vm(Allocator& allocator)
 	: m_allocator(&allocator)
@@ -28,6 +42,26 @@ Vm::Vm(Allocator& allocator)
 	m_leString = m_allocator->allocateStringConstant("$le").value;
 	m_gtString = m_allocator->allocateStringConstant("$gt").value;
 	m_geString = m_allocator->allocateStringConstant("$ge").value;
+	m_getIndexString = m_allocator->allocateStringConstant("$get_index").value;
+	m_setIndexString = m_allocator->allocateStringConstant("$set_index").value;
+
+	defineNativeFunction("floor", floor, 1);
+
+	auto listString = m_allocator->allocateStringConstant("List").value;
+	m_listType = m_allocator->allocateClass(listString, sizeof(List), reinterpret_cast<MarkingFunction>(List::mark));	
+
+	auto addFn = [this](std::string_view name, NativeFunction function, int argCount)
+	{
+		auto nameObj = m_allocator->allocateString(name);
+		auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount);
+		m_listType->fields.set(nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
+	};
+	addFn("$init", List::init, 1);
+	addFn("push", List::push, 2);
+	addFn("size", List::get_size, 1);
+	addFn("$get_index", List::get_index, 2);
+	addFn("$set_index", List::set_index, 3);
+	reset();
 }
 
 Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
@@ -48,6 +82,8 @@ Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 void Vm::reset()
 {
 	m_globals.clear();
+	auto listString = m_allocator->allocateStringConstant("List").value;
+	m_globals.set(listString, Value(reinterpret_cast<Obj*>(m_listType)));
 }
 
 Vm::Result Vm::run()
@@ -556,7 +592,7 @@ Vm::Result Vm::run()
 
 			ASSERT((nameValue.type == ValueType::Obj) && (nameValue.as.obj->isString()));
 			auto name = nameValue.as.obj->asString();
-			auto class_ = m_allocator->allocateClass(name, nullptr);
+			auto class_ = m_allocator->allocateClass(name, 0, nullptr);
 			popStack();
 			pushStack(Value(reinterpret_cast<Obj*>(class_)));
 			break;
@@ -570,9 +606,10 @@ Vm::Result Vm::run()
 			if (auto class_ = getClassOrNullptr(lhs); class_ != nullptr)
 			{
 				if (auto function = class_->fields.get(fieldName); 
-					function.has_value() && (*function)->isObj() && (*function)->as.obj->isFunction())
+					function.has_value() && (*function)->isObj() 
+					&& ((*function)->as.obj->isFunction() || (*function)->as.obj->isNativeFunction()))
 				{
-					auto boundFunction = m_allocator->allocateBoundFunction((*function)->as.obj->asFunction(), lhs);
+					auto boundFunction = m_allocator->allocateBoundFunction((*function)->as.obj, lhs);
 					popStack();
 					popStack();
 					pushStack(Value(reinterpret_cast<Obj*>(boundFunction)));
@@ -612,7 +649,8 @@ Vm::Result Vm::run()
 				}
 				break;
 			}
-			
+
+			return fatalError("type has no field '%s'", fieldName->chars);
 			break;
 		}
 
@@ -759,6 +797,48 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::GetIndex:
+		{
+			auto& value = peekStack(1);
+			auto& index = peekStack(0);
+			if (auto class_ = getClassOrNullptr(value); class_ != nullptr)
+			{
+				auto getIndexFunction = class_->fields.get(m_getIndexString);
+				if (getIndexFunction.has_value() == false)
+				{
+					return fatalError("type doesn't define an index function");
+				}
+				if (callValue(**getIndexFunction, 2, 0) == Result::RuntimeError)
+				{
+					return Result::RuntimeError;
+				}
+			}
+			break;
+		}
+
+		case Op::SetIndex:
+		{
+			auto& value = peekStack(1);
+			auto& index = peekStack(0);
+			if (auto class_ = getClassOrNullptr(value); class_ != nullptr)
+			{
+				auto setIndexFunction = class_->fields.get(m_setIndexString);
+				if (setIndexFunction.has_value() == false)
+				{
+					return fatalError("type doesn't define an set index function");
+				}
+				if (callValue(**setIndexFunction, 3, 0) == Result::RuntimeError)
+				{
+					return Result::RuntimeError;
+				}
+			}
+			else
+			{
+				return fatalError("type doesn't define an set index function");
+			}
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 			return Result::RuntimeError;
@@ -888,9 +968,9 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			break;
 		}
 
-		case ObjType::ForeignFunction:
+		case ObjType::NativeFunction:
 		{
-			auto calle = obj->asForeignFunction();
+			auto calle = obj->asNativeFunction();
 			if (argCount != calle->argCount)
 			{
 				return fatalError("expected %d arguments but got %d", calle->argCount, argCount);
@@ -910,20 +990,23 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 
 		case ObjType::Class:
 		{
+			ASSERT(numberOfValuesToPopOffExceptArgs == 1);
+
 			auto calle = obj->asClass();
-			auto instance = m_allocator->allocateInstance(calle);
-			auto voxlInstance = Value(reinterpret_cast<Obj*>(instance));
-			instance->class_ = calle;
+			auto instance = (calle->instanceSize == 0)
+				? reinterpret_cast<Obj*>(m_allocator->allocateInstance(calle))
+				: reinterpret_cast<Obj*>(m_allocator->allocateNativeInstance(calle));
+			auto instanceValue = Value(instance);
 
 			auto optInitalizer = calle->fields.get(m_initString);
-			ASSERT(numberOfValuesToPopOffExceptArgs == 1);
-			m_stackTop[-argCount - 1] = Value(reinterpret_cast<Obj*>(instance)); // Replace the class with the instance.
+			m_stackTop[-argCount - 1] = instanceValue; // Replace the class with the instance.
 			if (optInitalizer.has_value())
 			{
 				if (callValue(**optInitalizer, argCount + 1, 0) == Result::RuntimeError)
 				{
 					return Result::RuntimeError;
 				}
+				//m_stackTop[-1] = instanceValue;
 				// Could just replace the class with the instance here again so it looks like the call always returns the instance.
 				// Python just throws a TypeError if __init__ returns something else than None.
 				// Javascript just ignores it and always returns this.
@@ -939,7 +1022,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 		{
 			auto calle = obj->asBoundFunction();
 			m_stackTop[-argCount - 1] = calle->value;
-			auto function = calle->function;
+			auto function = calle->callable;
 			if (callValue(Value(reinterpret_cast<Obj*>(function)), argCount + 1, 0) == Result::RuntimeError)
 			{
 				return Result::RuntimeError;
@@ -956,9 +1039,12 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 
 ObjClass* Vm::getClassOrNullptr(const Value& value)
 {
-	if (value.isObj() && value.as.obj->isInstance())
+	if (value.isObj())
 	{
-		return value.as.obj->asInstance()->class_;
+		if (value.as.obj->isInstance())
+			return value.as.obj->asInstance()->class_;
+		if (value.as.obj->isNativeInstance())
+			return value.as.obj->asNativeInstance()->class_;
 	}
 	return nullptr;
 }
@@ -971,6 +1057,7 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 	}
 
 	allocator.addHashTable(vm->m_globals);
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_listType));
 
 	for (auto frame = vm->m_callStack.data(); frame != &vm->callStackTop() + 1; frame++)
 	{

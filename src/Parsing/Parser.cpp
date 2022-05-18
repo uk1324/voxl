@@ -386,14 +386,14 @@ std::unique_ptr<Expr> Parser::unary()
 	if (match(TokenType::Minus) || match(TokenType::Not))
 	{
 		auto op = peekPrevious().type;
-		auto expr = callOrFieldAccess();
+		auto expr = callOrFieldAccessOrIndex();
 		return std::make_unique<UnaryExpr>(std::move(expr), op, start, peekPrevious().end);
 	}
 
-	return callOrFieldAccess();
+	return callOrFieldAccessOrIndex();
 }
 
-std::unique_ptr<Expr> Parser::callOrFieldAccess()
+std::unique_ptr<Expr> Parser::callOrFieldAccessOrIndex()
 {
 	size_t start = peek().start;
 	auto expression = primary();
@@ -418,6 +418,17 @@ std::unique_ptr<Expr> Parser::callOrFieldAccess()
 			expect(TokenType::Identifier, "expected field name");
 			const auto name = peekPrevious().identifier;
 			expression = std::make_unique<GetFieldExpr>(std::move(expression), name, start, peekPrevious().end);
+		}
+		else if (match(TokenType::LeftBracket))
+		{
+			auto index = expr();
+			expect(TokenType::RightBracket, "expected ']'");
+			expression = std::make_unique<BinaryExpr>(
+				std::move(expression), 
+				TokenType::LeftBracket, 
+				std::move(index), 
+				start, 
+				peekPrevious().end);
 		}
 		else
 		{

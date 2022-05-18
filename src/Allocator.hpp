@@ -55,9 +55,10 @@ public:
 	ObjClosure* allocateClosure(ObjFunction* function);
 	ObjUpvalue* allocateUpvalue(Value* localVariable);
 	ObjNativeFunction* allocateForeignFunction(ObjString* name, NativeFunction function, int argCount);
-	ObjClass* allocateClass(ObjString* name, MarkingFunction mark);
+	ObjClass* allocateClass(ObjString* name, size_t instanceSize, MarkingFunction mark);
 	ObjInstance* allocateInstance(ObjClass* class_);
-	ObjBoundFunction* allocateBoundFunction(ObjFunction* function, const Value& value);
+	ObjNativeInstance* allocateNativeInstance(ObjClass* class_);
+	ObjBoundFunction* allocateBoundFunction(Obj* callable, const Value& value);
 
 	struct StringConstant
 	{

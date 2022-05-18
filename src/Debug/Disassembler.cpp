@@ -141,6 +141,8 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::LoadNull: return justOp("loadNull");
 		case Op::LoadTrue: return justOp("loadTrue");
 		case Op::LoadFalse: return justOp("loadFalse");
+		case Op::SetIndex: return justOp("setIndex");
+		case Op::GetIndex: return justOp("getIndex");
 		case Op::Not: return justOp("not");
 		case Op::Negate: return justOp("negate");
 		case Op::PopStack: return justOp("popStack");

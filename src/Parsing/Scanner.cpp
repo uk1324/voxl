@@ -55,6 +55,21 @@ Token Scanner::token()
 
 			return makeToken(TokenType::Plus);
 		}
+		case '/': 
+		{
+			if (match('/'))
+			{
+				if (peekNext() == '=')
+					return makeToken(TokenType::SlashSlashEquals);
+				return makeToken(TokenType::SlashSlash);
+			}
+
+			if (match('='))
+				return makeToken(TokenType::SlashEquals);
+
+			return makeToken(TokenType::Slash);
+
+		}
 		case '&': return match('&')
 			? makeToken(TokenType::AndAnd)
 			: makeToken(TokenType::And);
@@ -70,9 +85,6 @@ Token Scanner::token()
 		case '-': return match('=') 
 			? makeToken(TokenType::MinusEquals)
 			: makeToken(TokenType::Minus);
-		case '/': return match('=')
-			? makeToken(TokenType::SlashEquals)
-			: makeToken(TokenType::Slash);
 		case '%': return match('=')
 			? makeToken(TokenType::PercentEquals)
 			: makeToken(TokenType::Percent);

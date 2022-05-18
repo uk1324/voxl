@@ -115,10 +115,17 @@ ObjInstance* Allocator::allocateInstance(ObjClass* class_)
 	return obj;
 }
 
-ObjBoundFunction* Allocator::allocateBoundFunction(ObjFunction* function, const Value& value)
+ObjNativeInstance* Allocator::allocateNativeInstance(ObjClass* class_)
+{
+	auto obj = allocateObj(class_->instanceSize, ObjType::NativeInstance)->asNativeInstance();
+	obj->class_ = class_;
+	return obj;
+}
+
+ObjBoundFunction* Allocator::allocateBoundFunction(Obj* callable, const Value& value)
 {
 	auto obj = allocateObj(sizeof(ObjBoundFunction), ObjType::BoundFunction)->asBoundFunction();
-	obj->function = function;
+	obj->callable= callable;
 	obj->value = value;
 	return obj;
 }
@@ -165,19 +172,20 @@ Allocator::FunctionConstant Allocator::allocateFunctionConstant(ObjString* name,
 
 ObjNativeFunction* Allocator::allocateForeignFunction(ObjString* name, NativeFunction function, int argCount)
 {
-	auto obj = reinterpret_cast<ObjNativeFunction*>(allocateObj(sizeof(ObjNativeFunction), ObjType::ForeignFunction));
-	obj->obj.type = ObjType::ForeignFunction;
+	auto obj = reinterpret_cast<ObjNativeFunction*>(allocateObj(sizeof(ObjNativeFunction), ObjType::NativeFunction));
+	obj->obj.type = ObjType::NativeFunction;
 	obj->name = name;
 	obj->function = function;
 	obj->argCount = argCount;
 	return obj;
 }
 
-ObjClass* Allocator::allocateClass(ObjString* name, MarkingFunction mark)
+ObjClass* Allocator::allocateClass(ObjString* name, size_t instanceSize, MarkingFunction mark)
 {
 	auto obj = allocateObj(sizeof(ObjClass), ObjType::Class)->asClass();
 	obj->name = name;
 	obj->mark = mark;
+	obj->instanceSize = instanceSize;
 	new (&obj->fields) HashTable();
 	return obj;
 }
@@ -200,7 +208,7 @@ void Allocator::markObj(Obj* obj)
 			return;
 		}
 
-		case ObjType::ForeignFunction:
+		case ObjType::NativeFunction:
 		{
 			const auto function = reinterpret_cast<ObjNativeFunction*>(obj);
 			addObj(reinterpret_cast<Obj*>(function->name));
@@ -223,11 +231,19 @@ void Allocator::markObj(Obj* obj)
 			return;
 		}
 
+		case ObjType::NativeInstance:
+		{
+			const auto instance = obj->asNativeInstance();
+			addObj(reinterpret_cast<Obj*>(instance->class_));
+			instance->class_->mark(instance, *this);
+			return;
+		}
+
 		case ObjType::BoundFunction:
 		{
 			const auto function = obj->asBoundFunction();
 			addValue(function->value);
-			addObj(reinterpret_cast<Obj*>(function->function));
+			addObj(function->callable);
 			return;
 		}
 
