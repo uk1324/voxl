@@ -140,3 +140,8 @@ x.log();
 x = generate_list(10);
 insertionsort(x);
 x.log();
+
+
+x : List();
+x.size();
+List.size(5);

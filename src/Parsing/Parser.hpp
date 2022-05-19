@@ -42,6 +42,7 @@ private:
 	std::unique_ptr<Stmt> whileStmt();
 	std::unique_ptr<Stmt> breakStmt();
 	std::unique_ptr<Stmt> classStmt();
+	std::unique_ptr<Stmt> implStmt();
 	std::unique_ptr<Stmt> tryStmt();
 	std::unique_ptr<Stmt> throwStmt();
 	std::unique_ptr<Stmt> variableDeclarationStmt();

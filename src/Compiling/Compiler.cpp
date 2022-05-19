@@ -1,3 +1,5 @@
+#include "Compiler.hpp"
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -135,6 +137,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 		CASE_STMT_TYPE(Loop, loopStmt)
 		CASE_STMT_TYPE(Break, breakStmt)
 		CASE_STMT_TYPE(Class, classStmt)
+		CASE_STMT_TYPE(Impl, implStmt)
 		CASE_STMT_TYPE(Try, tryStmt)
 		CASE_STMT_TYPE(Throw, throwStmt)
 	}
@@ -345,6 +348,27 @@ Compiler::Status Compiler::throwStmt(const ThrowStmt& stmt)
 	return Status::Ok;
 }
 
+// Class has to be TOS.
+Compiler::Status Compiler::compileMethods(std::string_view className, const std::vector<std::unique_ptr<FnStmt>>& methods)
+{
+	for (const auto& method : methods)
+	{
+		auto arguments = method->arguments;
+		arguments.insert(arguments.begin(), "$");
+		const auto [nameConstant, name] = m_allocator->allocateStringConstant(
+			std::string(className) + '.' + std::string(method->name));
+		const auto [functionConstant, function] =
+			m_allocator->allocateFunctionConstant(name, static_cast<int>(arguments.size()));
+
+		TRY(compileFunction(method->name, function, arguments, method->stmts, method->start, method->end()));
+
+		const auto methodNameConstant = m_allocator->allocateStringConstant(method->name).constant;
+		TRY(loadConstant(functionConstant));
+		TRY(loadConstant(methodNameConstant));
+		emitOp(Op::StoreMethod);
+	}
+}
+
 Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 {
 	// If classes outside the global scope were allowed they would need to be created each time the scope is executed.
@@ -357,27 +381,23 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 	TRY(loadConstant(classNameConstant));
 	emitOp(Op::CreateClass);
 
-	for (const auto& method : stmt.methods)
-	{
-		auto arguments = method->arguments;
-		arguments.insert(arguments.begin(), "$");
-		const auto [nameConstant, name] = m_allocator->allocateStringConstant(std::string(stmt.name) + '.' + std::string(method->name));
-		const auto [functionConstant, function] =
-			m_allocator->allocateFunctionConstant(name, static_cast<int>(arguments.size()));
-
-		TRY(compileFunction(method->name, function, arguments, method->stmts, method->start, method->end()));
-
-		const auto methodNameConstant = m_allocator->allocateStringConstant(method->name).constant;
-		TRY(loadConstant(functionConstant));
-		TRY(loadConstant(methodNameConstant));
-		emitOp(Op::StoreMethod);
-	}
+	TRY(compileMethods(stmt.name, stmt.methods));
 
 	// If I allow classes to be created in local scope then this code needs to change becuase else the class wouldn't
 	// be able to access itself.
 	TRY(createVariable(stmt.name, stmt.start, stmt.end()));
 
 	return Status::Ok;
+}
+
+Compiler::Status Compiler::implStmt(const ImplStmt& stmt)
+{
+	if (m_scopes.size() > 0)
+		return errorAt(stmt, "impl statements can only appear at global scope");
+	// TODO: Add type checking if the type is a type either here or in Op::StoreMethod.
+	TRY(variable(stmt.typeName, VariableOp::Get));
+	TRY(compileMethods(stmt.typeName, stmt.methods));
+	emitOp(Op::PopStack);
 }
 
 Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
@@ -481,7 +501,7 @@ Compiler::Status Compiler::boolConstantExpr(const BoolConstantExpr& expr)
 	return Status::Ok;
 }
 
-Compiler::Status Compiler::nullExpr(const NullExpr& expr)
+Compiler::Status Compiler::nullExpr(const NullExpr&)
 {
 	emitOp(Op::LoadNull);
 	return Status::Ok;

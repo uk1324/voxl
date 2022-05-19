@@ -1,23 +1,25 @@
-List.log = |list| {
-	i : 0;
-	while i < list.size() {
-		print(list[i]);
-		print(" ");
-		i += 1;
-	}	
-	print("\n");
-};
+impl List {
+	log() {
+		i : 0;
+		while i < $.size() {
+			print($[i]);
+			print(" ");
+			i += 1;
+		}	
+		print("\n");
+	}
 
-List.contains = |list, item| {
-	i : 0;
-	while i < list.size() {
-		if list[i] == item {
-			ret true;
-		}
-		i += 1;
-	}	
-	ret false;
-};
+	contains(item) {
+		i : 0;
+		while i < $.size() {
+			if $[i] == item {
+				ret true;
+			}
+			i += 1;
+		}	
+		ret false;
+	}
+}
 
 fn quicksort(list, left, right) {
 	if left >= right {

@@ -800,7 +800,6 @@ Vm::Result Vm::run()
 		case Op::GetIndex:
 		{
 			auto& value = peekStack(1);
-			auto& index = peekStack(0);
 			if (auto class_ = getClassOrNullptr(value); class_ != nullptr)
 			{
 				auto getIndexFunction = class_->fields.get(m_getIndexString);
@@ -819,7 +818,6 @@ Vm::Result Vm::run()
 		case Op::SetIndex:
 		{
 			auto& value = peekStack(1);
-			auto& index = peekStack(0);
 			if (auto class_ = getClassOrNullptr(value); class_ != nullptr)
 			{
 				auto setIndexFunction = class_->fields.get(m_setIndexString);

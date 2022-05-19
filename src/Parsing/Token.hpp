@@ -70,6 +70,7 @@ enum class TokenType
 	Catch,
 	Throw,
 	Finally,
+	Impl,
 
 	// Other
 	Identifier,

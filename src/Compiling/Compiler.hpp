@@ -86,7 +86,9 @@ private:
 	Status ifStmt(const IfStmt& stmt);
 	Status loopStmt(const LoopStmt& stmt);
 	Status breakStmt(const BreakStmt& stmt);
+	Status compileMethods(std::string_view className, const std::vector<std::unique_ptr<FnStmt>>& methods);
 	Status classStmt(const ClassStmt& stmt);
+	Status implStmt(const ImplStmt& stmt);
 	Status tryStmt(const TryStmt& stmt);
 	Status throwStmt(const ThrowStmt& stmt);
 
@@ -96,7 +98,7 @@ private:
 	Status intConstantExpr(const IntConstantExpr& expr);
 	Status floatConstantExpr(const FloatConstantExpr& expr);
 	Status boolConstantExpr(const BoolConstantExpr& expr);
-	Status nullExpr(const NullExpr& expr);
+	Status nullExpr(const NullExpr&);
 	Status stringConstantExpr(const StringConstantExpr& expr);
 	Status binaryExpr(const BinaryExpr& expr);
 	Status unaryExpr(const UnaryExpr& expr);

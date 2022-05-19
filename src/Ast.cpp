@@ -167,6 +167,12 @@ ClassStmt::ClassStmt(std::string_view name, std::vector<std::unique_ptr<FnStmt>>
 	, methods(std::move(methods))
 {}
 
+ImplStmt::ImplStmt(std::string_view typeName, std::vector<std::unique_ptr<FnStmt>> methods, size_t start, size_t end)
+	: Stmt(start, end, StmtType::Impl)
+	, typeName(typeName)
+	, methods(std::move(methods))
+{}
+
 TryStmt::TryStmt(
 	StmtList tryBlock,
 	std::optional<std::string_view> caughtValueName,

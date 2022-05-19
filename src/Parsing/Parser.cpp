@@ -1,3 +1,4 @@
+#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -58,6 +59,8 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return breakStmt();
 	if (match(TokenType::Class))
 		return classStmt();
+	if (match(TokenType::Impl))
+		return implStmt();
 	if (match(TokenType::Try))
 		return tryStmt();
 	if (match(TokenType::Throw))
@@ -202,6 +205,25 @@ std::unique_ptr<Stmt> Parser::classStmt()
 	return std::make_unique<ClassStmt>(name, std::move(methods), start, peekPrevious().end);
 }
 
+std::unique_ptr<Stmt> Parser::implStmt()
+{
+	auto start = peekPrevious().start;
+	expect(TokenType::Identifier, "expected type name");
+	auto typeName = peekPrevious().identifier;
+
+	expect(TokenType::LeftBrace, "expected '{'");
+
+	decltype(ImplStmt::methods) methods;
+
+	while ((isAtEnd() == false) && (check(TokenType::RightBrace) == false))
+	{
+		methods.push_back(function(peek().end));
+	}
+	expect(TokenType::RightBrace, "expected '}'");
+
+	return std::make_unique<ImplStmt>(typeName, std::move(methods), start, peekPrevious().end);
+}
+
 std::unique_ptr<Stmt> Parser::tryStmt()
 {
 	size_t start = peekPrevious().start;
@@ -294,7 +316,7 @@ std::vector<std::unique_ptr<Stmt>> Parser::block()
 		{
 			stmts.push_back(stmt());
 		}
-		catch (const ParsingError& error)
+		catch (const ParsingError&)
 		{
 			synchronize();
 		}

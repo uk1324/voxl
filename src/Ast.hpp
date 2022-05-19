@@ -146,6 +146,7 @@ enum class StmtType
 	Loop,
 	Break,
 	Class,
+	Impl,
 	Try,
 	Throw,
 };
@@ -256,9 +257,17 @@ struct BreakStmt final : public Stmt
 
 struct ClassStmt final : public Stmt
 {
-	ClassStmt(std::string_view name, std::vector<std::unique_ptr<FnStmt>>, size_t start, size_t end);
+	ClassStmt(std::string_view name, std::vector<std::unique_ptr<FnStmt>> methods, size_t start, size_t end);
 
 	std::string_view name;
+	std::vector<std::unique_ptr<FnStmt>> methods;
+};
+
+struct ImplStmt final : public Stmt
+{
+	ImplStmt(std::string_view typeName, std::vector<std::unique_ptr<FnStmt>> methods, size_t start, size_t end);
+
+	std::string_view typeName;
 	std::vector<std::unique_ptr<FnStmt>> methods;
 };
 

@@ -222,6 +222,7 @@ Token Scanner::keywordOrIdentifier()
 		{ "catch", TokenType::Catch },
 		{ "finally", TokenType::Finally },
 		{ "throw", TokenType::Throw },
+		{ "impl", TokenType::Impl },
 	};
 
 	while (isIdentifierChar(peek()))
