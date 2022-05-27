@@ -1,5 +1,3 @@
-#include "Compiler.hpp"
-#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -64,8 +62,7 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 	return Result{ m_hadError, reinterpret_cast<ObjFunction*>(scriptFunction) };
 }
 
-Compiler::Status Compiler::compileFunction(
-	std::string_view functionName, 
+Compiler::Status Compiler::compileFunction( 
 	ObjFunction* function,
 	const std::vector<std::string_view>& arguments, 
 	const StmtList& stmts, 
@@ -207,7 +204,7 @@ Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 	const auto [functionConstant, function] = m_allocator->allocateFunctionConstant(name, static_cast<int>(stmt.arguments.size()));
 	TRY(loadConstant(functionConstant));
 	TRY(createVariable(stmt.name, stmt.start, stmt.end()));
-	return compileFunction(stmt.name, function, stmt.arguments, stmt.stmts, stmt.start, stmt.end());
+	return compileFunction(function, stmt.arguments, stmt.stmts, stmt.start, stmt.end());
 }
 
 Compiler::Status Compiler::retStmt(const RetStmt& stmt)
@@ -293,6 +290,7 @@ Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
 		return errorAt(stmt, "cannot use break outside of a loop");
 	}
 	auto& loop = m_loops.back();
+	// TODO: This doesn't handle upvalues.
 	for (auto scope = m_scopes.begin() + loop.scopeDepth; scope != m_scopes.end(); scope++)
 	{
 		for (size_t _ = 0; _ < scope->localVariables.size(); _++)
@@ -360,13 +358,15 @@ Compiler::Status Compiler::compileMethods(std::string_view className, const std:
 		const auto [functionConstant, function] =
 			m_allocator->allocateFunctionConstant(name, static_cast<int>(arguments.size()));
 
-		TRY(compileFunction(method->name, function, arguments, method->stmts, method->start, method->end()));
+		TRY(compileFunction(function, arguments, method->stmts, method->start, method->end()));
 
 		const auto methodNameConstant = m_allocator->allocateStringConstant(method->name).constant;
 		TRY(loadConstant(functionConstant));
 		TRY(loadConstant(methodNameConstant));
 		emitOp(Op::StoreMethod);
 	}
+
+	return Status::Ok;
 }
 
 Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
@@ -398,6 +398,7 @@ Compiler::Status Compiler::implStmt(const ImplStmt& stmt)
 	TRY(variable(stmt.typeName, VariableOp::Get));
 	TRY(compileMethods(stmt.typeName, stmt.methods));
 	emitOp(Op::PopStack);
+	return Status::Ok;
 }
 
 Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
@@ -603,7 +604,7 @@ Compiler::Status Compiler::callExpr(const CallExpr& expr)
 	return Status::Ok;
 }
 
-Compiler::Status Compiler::arrayExpr(const ArrayExpr& expr)
+Compiler::Status Compiler::arrayExpr(const ArrayExpr&)
 {
 	ASSERT_NOT_REACHED();
 	/*for (const auto& value : expr.values)
@@ -616,10 +617,10 @@ Compiler::Status Compiler::arrayExpr(const ArrayExpr& expr)
 
 Compiler::Status Compiler::lambdaExpr(const LambdaExpr& expr)
 {
-	std::string_view anonymousFunctionName = "";
-	const auto [nameConstant, name] = m_allocator->allocateStringConstant(anonymousFunctionName);
+	static constexpr std::string_view ANONYMOUS_FUNCTION_NAME = "";
+	const auto [nameConstant, name] = m_allocator->allocateStringConstant(ANONYMOUS_FUNCTION_NAME);
 	const auto [functionConstant, function] = m_allocator->allocateFunctionConstant(name, static_cast<int>(expr.arguments.size()));
-	TRY(compileFunction(anonymousFunctionName, function, expr.arguments, expr.stmts, expr.start, expr.end()));
+	TRY(compileFunction(function, expr.arguments, expr.stmts, expr.start, expr.end()));
 	TRY(loadConstant(functionConstant));
 	return Status::Ok;
 }
@@ -720,7 +721,7 @@ Compiler::Status Compiler::variable(std::string_view name, VariableOp op)
 				}
 				else if (op == VariableOp::Get)
 				{
-					emitOp(Op::LoadUpvalue);
+					emitOp(Op::GetUpvalue);
 				}
 				emitUint32(static_cast<uint32_t>(lastIndex));
 			}
@@ -732,7 +733,7 @@ Compiler::Status Compiler::variable(std::string_view name, VariableOp op)
 				}
 				else if (op == VariableOp::Get)
 				{
-					emitOp(Op::LoadLocal);
+					emitOp(Op::GetLocal);
 				}
 				emitUint32(static_cast<uint32_t>(local->second.index));
 			}
@@ -749,7 +750,7 @@ Compiler::Status Compiler::variable(std::string_view name, VariableOp op)
 	}
 	else if (op == VariableOp::Get)
 	{
-		emitOp(Op::LoadGlobal);
+		emitOp(Op::GetGlobal);
 	}
 	return Status::Ok;
 }
@@ -758,7 +759,7 @@ Compiler::Status Compiler::loadConstant(size_t index)
 {
 	if (index > UINT32_MAX)
 		return Status::Error;
-	emitOp(Op::LoadConstant);
+	emitOp(Op::GetConstant);
 	emitUint32(static_cast<uint32_t>(index));
 	return Status::Ok;
 }

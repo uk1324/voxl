@@ -166,6 +166,7 @@ Allocator::FunctionConstant Allocator::allocateFunctionConstant(ObjString* name,
 	obj->argCount = argCount;
 	obj->name = name;
 	obj->obj.isMarked = false;
+	obj->upvalueCount = 0;
 	new (&obj->byteCode) ByteCode();
 	return { createConstant(Value(reinterpret_cast<Obj*>(obj))), obj };
 }

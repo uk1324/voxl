@@ -1,0 +1,69 @@
+Closures are implemented using Lua's idea of upvalues described in "The Implementation of Lua 5.0".
+Example compilation a closure.
+fn a() {
+	x : 0;
+	y : 1;
+	fn b()
+	{
+		z : x;
+		fn c()
+		{
+			ret x + y + z + x;
+		}
+	}
+}
+Captured variables are stored inside the compiler as
+struct Captured
+{
+	// If the function that the outer variable is accssed from is the same function as the function inside of which the function accessing the variable is defined isLocal is set to true.
+	// Example:
+	// When accessing x or y from b or z from c then true. If accessing x or y from c then false.
+	bool isLocal; 
+	// if isLocal then index is the index into the locals of the function the variable being accessed is defined in, else it is the index of the captured variable of the closest outer function.
+	size_t index;
+}
+
+Inside b() the variable x is accessed in the declaration of z. The variable is added to list of values captured by b(). index is set to the index of the local in the values of a() which would be equal to zero 0, isLocal is set to true;
+Inside c() x is accessed. isLocal is set to false. index is set to 0 which refers to the first variable captured by b().
+Then y is accessed. c() can't directly get variables from b() so first b has to add y to it's captured values so b() adds an entry with is isLocal = true and index = 1. Then c() adds an entry isLocal = false and index = 1. 
+Then z is accessed c hasn't captured it yet so it is added and isLocal = true and index = 0 becuase it is the first variable of b().
+Then x is accessed and becuase it was accessed previously nothing has to be done.
+
+Depending on if the variable is set or loaded an instruction to get or load the upvalue is emited.
+
+Functions can only access variables from the closest outer scope or variables captured by the closest outer scope becuase function from farther scopes may not exit anymore. 
+Example.
+fn a() 
+{
+	x : 0;
+	fn b()
+	{
+		fn c()
+		{
+			ret x;
+		}
+		c();
+	}
+	ret b;
+}
+v : a();
+v();
+When v() is invoked c() can't access x becuase it doesn't exist anymore. This is why when accessing a variable from a farther scope requires all the functions between the variable and the function accessing the variable to capture the value.
+
+If a function captures any variables then after it create closure instruction specifing all the variables it captures in the form of the Captured struct is emited. It convets the function into a closure.
+
+When a scope is exited an instruction that moves the value from the stack to the heap is emited.
+
+At runtime upvalues are represented as
+struct Upvalue
+{
+	Value value;
+	Value* location.
+}
+
+Closures store a list of pointers to Upvalues it uses. The upvalues are managed by the GC.
+The Vm stores the list of all the upvalues that haven't been moved to the heap yet.
+The create closure instruction replaces the function with a closure and goes through all the specified values. If isLocal is true then a new upvalue is allocated. The value can be set to null and the location is set to point to the captured value on the stack. If isLocal is false then the upvalue is set to the upvalue of the currently executing function which is the function the closure was defined in.
+
+Moving the value to the heap just sets Upvalue::value to the value in the stack location stored in Upvalue::location and then sets the Upvalue::location to the address of Upvalue::value.
+To not emit extra instrunctions before a return, all the values owned by the function are moved automatically move to the heap.

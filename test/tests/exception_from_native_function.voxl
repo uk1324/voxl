@@ -1,0 +1,7 @@
+print(floor(1.2));
+
+try {
+	floor("abc");
+} catch error {
+	print(error);
+}

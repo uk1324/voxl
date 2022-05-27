@@ -225,6 +225,9 @@ Token Scanner::keywordOrIdentifier()
 		{ "impl", TokenType::Impl },
 	};
 
+	// TODO: Could check here if identifiers starting with "$" (reserved identifiers) are spelled correctly.
+	// Make some algorithms that finds the closest name to the misspelled one.
+
 	while (isIdentifierChar(peek()))
 		advance();
 

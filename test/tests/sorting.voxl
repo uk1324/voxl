@@ -47,6 +47,7 @@ fn quicksort(list, left, right) {
 fn bubblesort(list) {
 	right : list.size();
 	swapped : true;
+	// TODO: Implement do while
 	while swapped {
 		right -= 1;
 		swapped = false;

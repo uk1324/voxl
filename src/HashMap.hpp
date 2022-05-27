@@ -2,6 +2,7 @@
 
 #include <Asserts.hpp>
 #include <optional>
+#include <iostream>
 
 /* 
 struct KeyTraits

@@ -7,6 +7,14 @@
 namespace Lang
 {
 
+// TODO:
+// Parsing can be made faster by making Parser own a Scanner. Instead of generating all the tokens at once Parser
+// would call a function nextToken on the scanner. The parser would keep the number of lookahead tokens it needs.
+// Another optimization would be to make reading the file faster. This could be done by not loading the whole file 
+// into memory at once. Linux provides mmap, Windows has CreateFileMapping and MapViewOfFile. When a file is opened with
+// those functions the operating system loads the parts of the file into memory only when they are accessed and unloads
+// the unused ones.
+
 class Scanner
 {
 public:

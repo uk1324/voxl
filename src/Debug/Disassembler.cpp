@@ -125,11 +125,11 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::Concat: return justOp("concat");
 		case Op::Equals: return justOp("equals");
 		case Op::NotEquals: return justOp("notEquals");
-		case Op::LoadConstant: return opConstant("loadConstant", byteCode, offset, allocator);
-		case Op::LoadLocal: return opNumber("loadLocal", byteCode, offset);
+		case Op::GetConstant: return opConstant("loadConstant", byteCode, offset, allocator);
+		case Op::GetLocal: return opNumber("loadLocal", byteCode, offset);
 		case Op::SetLocal: return opNumber("setLocal", byteCode, offset);
 		case Op::Call: return opNumber("call", byteCode, offset);
-		case Op::LoadGlobal: return justOp("loadGlobal");
+		case Op::GetGlobal: return justOp("loadGlobal");
 		case Op::SetGlobal: return justOp("setGlobal");
 		case Op::CreateGlobal: return justOp("createGlobal");
 		case Op::JumpIfFalse: return jump("jumpIfFalse", byteCode, offset, 1);
@@ -148,7 +148,7 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::PopStack: return justOp("popStack");
 		case Op::Return: return justOp("return");
 		case Op::Closure: return closureOp("closure", byteCode, offset);
-		case Op::LoadUpvalue: return opNumber("getUpvalue", byteCode, offset);
+		case Op::GetUpvalue: return opNumber("getUpvalue", byteCode, offset);
 		case Op::SetUpvalue: return opNumber("setUpvalue", byteCode, offset);
 		case Op::CloseUpvalue: return closeUpvalueOp("closeUpvalue", byteCode, offset);
 

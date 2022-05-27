@@ -3,6 +3,7 @@
 #include <Allocator.hpp>
 #include <ByteCode.hpp>
 #include <ErrorPrinter.hpp>
+#include <StaticStack.hpp>
 #include <unordered_map>
 #include <array>
 
@@ -18,18 +19,23 @@ public:
 		RuntimeError,
 	};
 
+	// Order members to reduce the size.
 	struct CallFrame
 	{
 		const uint8_t* instructionPointer;
 		Value* values;
-		// this is pointless the executing function is always at the bottom of the call stack
-		// thogh it does use one level of indirection less
+		ObjUpvalue** upvalues;
+		// TODO: Could set to nullptr for native functions.
 		ObjFunction* function;
 		int numberOfValuesToPopOffExceptArgs;
 		uint32_t absoluteJumpToCatch;
 		bool isTrySet;
-		ObjUpvalue** upvalues;
-		ObjClosure* closure;
+		// TODO: Try catch doesn't pop the block off the stack when an exception happens.
+		// To fix this I could store the stack value before try on Op::TryBegin otherwise it would be set to nullptr
+		// indicating that try isn't set.
+
+		bool isNativeFunction();
+		void setNativeFunction();
 	};
 
 private:
@@ -51,14 +57,10 @@ private:
 	uint32_t readUint32();
 	uint8_t readUint8();
 
-	const Value& peekStack(size_t depth = 0) const;
-	Value& peekStack(size_t depth = 0);
-	void popStack();
-	void pushStack(Value value);
-	CallFrame& callStackTop();
-	const CallFrame& callStackTop() const;
 	Result fatalError(const char* format, ...);
+	Result callObjFunction(ObjFunction* function, int argCount, int numberOfValuesToPopOffExceptArgs);
 	Result callValue(Value value, int argCount, int numberOfValuesToPopOffExceptArgs);
+	Result throwValue(const Value& value);
 	ObjClass* getClassOrNullptr(const Value& value);
 
 private:
@@ -67,11 +69,8 @@ private:
 public:
 	HashTable m_globals;
 	
-	std::array<Value, 1024> m_stack;
-	Value* m_stackTop;
-
-	std::array<CallFrame, 100> m_callStack;
-	size_t m_callStackSize;
+	StaticStack<Value, 1024> m_stack;
+	StaticStack<CallFrame, 100> m_callStack;
 
 	Allocator* m_allocator;
 

@@ -69,7 +69,6 @@ public:
 
 private:
 	Status compileFunction(
-		std::string_view functionName,
 		ObjFunction* function,
 		const std::vector<std::string_view>& arguments, 
 		const StmtList& stmts, 

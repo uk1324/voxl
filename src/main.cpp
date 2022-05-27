@@ -94,6 +94,26 @@ Value print2(Value* args, int argCount)
 
 // Maybe add elif
 
+// Inheriting from a class could add the subclass to the list in the base class.
+
+// Decorators could be implemeted by adding the decorator name and args to the ast node
+
+// Use keyword base instead of super
+
+/*
+List comprehensions look like this [<expr> for <identifier> in <iterator>]
+they could be desugared into
+{
+	result : [];
+	for <i> in <iteartor> {
+		result.push(<expr>);
+	}
+}
+Result could be a identifier with an impossible character.
+To make list comprehensions an expression instead of popping the result variable the scope it is in could be removed
+leaving it as TOS.
+*/
+
 VOXL_NATIVE_FN(add)
 {
 	if ((args[0].type != ValueType::Int) || (args[1].type != ValueType::Int))
@@ -105,7 +125,7 @@ VOXL_NATIVE_FN(add)
 
 int main()
 {
-
+	// TODO: Lambda vs function vs macro for reading instructions.
 	bool shouldCompile = true;
 
 	std::string filename = "../../../src/test2.voxl";
