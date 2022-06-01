@@ -86,7 +86,7 @@ Compiler::Status Compiler::compileFunction(
 	emitOp(Op::Return);
 
 #ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
-	std::cout << "----" << functionName << '\n';
+	std::cout << "----" << function->name->chars << '\n';
 	disassembleByteCode(function->byteCode, *m_allocator);
 #endif
 

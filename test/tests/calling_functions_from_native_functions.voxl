@@ -41,4 +41,3 @@ try {
 } catch value {
 	print(value);
 }
-

@@ -114,11 +114,30 @@ To make list comprehensions an expression instead of popping the result variable
 leaving it as TOS.
 */
 
+/*
+a f x 
+or 
+a /f x
+The issue with infix function call notation could be fixed by only allowing it as parenthesized if they are part of a 
+bigger expression.
+so 
+a f b would be valid 
+but 
+a f b f c would not be
+a f (b f c) would be
+This could be implemented by creating a node in the AST for grouping.
+Then in the compile function return error.
+If a statement expression with the infix call is compiled then don't return an error.
+If a grouping expression with the infix call is compiled then don't return an error.
+Making more complex rules would probably require storing the information on what is compiled on the stack.
+Solving the problem using the parser would probably produce but errors and also would require modying quite a bit of the code.
+*/
+
 VOXL_NATIVE_FN(add)
 {
 	if ((args[0].type != ValueType::Int) || (args[1].type != ValueType::Int))
 	{
-		return NativeFunctionResult::exception(Value(Int(5)));
+		throw NativeException(Value::null());
 	}
 	return Value(args[0].as.intNumber + args[1].as.intNumber);
 }

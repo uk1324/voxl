@@ -1,4 +1,3 @@
-#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Vm/List.hpp>
 #include <Utf8.hpp>
@@ -23,13 +22,32 @@ static VOXL_NATIVE_FN(floor)
 	{
 		return Value(static_cast<Int>(::floor(args[0].as.floatNumber)));
 	}
-	return NativeFunctionResult::exception(Value::null());
+
+	throw NativeException(Value::null());
+}
+
+static VOXL_NATIVE_FN(invoke)
+{
+	return vm.call(args[0], nullptr, 0);
+}
+
+static VOXL_NATIVE_FN(get_5)
+{
+	return Value::integer(5);
+}
+
+static VOXL_NATIVE_FN(throw_3)
+{
+	throw NativeException(Value::integer(3));
 }
 
 #define TRY(somethingThatReturnsResult) \
-	if (somethingThatReturnsResult == Result::RuntimeError) \
 	{ \
-		return Result::RuntimeError; \
+		const auto expressionResult = somethingThatReturnsResult; \
+		if (expressionResult.type != ResultType::Ok) \
+		{ \
+			return expressionResult; \
+		} \
 	}
 
 #define TRY_PUSH(value) \
@@ -61,9 +79,6 @@ Vm::Vm(Allocator& allocator)
 	, m_getIndexString(m_allocator->allocateStringConstant("$get_index").value)
 	, m_setIndexString(m_allocator->allocateStringConstant("$set_index").value)
 {
-
-	defineNativeFunction("floor", floor, 1);
-
 	auto listString = m_allocator->allocateStringConstant("List").value;
 	m_listType = m_allocator->allocateClass(listString, sizeof(List), reinterpret_cast<MarkingFunction>(List::mark));	
 
@@ -81,13 +96,13 @@ Vm::Vm(Allocator& allocator)
 	reset();
 }
 
-Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
+VmResult Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 {
 	m_callStack.clear();
 	m_stack.clear();
 	m_errorPrinter = &errorPrinter;
 
-	TRY_PUSH_CALL_STACK();
+	ASSERT(m_callStack.push() == true);
 	auto& frame = m_callStack.top();
 	frame.instructionPointer = program->byteCode.code.data();
 	frame.values = m_stack.topPtr;
@@ -96,12 +111,13 @@ Vm::Result Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 	frame.numberOfValuesToPopOffExceptArgs = 0;
 
 	const auto result = run();
-	if (result == Result::Success)
+	if (result.type == ResultType::Ok)
 	{
 		// The program should always finish without anything on both the excecution and call stack.
 		ASSERT(m_callStack.isEmpty() && m_stack.isEmpty());
+		return VmResult::Success;
 	}
-	return result;
+	return VmResult::RuntimeError;
 }
 
 void Vm::reset()
@@ -110,6 +126,9 @@ void Vm::reset()
 	auto listString = m_allocator->allocateStringConstant("List").value;
 	m_globals.set(listString, Value(reinterpret_cast<Obj*>(m_listType)));
 	defineNativeFunction("floor", floor, 1);
+	defineNativeFunction("invoke", invoke, 1);
+	defineNativeFunction("get_5", get_5, 0);
+	defineNativeFunction("throw_3", throw_3, 0);
 }
 
 Vm::Result Vm::run()
@@ -152,10 +171,7 @@ Vm::Result Vm::run()
 			auto optMethod = instance->class_->fields.get(overloadNameString); \
 			if (optMethod.has_value()) \
 			{ \
-				if (callValue(**optMethod, 2, 0) == Result::RuntimeError) \
-				{ \
-					return Result::RuntimeError; \
-				} \
+				TRY(callValue(**optMethod, 2, 0)); \
 			} \
 			else \
 			{ \
@@ -204,10 +220,7 @@ Vm::Result Vm::run()
 				auto optMethod = instance->class_->fields.get(m_modString);
 				if (optMethod.has_value())
 				{
-					if (callValue(**optMethod, 2, 0) == Result::RuntimeError)
-					{
-						return Result::RuntimeError;
-					}
+					TRY(callValue(**optMethod, 2, 0));
 				}
 				else
 				{
@@ -251,10 +264,7 @@ Vm::Result Vm::run()
 				auto optMethod = instance->class_->fields.get(m_modString);
 				if (optMethod.has_value())
 				{
-					if (callValue(**optMethod, 2, 0) == Result::RuntimeError)
-					{
-						return Result::RuntimeError;
-					}
+					TRY(callValue(**optMethod, 2, 0));
 				}
 				else
 				{
@@ -309,10 +319,7 @@ Vm::Result Vm::run()
 				auto optMethod = instance->class_->fields.get(overloadNameString); \
 				if (optMethod.has_value()) \
 				{ \
-					if (callValue(**optMethod, 2, 0) == Result::RuntimeError) \
-					{ \
-						return Result::RuntimeError; \
-					} \
+					TRY(callValue(**optMethod, 2, 0)); \
 				} \
 				else \
 				{ \
@@ -478,8 +485,7 @@ Vm::Result Vm::run()
 			bool doesNotAlreadyExist = m_globals.set(name, value);
 			if (doesNotAlreadyExist)
 			{
-				m_errorPrinter->outStream() << '\'' << name->chars << "' is not defined\n";
-				return Result::RuntimeError;
+				return fatalError("'%s' is not defined", name->chars);
 			}
 			m_stack.pop();
 			break;
@@ -608,10 +614,7 @@ Vm::Result Vm::run()
 				{
 					return fatalError("type doesn't define an index function");
 				}
-				if (callValue(**getIndexFunction, 2, 0) == Result::RuntimeError)
-				{
-					return Result::RuntimeError;
-				}
+				TRY(callValue(**getIndexFunction, 2, 0));
 			}
 			break;
 		}
@@ -626,10 +629,7 @@ Vm::Result Vm::run()
 				{
 					return fatalError("type doesn't define an set index function");
 				}
-				if (callValue(**setIndexFunction, 3, 0) == Result::RuntimeError)
-				{
-					return Result::RuntimeError;
-				}
+				TRY(callValue(**setIndexFunction, 3, 0));
 			}
 			else
 			{
@@ -735,7 +735,7 @@ Vm::Result Vm::run()
 			if (m_callStack.size() == 1)
 			{
 				m_callStack.pop();
-				return Result::Success;
+				return Result::ok();
 			}
 			else
 			{
@@ -762,7 +762,12 @@ Vm::Result Vm::run()
 				}
 
 				m_callStack.pop();
+
 				TRY_PUSH(result);
+				if (m_callStack.top().isNativeFunction())
+				{
+					return Result::ok();
+				}
 			}
 			break;
 		}
@@ -843,7 +848,7 @@ Vm::Result Vm::run()
 
 		default:
 			ASSERT_NOT_REACHED();
-			return Result::RuntimeError;
+			return Result::fatal();
 		}
 	}
 }
@@ -855,6 +860,48 @@ void Vm::defineNativeFunction(std::string_view name, NativeFunction function, in
 	m_globals.set(nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
 }
 
+Value Vm::call(Value& calle, Value* values, int argCount)
+{
+	for (int i = 0; i < argCount; i++)
+	{
+		if (m_stack.push(values[i]) == false)
+		{
+			throw FatalException{};
+		}
+	}
+
+	const auto callResult = callValue(calle, argCount, 0);
+	switch (callResult.type)
+	{
+		case ResultType::Ok: break;
+		case ResultType::Fatal: throw FatalException{};
+		case ResultType::Exception: throw NativeException(callResult.value);
+	}
+
+	if (calle.isObj() && calle.as.obj->isNativeFunction())
+	{
+		const auto& returnValue = m_stack.peek(0);
+		m_stack.pop();
+		return returnValue;
+	}
+
+	const auto runResult = run();
+	switch (runResult.type)
+	{
+		case ResultType::Ok:
+		{
+			const auto& returnValue = m_stack.peek(0);
+			m_stack.pop();
+			return returnValue;
+		}
+		case ResultType::Fatal: throw FatalException{};
+		case ResultType::Exception: throw NativeException(runResult.value);
+	}
+
+	ASSERT_NOT_REACHED();
+	return Value::null();
+}
+
 uint8_t Vm::readUint8()
 {
 	uint8_t value = *m_callStack.top().instructionPointer;
@@ -862,6 +909,7 @@ uint8_t Vm::readUint8()
 	return value;
 }
 
+// TODO: could make a constructor for NativeFunctionResult that takes the vm and a message which it logs.
 Vm::Result Vm::fatalError(const char* format, ...)
 {
 	char errorBuffer[256];
@@ -870,14 +918,14 @@ Vm::Result Vm::fatalError(const char* format, ...)
 	vsnprintf(errorBuffer, sizeof(errorBuffer), format, args);
 	va_end(args);
 	m_errorPrinter->outStream() << "fatal runtime error: " << errorBuffer << '\n';
-	for (auto& frame = m_callStack.crbegin(); frame != m_callStack.crend(); ++frame)
+	for (auto frame = m_callStack.crbegin(); frame != m_callStack.crend(); ++frame)
 	{
 		const auto function = frame->function;
 		const auto instructionOffset = frame->instructionPointer - function->byteCode.code.data();
 		const auto lineNumber = function->byteCode.lineNumberAtOffset[instructionOffset] + 1;
 		m_errorPrinter->outStream() << "line " << lineNumber << " in " << function->name->chars << "()\n";
 	}
-	return Result::RuntimeError;
+	return Result::fatal();
 }
 
 Vm::Result Vm::callObjFunction(ObjFunction* function, int argCount, int numberOfValuesToPopOffExceptArgs)
@@ -894,7 +942,7 @@ Vm::Result Vm::callObjFunction(ObjFunction* function, int argCount, int numberOf
 	frame.function = function;
 	frame.numberOfValuesToPopOffExceptArgs = numberOfValuesToPopOffExceptArgs;
 	frame.isTrySet = false;
-	return Result::Success;
+	return Result::ok();
 }
 
 Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffExceptArgs)
@@ -923,31 +971,28 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 
 		case ObjType::NativeFunction:
 		{
-			auto calle = obj->asNativeFunction();
-			if (argCount != calle->argCount)
+			auto function = obj->asNativeFunction();
+			if (argCount != function->argCount)
 			{
-				return fatalError("expected %d arguments but got %d", calle->argCount, argCount);
+				return fatalError("expected %d arguments but got %d", function->argCount, argCount);
 			} 
 			TRY_PUSH_CALL_STACK();
 			auto& frame = m_callStack.top();
 			frame.setNativeFunction();
-			const auto result = calle->function(m_stack.topPtr - argCount, argCount, *this, *m_allocator);
-			m_callStack.pop();
-
-			switch (result.type)
+			frame.isTrySet = true;
+			try
 			{
-				case NativeFunctionResultType::Ok:
-					m_stack.topPtr -= numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount);
-					TRY_PUSH(result.value);
-					break;
-
-				case NativeFunctionResultType::Exception:
-					TRY(throwValue(result.value));
-					break;
-
-				case NativeFunctionResultType::Fatal:
-					return Result::RuntimeError;
+				const auto result = function->function(m_stack.topPtr - argCount, argCount, *this, *m_allocator);
+				m_stack.topPtr -= numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount);
+				TRY_PUSH(result);
+				m_callStack.pop();
 			}
+			catch (const NativeException& exception)
+			{
+				m_callStack.pop();
+				TRY(throwValue(exception.value));
+			}
+
 			break;
 		}
 
@@ -956,13 +1001,13 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			// The class gets replaced with the instance so any other case would not work.
 			ASSERT(numberOfValuesToPopOffExceptArgs == 1);
 
-			auto calle = obj->asClass();
-			auto instance = (calle->instanceSize == 0)
-				? reinterpret_cast<Obj*>(m_allocator->allocateInstance(calle))
-				: reinterpret_cast<Obj*>(m_allocator->allocateNativeInstance(calle));
+			auto class_ = obj->asClass();
+			auto instance = (class_->instanceSize == 0)
+				? reinterpret_cast<Obj*>(m_allocator->allocateInstance(class_))
+				: reinterpret_cast<Obj*>(m_allocator->allocateNativeInstance(class_));
 
 			m_stack.topPtr[-argCount - 1] = Value(instance); // Replace the class with the instance.
-			if (auto initializer = calle->fields.get(m_initString); initializer.has_value())
+			if (const auto initializer = class_->fields.get(m_initString); initializer.has_value())
 			{
 				TRY(callValue(**initializer, argCount + 1, 0));
 				// Could check if the function returns null like python,
@@ -994,10 +1039,12 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 		}
 
 		default:
-			return fatalError("type is not calable\n");
+		{
+			return fatalError("type is not calable");
+		}
 	}
 
-	return Result::Success;
+	return Result::ok();
 }
 
 Vm::Result Vm::throwValue(const Value& value)
@@ -1008,11 +1055,16 @@ Vm::Result Vm::throwValue(const Value& value)
 
 		if (frame.isTrySet)
 		{
+			if (frame.isNativeFunction())
+			{
+				return Result::exception(value);
+			}
+
 			frame.isTrySet = false;
 			frame.instructionPointer = &frame.function->byteCode.code[frame.absoluteJumpToCatch];
 			m_stack.topPtr = frame.values - frame.numberOfValuesToPopOffExceptArgs;
 			TRY_PUSH(value);
-			return Result::Success;
+			return Result::ok();
 		}
 
 		m_callStack.pop();
@@ -1078,3 +1130,24 @@ void Vm::CallFrame::setNativeFunction()
 {
 	function = nullptr;
 }
+
+Vm::Result Vm::Result::ok()
+{
+	return Result(ResultType::Ok);
+}
+
+Vm::Result Vm::Result::exception(const Value& value)
+{
+	Result result(ResultType::Exception);
+	result.value = value;
+	return result;
+}
+
+Vm::Result Vm::Result::fatal()
+{
+	return Result(ResultType::Fatal);
+}
+
+Vm::Result::Result(ResultType type)
+	: type(type)
+{}

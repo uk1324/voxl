@@ -44,7 +44,7 @@ VOXL_NATIVE_FN(List::get_index)
 	const auto& index = args[1];
 	if (index.isInt() == false)
 	{
-		return NativeFunctionResult::exception(Value::null());
+		throw NativeException(Value::null());
 	}
 	return list->data[index.as.intNumber];
 }
@@ -56,7 +56,7 @@ VOXL_NATIVE_FN(List::set_index)
 	const auto& index = args[2];
 	if (index.isInt() == false)
 	{
-		return NativeFunctionResult::exception(Value::null());
+		throw NativeException(Value::null());
 	}
 	return list->data[index.as.intNumber] = value;
 }

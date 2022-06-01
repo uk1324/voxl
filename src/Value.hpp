@@ -116,35 +116,23 @@ public:
 	} as;
 };
 
-enum class NativeFunctionResultType
-{
-	Ok,
-	Exception,
-	Fatal,
-};
-
-struct NativeFunctionResult
-{
-	/* implicit */ NativeFunctionResult(const Value& value);
-	[[nodiscard]] static NativeFunctionResult exception(const Value& value);
-	[[nodiscard]] static NativeFunctionResult fatal();
-
-	NativeFunctionResultType type;
-	Value value;
-
-private:
-	// Can't just use struct initialization becuase a constructor is defined.
-	NativeFunctionResult() = default;
-};
-
 class Vm;
 class Alloactor;
-#define VOXL_NATIVE_FN(name) NativeFunctionResult name( \
+#define VOXL_NATIVE_FN(name) Value name( \
 	[[maybe_unused]] Value* args, \
 	[[maybe_unused]] int argCount, \
 	[[maybe_unused]] Vm& vm, \
 	[[maybe_unused]] Allocator& allocator)
-using NativeFunction = NativeFunctionResult(*)(Value* /*arguments*/, int /*argumentCount*/, Vm&, Allocator&);
+using NativeFunction = Value (*)(Value* /*arguments*/, int /*argumentCount*/, Vm&, Allocator&);
+
+struct NativeException
+{
+	NativeException(const Value& value)
+		: value(value)
+	{}
+
+	Value value;
+};
 
 struct ObjNativeFunction
 {

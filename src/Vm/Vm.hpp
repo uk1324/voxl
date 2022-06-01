@@ -10,14 +10,16 @@
 namespace Lang
 {
 
+enum class [[nodiscard]] VmResult
+{
+	Success,
+	RuntimeError,
+};
+
 class Vm
 {
-public:
-	enum class [[nodiscard]] Result
-	{
-		Success,
-		RuntimeError,
-	};
+private:
+	struct FatalException {};
 
 	// Order members to reduce the size.
 	struct CallFrame
@@ -38,18 +40,37 @@ public:
 		void setNativeFunction();
 	};
 
-private:
+	enum class ResultType
+	{
+		Ok,
+		Exception,
+		Fatal,
+	};
+
+	struct Result
+	{
+		[[nodiscard]] static Result ok();
+		[[nodiscard]] static Result exception(const Value& value);
+		[[nodiscard]] static Result fatal();
+
+		ResultType type;
+		Value value;
+
+	private:
+		Result(ResultType type);
+	};
 
 public:
 	Vm(Allocator& allocator);
 
 public:
-	Result execute(ObjFunction* program, ErrorPrinter& errorPrinter);
+	VmResult execute(ObjFunction* program, ErrorPrinter& errorPrinter);
 	void reset();
 
 	void defineNativeFunction(std::string_view name, NativeFunction function, int argCount);
 
 	//Value add(Value lhs, Value rhs);
+	Value call(Value& calle, Value* values, int argCount);
 
 private:
 	Result run();

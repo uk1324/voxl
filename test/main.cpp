@@ -54,6 +54,7 @@ std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "lambdas", "0 1 4 9 16 25 36 49 64 81 100 \n1 1 2 6 24 120 720 5040 40320 362880 3628800 \n" },
 	{ "sorting", "0 1 2 3 4 5 6 7 8 9 \n0 1 2 3 4 5 6 7 8 9 \n0 1 2 3 4 5 6 7 8 9 \n0 1 2 3 4 5 6 7 8 9 \n" },
 	{ "exception_from_native_function", "1null" },
+	{ "calling_functions_from_native_functions", "553353" },
 };
 
 void testFailed(std::string_view name)
@@ -111,7 +112,7 @@ int main()
 		output.str(std::string());
 		vm->reset();
 		auto vmResult = vm->execute(compilerResult.program, errorPrinter);
-		if (vmResult == Vm::Result::RuntimeError)
+		if (vmResult == VmResult::RuntimeError)
 		{
 			testFailed(name);
 			continue;

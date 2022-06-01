@@ -182,23 +182,3 @@ bool operator==(const Value& lhs, const Value& rhs)
 			return false;
 	}
 }
-
-NativeFunctionResult::NativeFunctionResult(const Value& value)
-	: type(NativeFunctionResultType::Ok)
-	, value(value)
-{}
-
-NativeFunctionResult NativeFunctionResult::exception(const Value& value)
-{
-	NativeFunctionResult result;
-	result.type = NativeFunctionResultType::Exception;
-	result.value = value;
-	return result;
-}
-
-NativeFunctionResult NativeFunctionResult::fatal()
-{
-	NativeFunctionResult result;
-	result.type = NativeFunctionResultType::Fatal;
-	return result;
-}
