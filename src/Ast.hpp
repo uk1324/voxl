@@ -42,6 +42,53 @@ struct Expr
 	const ExprType type;
 };
 
+enum class StmtType
+{
+	Expr,
+	Print,
+	VariableDeclaration,
+	Block,
+	Fn,
+	Ret,
+	If,
+	Loop,
+	Break,
+	Class,
+	Impl,
+	Try,
+	Throw,
+	Match,
+};
+
+struct Stmt
+{
+	Stmt(size_t start, size_t end, StmtType type);
+	virtual ~Stmt() = default;
+	size_t end() const;
+
+	const size_t start;
+	const size_t length;
+	const StmtType type;
+};
+
+using StmtList = std::vector<std::unique_ptr<Stmt>>;
+
+enum class PtrnType
+{
+	Class
+};
+
+struct Ptrn
+{
+	Ptrn(size_t start, size_t end, PtrnType type);
+	virtual ~Ptrn() = default;
+	size_t end() const;
+
+	const size_t start;
+	const size_t length;
+	const PtrnType type;
+};
+
 struct IntConstantExpr final : public Expr
 {
 	IntConstantExpr(Int value, size_t start, size_t end);
@@ -134,35 +181,13 @@ struct ArrayExpr final : public Expr
 	std::vector<std::unique_ptr<Expr>> values;
 };
 
-enum class StmtType
+struct LambdaExpr final : public Expr
 {
-	Expr,
-	Print,
-	VariableDeclaration,
-	Block,
-	Fn,
-	Ret,
-	If,
-	Loop,
-	Break,
-	Class,
-	Impl,
-	Try,
-	Throw,
+	LambdaExpr(std::vector<std::string_view> arguments, StmtList stmts, size_t start, size_t end);
+
+	std::vector<std::string_view> arguments;
+	StmtList stmts;
 };
-
-struct Stmt
-{
-	Stmt(size_t start, size_t end, StmtType type);
-	virtual ~Stmt() = default;
-	size_t end() const;
-
-	const size_t start;
-	const size_t length;
-	const StmtType type;
-};
-
-using StmtList = std::vector<std::unique_ptr<Stmt>>;
 
 struct ExprStmt final : public Stmt
 {
@@ -294,12 +319,25 @@ struct ThrowStmt final : public Stmt
 	std::unique_ptr<Expr> expr;
 };
 
-struct LambdaExpr final : public Expr
+struct MatchStmt final : public Stmt 
 {
-	LambdaExpr(std::vector<std::string_view> arguments, StmtList stmts, size_t start, size_t end);
+	struct Pair
+	{
+		std::unique_ptr<Ptrn> pattern;
+		StmtList block;
+	};
 
-	std::vector<std::string_view> arguments;
-	StmtList stmts;
+	MatchStmt(std::unique_ptr<Expr> expr, std::vector<Pair> cases, size_t start, size_t end);
+
+	std::unique_ptr<Expr> expr;
+	std::vector<Pair> cases;
+};
+
+struct ClassPtrn final : public Ptrn
+{
+	ClassPtrn(std::string_view className, size_t start, size_t end);
+
+	std::string_view className;
 };
 
 }

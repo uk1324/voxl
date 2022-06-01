@@ -55,6 +55,7 @@ std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "sorting", "0 1 2 3 4 5 6 7 8 9 \n0 1 2 3 4 5 6 7 8 9 \n0 1 2 3 4 5 6 7 8 9 \n0 1 2 3 4 5 6 7 8 9 \n" },
 	{ "exception_from_native_function", "1null" },
 	{ "calling_functions_from_native_functions", "553353" },
+	{ "match_class", "XY" },
 };
 
 void testFailed(std::string_view name)

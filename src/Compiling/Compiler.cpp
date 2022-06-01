@@ -1,3 +1,6 @@
+#include "Compiler.hpp"
+#include "Compiler.hpp"
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -137,9 +140,10 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 		CASE_STMT_TYPE(Impl, implStmt)
 		CASE_STMT_TYPE(Try, tryStmt)
 		CASE_STMT_TYPE(Throw, throwStmt)
+		CASE_STMT_TYPE(Match, matchStmt)
 	}
+#undef CASE_STMT_STMT
 	m_lineNumberStack.pop_back();
-
 	return Status::Ok;
 }
 
@@ -401,6 +405,29 @@ Compiler::Status Compiler::implStmt(const ImplStmt& stmt)
 	return Status::Ok;
 }
 
+Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
+{
+	TRY(compile(stmt.expr));
+	
+	std::vector<size_t> jumpsToEnd;
+	for (const auto& case_ : stmt.cases)
+	{
+		TRY(compile(case_.pattern));
+		const auto jumpToNextCase = emitJump(Op::JumpIfFalseAndPop);
+		TRY(compile(case_.block));
+		jumpsToEnd.push_back(emitJump(Op::Jump));
+		setJumpToHere(jumpToNextCase);
+	}
+
+	for (const auto jump : jumpsToEnd)
+	{
+		setJumpToHere(jump);
+	}
+
+	emitOp(Op::PopStack);
+	return Status::Ok;
+}
+
 Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 {
 #define CASE_EXPR_TYPE(exprType, exprFunction) \
@@ -423,8 +450,8 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 		CASE_EXPR_TYPE(GetField, getFieldExpr)
 		CASE_EXPR_TYPE(Lambda, lambdaExpr)
 	}
+#undef CASE_EXPR_TYPE
 	m_lineNumberStack.pop_back();
-
 	return Status::Ok;
 }
 
@@ -613,6 +640,29 @@ Compiler::Status Compiler::arrayExpr(const ArrayExpr&)
 	}
 	TRY(emitOpArg(Op::CreateArray, expr.values.size(), expr.start, expr.end()));*/
 	return Status::Error;
+}
+
+// The expression being matches must be TOS.
+Compiler::Status Compiler::compile(const std::unique_ptr<Ptrn>& ptrn)
+{
+#define CASE_PTRN_TYPE(ptrnType, ptrnFunction) \
+	case PtrnType::ptrnType: TRY(ptrnFunction(*static_cast<ptrnType##Ptrn*>(ptrn.get()))); break;	
+
+	m_lineNumberStack.push_back(m_errorPrinter->sourceInfo().getLine(ptrn->start));
+	switch (ptrn->type)
+	{
+		CASE_PTRN_TYPE(Class, classPtrn)
+	}
+#undef CASE_PTRN_TYPE
+
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::classPtrn(const ClassPtrn& ptrn)
+{
+	TRY(variable(ptrn.className, VariableOp::Get));
+	emitOp(Op::MatchClass);
+	return Status::Ok;
 }
 
 Compiler::Status Compiler::lambdaExpr(const LambdaExpr& expr)

@@ -70,6 +70,17 @@ Token Scanner::token()
 			return makeToken(TokenType::Slash);
 
 		}
+		case '=': 
+		{
+			if (match('='))
+				return makeToken(TokenType::EqualsEquals);
+			
+			if (match('>'))
+				return makeToken(TokenType::Arrow);
+
+			return makeToken(TokenType::Equals);
+		}
+
 		case '&': return match('&')
 			? makeToken(TokenType::AndAnd)
 			: makeToken(TokenType::And);
@@ -94,9 +105,6 @@ Token Scanner::token()
 		case '!': return match('=')
 			? makeToken(TokenType::NotEquals)
 			: makeToken(TokenType::Not);
-		case '=': return match('=')
-			? makeToken(TokenType::EqualsEquals)
-			: makeToken(TokenType::Equals);
 		case ';': return makeToken(TokenType::Semicolon);
 		case '(': return makeToken(TokenType::LeftParen);
 		case ')': return makeToken(TokenType::RightParen);
@@ -223,6 +231,7 @@ Token Scanner::keywordOrIdentifier()
 		{ "finally", TokenType::Finally },
 		{ "throw", TokenType::Throw },
 		{ "impl", TokenType::Impl },
+		{ "match", TokenType::Match },
 	};
 
 	// TODO: Could check here if identifiers starting with "$" (reserved identifiers) are spelled correctly.

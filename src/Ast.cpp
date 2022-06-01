@@ -13,6 +13,28 @@ size_t Expr::end() const
 	return start + length;
 }
 
+Stmt::Stmt(size_t start, size_t end, StmtType type)
+	: start(start)
+	, length(end - start)
+	, type(type)
+{}
+
+size_t Stmt::end() const
+{
+	return start + length;
+}
+
+Ptrn::Ptrn(size_t start, size_t end, PtrnType type)
+	: start(start)
+	, length(end - start)
+	, type(type)
+{}
+
+size_t Ptrn::end() const
+{
+	return start + length;
+}
+
 IntConstantExpr::IntConstantExpr(Int value, size_t start, size_t end)
 	: Expr(start, end, ExprType::IntConstant)
 	, value(value)
@@ -80,16 +102,11 @@ ArrayExpr::ArrayExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, si
 	, values(std::move(values))
 {}
 
-Stmt::Stmt(size_t start, size_t end, StmtType type)
-	: start(start)
-	, length(end - start)
-	, type(type)
+LambdaExpr::LambdaExpr(std::vector<std::string_view> arguments, StmtList stmts, size_t start, size_t end)
+	: Expr(start, end, ExprType::Lambda)
+	, arguments(std::move(arguments))
+	, stmts(std::move(stmts))
 {}
-
-size_t Stmt::end() const
-{
-	return start + length;
-}
 
 ExprStmt::ExprStmt(std::unique_ptr<Expr> expr, size_t start, size_t end)
 	: Stmt(start, end, StmtType::Expr)
@@ -187,14 +204,18 @@ TryStmt::TryStmt(
 	, finallyBlock(std::move(finallyBlock))
 {}
 
-
 ThrowStmt::ThrowStmt(std::unique_ptr<Expr> expr, size_t start, size_t end)
 	: Stmt(start, end, StmtType::Throw)
 	, expr(std::move(expr))
 {}
 
-LambdaExpr::LambdaExpr(std::vector<std::string_view> arguments, StmtList stmts, size_t start, size_t end)
-	: Expr(start, end, ExprType::Lambda)
-	, arguments(std::move(arguments))
-	, stmts(std::move(stmts))
+MatchStmt::MatchStmt(std::unique_ptr<Expr> expr, std::vector<Pair> cases, size_t start, size_t end)
+	: Stmt(start, end, StmtType::Match)
+	, expr(std::move(expr))
+	, cases(std::move(cases))
+{}
+
+ClassPtrn::ClassPtrn(std::string_view className, size_t start, size_t end)
+	: Ptrn(start, end, PtrnType::Class)
+	, className(className)
 {}

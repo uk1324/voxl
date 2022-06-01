@@ -846,6 +846,14 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::MatchClass:
+		{
+			const auto& class_ = m_stack.peek(0).as.obj->asClass();
+			const auto& value = m_stack.peek(1);
+			m_stack.top() = Value(getClassOrNullptr(value) == class_);
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 			return Result::fatal();
@@ -878,6 +886,10 @@ Value Vm::call(Value& calle, Value* values, int argCount)
 		case ResultType::Exception: throw NativeException(callResult.value);
 	}
 
+	// TODO: Would also need to check for native function in constructors.
+	// A simpler solution might be returning if the function is a native function from callValue
+	// Becuase so many places call callValue, I could create a new function callValueAndReturnIfNative.
+	// Then just call this function from callValue and ignore the reutrn value.
 	if (calle.isObj() && calle.as.obj->isNativeFunction())
 	{
 		const auto& returnValue = m_stack.peek(0);

@@ -90,6 +90,7 @@ private:
 	Status implStmt(const ImplStmt& stmt);
 	Status tryStmt(const TryStmt& stmt);
 	Status throwStmt(const ThrowStmt& stmt);
+	Status matchStmt(const MatchStmt& stmt);
 
 	Status compile(const std::unique_ptr<Expr>& expr);
 	Status compileBinaryExpr(const std::unique_ptr<Expr>& lhs, TokenType op, const std::unique_ptr<Expr>& rhs);
@@ -108,11 +109,17 @@ private:
 	Status getFieldExpr(const GetFieldExpr& expr);
 	Status lambdaExpr(const LambdaExpr& expr);
 
+	Status compile(const std::unique_ptr<Ptrn>& ptrn);
+	Status classPtrn(const ClassPtrn& ptrn);
+
 	// Expects the variable initializer to be on top of the stack.
 	Status createVariable(std::string_view name, size_t start, size_t end);
 	// Could make a RAII class
 	void beginScope();
 	void endScope();
+	// TODO: Just make function for get and set that will call variable() or making a function resolveVariable
+	// would be more complicated and require a new type that could be either global, local, orUpvalue and have an
+	// index or a string.
 	enum class VariableOp { Get, Set };
 	Status variable(std::string_view name, VariableOp op);
 	Status loadConstant(size_t index);

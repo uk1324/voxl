@@ -74,7 +74,7 @@ namespace Lang
 		TryEnd,
 		Throw, // [value]
 		CloseUpvalue, // index
-
+		MatchClass, // [value, class] -> [value, isInstanceBool]
 		PopStack,
 	};
 }

@@ -1,4 +1,3 @@
-#include "Parser.hpp"
 #include <Parsing/Parser.hpp>
 
 using namespace Lang;
@@ -65,6 +64,8 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return tryStmt();
 	if (match(TokenType::Throw))
 		return throwStmt();
+	if (match(TokenType::Match))
+		return matchStmt();
 	else
 	{
 		if (check(TokenType::Identifier) && (peekNext().type == TokenType::Colon))
@@ -187,7 +188,7 @@ std::unique_ptr<Stmt> Parser::breakStmt()
 
 std::unique_ptr<Stmt> Parser::classStmt()
 {
-	size_t start = peekPrevious().start;
+	const auto start = peekPrevious().start;
 
 	expect(TokenType::Identifier, "expected class name");
 	auto name = peekPrevious().identifier;
@@ -282,6 +283,28 @@ std::unique_ptr<Stmt> Parser::variableDeclarationStmt()
 
 	expect(TokenType::Semicolon, "expected ';'");
 	return std::make_unique<VariableDeclarationStmt>(std::move(nameInitializerPairs), start, peekPrevious().end);
+}
+
+std::unique_ptr<Stmt> Parser::matchStmt()
+{
+	const auto start = peekPrevious().start;
+
+	auto expression = expr();
+
+	expect(TokenType::LeftBrace, "expected '{'");
+
+	decltype (MatchStmt::cases) cases;
+
+	while ((isAtEnd() == false) && (check(TokenType::RightBrace) == false))
+	{
+		auto pattern = ptrn();
+		expect(TokenType::Arrow, "expected '=>'");
+		auto stmts = block();
+		cases.push_back({ std::move(pattern), std::move(stmts) });
+	}
+	expect(TokenType::RightBrace, "expected '}'");
+	
+	return std::make_unique<MatchStmt>(std::move(expression), std::move(cases), start, peekPrevious().end);
 }
 
 std::unique_ptr<FnStmt> Parser::function(size_t start)
@@ -553,6 +576,22 @@ std::unique_ptr<Expr> Parser::primary()
 		return std::make_unique<LambdaExpr>(std::move(arguments), std::move(stmts), start, peekPrevious().end);
 	}
 	throw errorAt(peek(), "expected expression");
+}
+
+std::unique_ptr<Ptrn> Parser::ptrn()
+{
+	if (match(TokenType::Identifier))
+	{
+		return classPtrn();
+	}
+
+	throw errorAt(peek(), "expected pattern");
+}
+
+std::unique_ptr<Ptrn> Parser::classPtrn()
+{
+	const auto& previous = peekPrevious();
+	return std::make_unique<ClassPtrn>(previous.identifier, previous.start, previous.end);
 }
 
 const Token& Parser::peek() const

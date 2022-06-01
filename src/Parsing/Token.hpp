@@ -50,6 +50,7 @@ enum class TokenType
 	Comma,
 	LeftBracket,
 	RightBracket,
+	Arrow,
 
 	// Keywords
 	Print,
@@ -71,6 +72,7 @@ enum class TokenType
 	Throw,
 	Finally,
 	Impl,
+	Match,
 
 	// Other
 	Identifier,
