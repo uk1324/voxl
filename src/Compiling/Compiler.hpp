@@ -11,6 +11,9 @@
 
 // Could synchronize on global statements because even if an error happend It can try to compile further because globals are executed at runtime.
 
+// TODO: Make a function compile block that would take a StmtList and beginScopel compile and endScope.
+// Remember too add the line numbers.
+
 namespace Lang
 {
 

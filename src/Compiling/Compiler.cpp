@@ -1,6 +1,3 @@
-#include "Compiler.hpp"
-#include "Compiler.hpp"
-#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -309,31 +306,54 @@ Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
 
 Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 {
-	ASSERT(stmt.catchBlock.has_value() || stmt.finallyBlock.has_value());
+	ASSERT((stmt.catchBlocks.empty() == false) || stmt.finallyBlock.has_value());
+	// TODO: Currently this isn't handled properly.
+	ASSERT((stmt.finallyBlock.has_value() && stmt.catchBlocks.empty()) == false);
 
-	emitOp(Op::TryBegin);
-	const auto tryJumpToCatch = currentLocation();
-	emitUint32(0);
+	//emitOp(Op::TryBegin);
+	//// TODO: Make it so the absolute jump is calculated at runtime.
+	//const auto jumpToCatchBlocks = currentLocation();
+	//emitUint32(0);
+	const auto jumpToCatchBlocks = emitJump(Op::TryBegin);
+	beginScope();
 	TRY(compile(stmt.tryBlock));
+	endScope();
 	emitOp(Op::TryEnd);
+	const auto jumpToEndOfCatchBlocks = emitJump(Op::Jump);
 
-	const auto jumpToEndOfCatch = emitJump(Op::Jump);
-
-	if (stmt.catchBlock.has_value())
+	setJumpToHere(jumpToCatchBlocks);
+	std::vector<size_t> jumpsToCatchEpilogue;
+	for (const auto& catchBlock : stmt.catchBlocks)
 	{
-		patch(tryJumpToCatch, static_cast<int32_t>(currentLocation()));
+		TRY(compile(catchBlock.pattern));
+		const auto jumpToNextHandler = emitJump(Op::JumpIfFalseAndPop);
 
 		beginScope();
 
 		// Declare a variable even if unused so the VM catch doesn't have to handle it as a special case.
-		auto name = stmt.caughtValueName.has_value() ? *stmt.caughtValueName : "";
+		const auto name = catchBlock.caughtValueName.has_value() ? *catchBlock.caughtValueName : "";
 		TRY(createVariable(name, stmt.start, stmt.end()));
 
-		TRY(compile(*stmt.catchBlock));
-
+		beginScope();
+		TRY(compile(catchBlock.block));
 		endScope();
+		jumpsToCatchEpilogue.push_back(emitJump(Op::Jump));
+
+		// Not calling endScope() so the caught value remains on the stack through multiple handlers.
+		m_scopes.pop_back();
+		setJumpToHere(jumpToNextHandler);
 	}
-	setJumpToHere(jumpToEndOfCatch);
+
+	emitOp(Op::Rethrow);
+
+	for (const auto& jump : jumpsToCatchEpilogue)
+	{
+		setJumpToHere(jump);
+	}
+	// Pop the caught value.
+	emitOp(Op::PopStack);
+
+	setJumpToHere(jumpToEndOfCatchBlocks);
 
 	if (stmt.finallyBlock.has_value())
 	{

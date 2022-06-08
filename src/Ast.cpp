@@ -192,15 +192,13 @@ ImplStmt::ImplStmt(std::string_view typeName, std::vector<std::unique_ptr<FnStmt
 
 TryStmt::TryStmt(
 	StmtList tryBlock,
-	std::optional<std::string_view> caughtValueName,
-	std::optional<StmtList> catchBlock,
+	std::vector<CatchBlock> catchBlocks,
 	std::optional<StmtList> finallyBlock,
 	size_t start,
 	size_t end)
 	: Stmt(start, end, StmtType::Try)
 	, tryBlock(std::move(tryBlock))
-	, caughtValueName(caughtValueName)
-	, catchBlock(std::move(catchBlock))
+	, catchBlocks(std::move(catchBlocks))
 	, finallyBlock(std::move(finallyBlock))
 {}
 

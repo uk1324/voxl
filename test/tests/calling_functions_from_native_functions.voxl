@@ -14,14 +14,14 @@ fn b() {
 // Catch language exception.
 try {
 	invoke(b);
-} catch value {
+} catch Int => value {
 	print(value);
 }
 
 // Catch native exception.
 try {
 	invoke(throw_3);
-} catch value {
+} catch Int => value {
 	print(value);
 }
 
@@ -38,6 +38,6 @@ fn d() {
 
 try {
 	invoke(d);
-} catch value {
+} catch Int => value {
 	print(value);
 }

@@ -23,7 +23,7 @@ static VOXL_NATIVE_FN(floor)
 		return Value(static_cast<Int>(::floor(args[0].as.floatNumber)));
 	}
 
-	throw NativeException(Value::null());
+	throw NativeException(Value::integer(0));
 }
 
 static VOXL_NATIVE_FN(invoke)
@@ -62,6 +62,13 @@ static VOXL_NATIVE_FN(throw_3)
 		return fatalError("call stack overflow"); \
 	}
 
+// TODO: Maybe make a better message.
+#define TRY_PUSH_EXCEPTION_HANDLER() \
+	if (m_exceptionHandlers.push() == false) \
+	{ \
+		return fatalError("call stack overflow"); \
+	}
+
 Vm::Vm(Allocator& allocator)
 	: m_allocator(&allocator)
 	, m_errorPrinter(nullptr)
@@ -93,6 +100,13 @@ Vm::Vm(Allocator& allocator)
 	addFn("size", List::get_size, 1);
 	addFn("$get_index", List::get_index, 2);
 	addFn("$set_index", List::set_index, 3);
+
+	auto intString = m_allocator->allocateStringConstant("Int").value;
+	m_intType = m_allocator->allocateClass(intString, 0, nullptr);
+
+	auto stringString = m_allocator->allocateStringConstant("String").value;
+	m_stringType = m_allocator->allocateClass(stringString, 0, nullptr);
+
 	reset();
 }
 
@@ -107,7 +121,6 @@ VmResult Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 	frame.instructionPointer = program->byteCode.code.data();
 	frame.values = m_stack.topPtr;
 	frame.function = program;
-	frame.isTrySet = false;
 	frame.numberOfValuesToPopOffExceptArgs = 0;
 
 	const auto result = run();
@@ -123,8 +136,9 @@ VmResult Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 void Vm::reset()
 {
 	m_globals.clear();
-	auto listString = m_allocator->allocateStringConstant("List").value;
-	m_globals.set(listString, Value(reinterpret_cast<Obj*>(m_listType)));
+	m_globals.set(m_listType->name, Value(reinterpret_cast<Obj*>(m_listType)));
+	m_globals.set(m_intType->name, Value(reinterpret_cast<Obj*>(m_intType)));
+	m_globals.set(m_stringType->name, Value(reinterpret_cast<Obj*>(m_stringType)));
 	defineNativeFunction("floor", floor, 1);
 	defineNativeFunction("invoke", invoke, 1);
 	defineNativeFunction("get_5", get_5, 0);
@@ -761,9 +775,15 @@ Vm::Result Vm::run()
 					m_openUpvalues.erase(it);
 				}
 
+				while ((m_exceptionHandlers.isEmpty() == false) && (m_exceptionHandlers.top().callFrame == &frame))
+				{
+					m_exceptionHandlers.pop();
+				}
+
 				m_callStack.pop();
 
 				TRY_PUSH(result);
+
 				if (m_callStack.top().isNativeFunction())
 				{
 					return Result::ok();
@@ -786,14 +806,18 @@ Vm::Result Vm::run()
 
 		case Op::TryBegin:
 		{
-			auto jump = readUint32();
-			m_callStack.top().isTrySet = true;
-			m_callStack.top().absoluteJumpToCatch = jump;
+			const auto jump = readUint32();
+			TRY_PUSH_EXCEPTION_HANDLER();
+			auto& handler = m_exceptionHandlers.top();
+			auto& frame = m_callStack.top();
+			handler.callFrame = &frame;
+			handler.handlerCodeLocation = frame.instructionPointer + jump;
+			handler.stackTopPtrBeforeTry = m_stack.topPtr;
 			break;
 		}
 
 		case Op::TryEnd:
-			m_callStack.top().isTrySet = false;
+			m_exceptionHandlers.pop();
 			break;
 
 		case Op::Throw:
@@ -851,6 +875,12 @@ Vm::Result Vm::run()
 			const auto& class_ = m_stack.peek(0).as.obj->asClass();
 			const auto& value = m_stack.peek(1);
 			m_stack.top() = Value(getClassOrNullptr(value) == class_);
+			break;
+		}
+
+		case Op::Rethrow:
+		{
+			throwValue(*m_callStack.top().caughtValue);
 			break;
 		}
 
@@ -953,7 +983,6 @@ Vm::Result Vm::callObjFunction(ObjFunction* function, int argCount, int numberOf
 	frame.values = m_stack.topPtr - argCount;
 	frame.function = function;
 	frame.numberOfValuesToPopOffExceptArgs = numberOfValuesToPopOffExceptArgs;
-	frame.isTrySet = false;
 	return Result::ok();
 }
 
@@ -991,7 +1020,6 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			TRY_PUSH_CALL_STACK();
 			auto& frame = m_callStack.top();
 			frame.setNativeFunction();
-			frame.isTrySet = true;
 			try
 			{
 				const auto result = function->function(m_stack.topPtr - argCount, argCount, *this, *m_allocator);
@@ -1017,6 +1045,8 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			auto instance = (class_->instanceSize == 0)
 				? reinterpret_cast<Obj*>(m_allocator->allocateInstance(class_))
 				: reinterpret_cast<Obj*>(m_allocator->allocateNativeInstance(class_));
+
+			// TODO: Handle special classes like Int.
 
 			m_stack.topPtr[-argCount - 1] = Value(instance); // Replace the class with the instance.
 			if (const auto initializer = class_->fields.get(m_initString); initializer.has_value())
@@ -1061,33 +1091,42 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 
 Vm::Result Vm::throwValue(const Value& value)
 {
-	while (m_callStack.isEmpty() == false)
+	if (m_exceptionHandlers.isEmpty())
 	{
-		auto& frame = m_callStack.top();
+		return fatalError("uncaught exception");
+	}
 
-		if (frame.isTrySet)
+	const auto& handler = m_exceptionHandlers.top();
+	auto& catchFrame = *handler.callFrame;
+
+	for (auto frame = m_callStack.crbegin(); (frame != m_callStack.crend()) && (&*frame > &catchFrame); ++frame)
+	{
+		if (frame->isNativeFunction())
 		{
-			if (frame.isNativeFunction())
-			{
-				return Result::exception(value);
-			}
-
-			frame.isTrySet = false;
-			frame.instructionPointer = &frame.function->byteCode.code[frame.absoluteJumpToCatch];
-			m_stack.topPtr = frame.values - frame.numberOfValuesToPopOffExceptArgs;
-			TRY_PUSH(value);
-			return Result::ok();
+			return Result::exception(value);
 		}
-
 		m_callStack.pop();
 	}
-	return fatalError("uncaught exception");
+
+	m_stack.topPtr = handler.stackTopPtrBeforeTry;
+	catchFrame.instructionPointer = handler.handlerCodeLocation;
+	TRY_PUSH(value);
+	catchFrame.caughtValue = &m_stack.top();
+
+	m_exceptionHandlers.pop();
+
+	return Result::ok();
 }
 
 ObjClass* Vm::getClassOrNullptr(const Value& value)
 {
+	if (value.isInt())
+		return m_intType;
+
 	if (value.isObj())
 	{
+		if (value.as.obj->isString())
+			return m_stringType;
 		if (value.as.obj->isInstance())
 			return value.as.obj->asInstance()->class_;
 		if (value.as.obj->isNativeInstance())
@@ -1133,7 +1172,7 @@ uint32_t Vm::readUint32()
 	return value;
 }
 
-bool Vm::CallFrame::isNativeFunction()
+bool Vm::CallFrame::isNativeFunction() const
 {
 	return function == nullptr;
 }

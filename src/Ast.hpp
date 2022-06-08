@@ -298,17 +298,22 @@ struct ImplStmt final : public Stmt
 
 struct TryStmt final : public Stmt
 {
+	struct CatchBlock
+	{
+		std::unique_ptr<Ptrn> pattern;
+		std::optional<std::string_view> caughtValueName;
+		StmtList block;
+	};
+
 	TryStmt(
 		StmtList tryBlock,
-		std::optional<std::string_view> caughtValueName,
-		std::optional<StmtList> catchBlock,
+		std::vector<CatchBlock> catchBlocks,
 		std::optional<StmtList> finallyBlock,
 		size_t start,
 		size_t end);
 
 	StmtList tryBlock; 
-	std::optional<std::string_view> caughtValueName;
-	std::optional<StmtList> catchBlock; 
+	std::vector<CatchBlock> catchBlocks;
 	std::optional<StmtList> finallyBlock;
 };
 

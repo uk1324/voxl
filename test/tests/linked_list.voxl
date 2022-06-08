@@ -84,7 +84,7 @@ x.push(7);
 x.pop();
 try {
 	x.pop();
-} catch error {
+} catch String => error {
 	print(error ++ " ");
 }
 x.push(1);

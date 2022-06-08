@@ -27,17 +27,22 @@ private:
 		const uint8_t* instructionPointer;
 		Value* values;
 		ObjUpvalue** upvalues;
-		// TODO: Could set to nullptr for native functions.
 		ObjFunction* function;
+		Value* caughtValue;
 		int numberOfValuesToPopOffExceptArgs;
-		uint32_t absoluteJumpToCatch;
-		bool isTrySet;
 		// TODO: Try catch doesn't pop the block off the stack when an exception happens.
 		// To fix this I could store the stack value before try on Op::TryBegin otherwise it would be set to nullptr
 		// indicating that try isn't set.
 
-		bool isNativeFunction();
+		bool isNativeFunction() const;
 		void setNativeFunction();
+	};
+
+	struct ExceptionHandler
+	{
+		Value* stackTopPtrBeforeTry;
+		const uint8_t* handlerCodeLocation;
+		CallFrame* callFrame;
 	};
 
 	enum class ResultType
@@ -91,7 +96,8 @@ public:
 	HashTable m_globals;
 	
 	StaticStack<Value, 1024> m_stack;
-	StaticStack<CallFrame, 100> m_callStack;
+	StaticStack<CallFrame, 128> m_callStack;
+	StaticStack<ExceptionHandler, 128> m_exceptionHandlers;
 
 	Allocator* m_allocator;
 
@@ -112,6 +118,8 @@ public:
 	ObjString* m_getIndexString;
 	ObjString* m_setIndexString;
 	ObjClass* m_listType;
+	ObjClass* m_intType;
+	ObjClass* m_stringType;
 
 	Allocator::MarkingFunctionHandle m_rootMarkingFunctionHandle;
 };

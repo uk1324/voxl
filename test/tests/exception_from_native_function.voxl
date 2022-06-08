@@ -2,6 +2,6 @@ print(floor(1.2));
 
 try {
 	floor("abc");
-} catch error {
+} catch Int => error {
 	print(error);
 }

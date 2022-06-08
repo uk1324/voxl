@@ -233,26 +233,50 @@ std::unique_ptr<Stmt> Parser::tryStmt()
 	if (match(TokenType::Finally))
 	{
 		auto finallyBlock = block();
-		return std::make_unique<TryStmt>(std::move(tryBlock), std::nullopt, std::nullopt, std::move(finallyBlock), start, peekPrevious().end);
+		return std::make_unique<TryStmt>(
+			std::move(tryBlock), 
+			decltype(TryStmt::catchBlocks)(), 
+			std::move(finallyBlock), 
+			start, 
+			peekPrevious().end);
 	}
 
-	expect(TokenType::Catch, "expected catch block");
-
-	std::optional<std::string_view> caughtValueName;
-	if (check(TokenType::LeftBrace) == false)
+	if (check(TokenType::Catch) == false)
 	{
-		expect(TokenType::Identifier, "expected caught value name");
-		caughtValueName = peekPrevious().identifier;
+		throw errorAt(peek(), "expected a catch block");
 	}
-	auto catchBlock = block();
+
+	decltype(TryStmt::catchBlocks) catchBlocks;
+	while ((isAtEnd() == false) && match(TokenType::Catch))
+	{
+		auto pattern = ptrn();
+		std::optional<std::string_view> caughtValueName;
+		if (match(TokenType::Arrow))
+		{
+			expect(TokenType::Identifier, "expected caught value name");
+			caughtValueName = peekPrevious().identifier;
+		}
+		auto stmts = block();
+		catchBlocks.push_back({ std::move(pattern), caughtValueName, std::move(stmts) });
+	}
 
 	if (match(TokenType::Finally))
 	{
 		auto finallyBlock = block();
-		return std::make_unique<TryStmt>(std::move(tryBlock), caughtValueName, std::move(catchBlock), std::move(finallyBlock), start, peekPrevious().end);
+		return std::make_unique<TryStmt>(
+			std::move(tryBlock), 
+			std::move(catchBlocks), 
+			std::move(finallyBlock), 
+			start, 
+			peekPrevious().end);
 	}
 
-	return std::make_unique<TryStmt>(std::move(tryBlock), caughtValueName, std::move(catchBlock), std::nullopt, start, peekPrevious().end);
+	return std::make_unique<TryStmt>(
+		std::move(tryBlock),
+		std::move(catchBlocks),
+		std::nullopt,
+		start,
+		peekPrevious().end);
 }
 
 std::unique_ptr<Stmt> Parser::throwStmt()

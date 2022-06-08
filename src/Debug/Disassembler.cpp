@@ -151,6 +151,8 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::GetUpvalue: return opNumber("getUpvalue", byteCode, offset);
 		case Op::SetUpvalue: return opNumber("setUpvalue", byteCode, offset);
 		case Op::CloseUpvalue: return closeUpvalueOp("closeUpvalue", byteCode, offset);
+		case Op::MatchClass: return justOp("matchClass");
+		case Op::Rethrow: return justOp("rethrow");
 
 		default:
 			std::cout << "invalid op";

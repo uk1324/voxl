@@ -1,16 +1,35 @@
-class X {}
-class Y {}
-
-fn match_instance(instance) {
-	match instance {
-		X => {
-			print("X");
-		}
-		Y => {
-			print("Y");
-		}
-	}
+fn b() {
+	throw 3;
 }
 
-match_instance(X());
-match_instance(Y());
+// Catch language exception.
+try {
+	invoke(b);
+} catch Int => value {
+	print(value);
+}
+
+/*
+// Catch native exception.
+try {
+	invoke(throw_3);
+} catch Int => value {
+	print(value);
+}
+
+// Multiple levels.
+fn c() {
+	ret invoke(a);
+}
+
+print(invoke(c));
+
+fn d() {
+	ret invoke(b);
+}
+
+try {
+	invoke(d);
+} catch Int => value {
+	print(value);
+}*/

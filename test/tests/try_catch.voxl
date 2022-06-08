@@ -9,7 +9,7 @@ fn recursion(n)
 try {
 	recursion(0);
 	print("try");
-} catch value {
+} catch String => value {
 	print(value);
 } finally {
 	print("finally");

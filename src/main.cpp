@@ -133,6 +133,29 @@ Making more complex rules would probably require storing the information on what
 Solving the problem using the parser would probably produce but errors and also would require modying quite a bit of the code.
 */
 
+// TODO: Maybe replace push_back with emplace_back
+
+/*
+Unit testing games.
+
+clear();
+
+e1 : spawnZombie(0, 2, 0);
+e2 : spawnZombie(0, 4, 0);
+start : Timer();
+
+loop {
+	if e1 collides e2 {
+		success();
+	} else if start.timeSince() > 2000 {
+		failure();
+	}
+}
+
+Maybe set some timeout outside of the language.
+
+*/
+
 VOXL_NATIVE_FN(add)
 {
 	if ((args[0].type != ValueType::Int) || (args[1].type != ValueType::Int))

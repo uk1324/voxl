@@ -73,6 +73,7 @@ namespace Lang
 		TryBegin, // absolute jump to catch stmt.
 		TryEnd,
 		Throw, // [value]
+		Rethrow,
 		CloseUpvalue, // index
 		MatchClass, // [value, class] -> [value, isInstanceBool]
 		PopStack,

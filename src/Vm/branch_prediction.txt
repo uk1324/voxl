@@ -1,0 +1,41 @@
+Switch statements over enums compile to a jump table. This creates a single indirect jump instruction. Some older processor microarchitectures aren't very good at predicting indirect jumps. Some of them always predict the last branch that was taken. To improve this some language implementations like CPython use compiler extensions like computed gotos (supported by Clang and GCC, but not by MSVC). They put a single indirect jump on the end of every instruction with is better at predicting repeated sequences of instructions.
+
+Example from https://eli.thegreenplace.net/2012/07/12/computed-goto-for-efficient-dispatch-tables
+int interp_cgoto(unsigned char* code, int initval) {
+    static void* dispatch_table[] = {
+        &&do_halt, &&do_inc, &&do_dec, &&do_mul2,
+        &&do_div2, &&do_add7, &&do_neg};
+    #define DISPATCH() goto *dispatch_table[code[pc++]]
+
+    int pc = 0;
+    int val = initval;
+
+    DISPATCH();
+    while (1) {
+        do_halt:
+            return val;
+        do_inc:
+            val++;
+            DISPATCH();
+        do_dec:
+            val--;
+            DISPATCH();
+        do_mul2:
+            val *= 2;
+            DISPATCH();
+        do_div2:
+            val /= 2;
+            DISPATCH();
+        do_add7:
+            val += 7;
+            DISPATCH();
+        do_neg:
+            val = -val;
+            DISPATCH();
+    }
+}
+
+One minor optimiztion that could be implemented without writing different dispatch methods for different compilers is the removal of the conditional branch at the beginning of the switch. Compilers always generate a check if the value is out of the range of the switch. This can be removed by putting __builtin_unreachable() for GCC and Clang or __assume(0) for MSVC in the default case of the switch. Though this probably shouldn't be done becuase it makes invalid op codes cause undefined behaviour and the branch is amost always taken making it very easy to predict, so it shouldn't cause any preformance problems.
+
+https://github.com/python/cpython/blob/main/Python/ceval.c#L1249 - this was written around 2010
+https://hal.inria.fr/hal-01100647/document - branch prediction on modern CPUs
