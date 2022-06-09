@@ -54,6 +54,8 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return loopStmt();
 	if (match(TokenType::While))
 		return whileStmt();
+	if (match(TokenType::For))
+		return forStmt();
 	if (match(TokenType::Break))
 		return breakStmt();
 	if (match(TokenType::Class))
@@ -177,6 +179,65 @@ std::unique_ptr<Stmt> Parser::whileStmt()
 	auto condition = expr();
 	auto stmts = block();
 	return std::make_unique<LoopStmt>(std::nullopt, std::move(condition), std::nullopt, std::move(stmts), start, peekPrevious().end);
+}
+
+std::unique_ptr<Stmt> Parser::forStmt()
+{
+	const auto start = peekPrevious().start;
+	expect(TokenType::Identifier, "expected variable name");
+	const auto& itemNameToken = peekPrevious();
+	expect(TokenType::In, "expected 'in'");
+	auto expression = expr();
+	const auto expressionStart = expression->start;
+	const auto expressionEnd = expression->end();
+	auto stmts = block();
+	const auto end = peekPrevious().end;
+
+	auto iterator = std::make_unique<CallExpr>(
+		std::make_unique<GetFieldExpr>(std::move(expression), "$iter", expressionStart, expressionEnd),
+		decltype(CallExpr::arguments)(),
+		expressionStart, expressionEnd);
+
+	// Using push because std::initializer_list doesn't work with move only types.
+	decltype(VariableDeclarationStmt::variables) iteratorVariable;
+	iteratorVariable.push_back({ ".iterator", std::move(iterator) });
+	auto iteratorDeclaration = std::make_unique<VariableDeclarationStmt>(std::move(iteratorVariable), start, end);
+
+#define NEXT_ITEM \
+	std::make_unique<CallExpr>( \
+		std::make_unique<GetFieldExpr>( \
+			std::make_unique<IdentifierExpr>(".iterator", itemNameToken.start, itemNameToken.start), \
+			"$next", \
+			itemNameToken.start, itemNameToken.end \
+		), \
+		decltype(CallExpr::arguments)(), \
+		itemNameToken.start, itemNameToken.end \
+	)
+
+	decltype(VariableDeclarationStmt::variables) itemVariable;
+	itemVariable.push_back({ itemNameToken.identifier, NEXT_ITEM });
+	auto itemDeclaration = std::make_unique<VariableDeclarationStmt>(std::move(itemVariable), start, end);
+
+	auto iterExpr = std::make_unique<AssignmentExpr>(
+		std::make_unique<IdentifierExpr>(itemNameToken.identifier, itemNameToken.start, itemNameToken.end), 
+		NEXT_ITEM, std::nullopt, itemNameToken.start, itemNameToken.end);
+
+	StmtList tryBlock;
+	tryBlock.push_back(
+		std::make_unique<LoopStmt>(std::move(itemDeclaration), std::nullopt, std::move(iterExpr), std::move(stmts), start, end));
+
+	decltype(TryStmt::catchBlocks) catchBlocks;
+	catchBlocks.push_back(TryStmt::CatchBlock{
+		std::make_unique<ClassPtrn>("StopIteration", start, end),
+		std::nullopt,
+		StmtList()
+	});
+	
+	StmtList block;
+	block.push_back(std::move(iteratorDeclaration));
+	block.push_back(std::make_unique<TryStmt>(std::move(tryBlock), std::move(catchBlocks), std::nullopt, start, end));
+
+	return std::make_unique<BlockStmt>(std::move(block), start, end);
 }
 
 std::unique_ptr<Stmt> Parser::breakStmt()

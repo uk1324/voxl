@@ -75,7 +75,7 @@ public:
 	void defineNativeFunction(std::string_view name, NativeFunction function, int argCount);
 
 	//Value add(Value lhs, Value rhs);
-	Value call(Value& calle, Value* values, int argCount);
+	Value call(const Value& calle, Value* values, int argCount);
 
 private:
 	Result run();
@@ -117,9 +117,12 @@ public:
 	ObjString* m_geString;
 	ObjString* m_getIndexString;
 	ObjString* m_setIndexString;
+
 	ObjClass* m_listType;
+	ObjClass* m_listIteratorType;
 	ObjClass* m_intType;
 	ObjClass* m_stringType;
+	ObjClass* m_stopIterationType;
 
 	Allocator::MarkingFunctionHandle m_rootMarkingFunctionHandle;
 };

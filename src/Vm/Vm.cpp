@@ -89,23 +89,32 @@ Vm::Vm(Allocator& allocator)
 	auto listString = m_allocator->allocateStringConstant("List").value;
 	m_listType = m_allocator->allocateClass(listString, sizeof(List), reinterpret_cast<MarkingFunction>(List::mark));	
 
-	auto addFn = [this](std::string_view name, NativeFunction function, int argCount)
+	auto addFn = [this](ObjClass* type, std::string_view name, NativeFunction function, int argCount)
 	{
 		auto nameObj = m_allocator->allocateString(name);
 		auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount);
-		m_listType->fields.set(nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
+		type->fields.set(nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
 	};
-	addFn("$init", List::init, 1);
-	addFn("push", List::push, 2);
-	addFn("size", List::get_size, 1);
-	addFn("$get_index", List::get_index, 2);
-	addFn("$set_index", List::set_index, 3);
+	addFn(m_listType, "$init", List::init, 1);
+	addFn(m_listType, "$iter", List::iter, 1);
+	addFn(m_listType, "push", List::push, 2);
+	addFn(m_listType, "size", List::get_size, 1);
+	addFn(m_listType, "$get_index", List::get_index, 2);
+	addFn(m_listType, "$set_index", List::set_index, 3);
+
+	auto listIteratorString = m_allocator->allocateStringConstant("ListIterator").value;
+	m_listIteratorType = m_allocator->allocateClass(listIteratorString, sizeof(ListIterator), reinterpret_cast<MarkingFunction>(ListIterator::mark));
+	addFn(m_listIteratorType, "$init", ListIterator::init, 2);
+	addFn(m_listIteratorType, "$next", ListIterator::next, 1);
 
 	auto intString = m_allocator->allocateStringConstant("Int").value;
 	m_intType = m_allocator->allocateClass(intString, 0, nullptr);
 
 	auto stringString = m_allocator->allocateStringConstant("String").value;
 	m_stringType = m_allocator->allocateClass(stringString, 0, nullptr);
+
+	auto stopIterationString = m_allocator->allocateStringConstant("StopIteration").value;
+	m_stopIterationType = m_allocator->allocateClass(stopIterationString, 0, nullptr);
 
 	reset();
 }
@@ -123,13 +132,18 @@ VmResult Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 	frame.function = program;
 	frame.numberOfValuesToPopOffExceptArgs = 0;
 
-	const auto result = run();
-	if (result.type == ResultType::Ok)
+	try 
 	{
-		// The program should always finish without anything on both the excecution and call stack.
-		ASSERT(m_callStack.isEmpty() && m_stack.isEmpty());
-		return VmResult::Success;
+		const auto result = run();
+		if (result.type == ResultType::Ok)
+		{
+			// The program should always finish without anything on both the excecution and call stack.
+			ASSERT(m_callStack.isEmpty() && m_stack.isEmpty());
+			return VmResult::Success;
+		}
 	}
+	catch (const FatalException&)
+	{}
 	return VmResult::RuntimeError;
 }
 
@@ -139,6 +153,7 @@ void Vm::reset()
 	m_globals.set(m_listType->name, Value(reinterpret_cast<Obj*>(m_listType)));
 	m_globals.set(m_intType->name, Value(reinterpret_cast<Obj*>(m_intType)));
 	m_globals.set(m_stringType->name, Value(reinterpret_cast<Obj*>(m_stringType)));
+	m_globals.set(m_stopIterationType->name, Value(reinterpret_cast<Obj*>(m_stopIterationType)));
 	defineNativeFunction("floor", floor, 1);
 	defineNativeFunction("invoke", invoke, 1);
 	defineNativeFunction("get_5", get_5, 0);
@@ -898,8 +913,18 @@ void Vm::defineNativeFunction(std::string_view name, NativeFunction function, in
 	m_globals.set(nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
 }
 
-Value Vm::call(Value& calle, Value* values, int argCount)
+Value Vm::call(const Value& calle, Value* values, int argCount)
 {
+	int numberOfValuesToPopOffExceptArgs = 0;
+	if (calle.isObj() && calle.as.obj->isClass())
+	{
+		numberOfValuesToPopOffExceptArgs = 1;
+		if (m_stack.push(calle) == false)
+		{
+			throw FatalException{};
+		}
+	}
+
 	for (int i = 0; i < argCount; i++)
 	{
 		if (m_stack.push(values[i]) == false)
@@ -908,7 +933,7 @@ Value Vm::call(Value& calle, Value* values, int argCount)
 		}
 	}
 
-	const auto callResult = callValue(calle, argCount, 0);
+	const auto callResult = callValue(calle, argCount, numberOfValuesToPopOffExceptArgs);
 	switch (callResult.type)
 	{
 		case ResultType::Ok: break;
@@ -920,11 +945,30 @@ Value Vm::call(Value& calle, Value* values, int argCount)
 	// A simpler solution might be returning if the function is a native function from callValue
 	// Becuase so many places call callValue, I could create a new function callValueAndReturnIfNative.
 	// Then just call this function from callValue and ignore the reutrn value.
-	if (calle.isObj() && calle.as.obj->isNativeFunction())
+	if (calle.isObj())
 	{
-		const auto& returnValue = m_stack.peek(0);
-		m_stack.pop();
-		return returnValue;
+		auto shouldCallRun = true;
+
+		if (calle.as.obj->isClass())
+		{
+			auto optInitializer = calle.as.obj->asClass()->fields.get(m_initString);
+			if ((optInitializer.has_value() == false) 
+				|| ((*optInitializer)->isObj() && (*optInitializer)->as.obj->isNativeFunction()))
+			{
+				shouldCallRun = false;
+			}
+		}
+		else if (calle.as.obj->isNativeFunction())
+		{
+			shouldCallRun = false;
+		}
+
+		if (shouldCallRun == false)
+		{
+			const auto& returnValue = m_stack.peek(0);
+			m_stack.pop();
+			return returnValue;
+		}
 	}
 
 	const auto runResult = run();
@@ -962,6 +1006,10 @@ Vm::Result Vm::fatalError(const char* format, ...)
 	m_errorPrinter->outStream() << "fatal runtime error: " << errorBuffer << '\n';
 	for (auto frame = m_callStack.crbegin(); frame != m_callStack.crend(); ++frame)
 	{
+		// TODO: Also print native functions. Currently calling a native function doesn't store it in the call frame.
+		if (frame->isNativeFunction())
+			continue;
+
 		const auto function = frame->function;
 		const auto instructionOffset = frame->instructionPointer - function->byteCode.code.data();
 		const auto lineNumber = function->byteCode.lineNumberAtOffset[instructionOffset] + 1;
@@ -1149,10 +1197,15 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 
 	allocator.addHashTable(vm->m_globals);
 	allocator.addObj(reinterpret_cast<Obj*>(vm->m_listType));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_intType));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_listIteratorType));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_stopIterationType));
+	allocator.addObj(reinterpret_cast<Obj*>(vm->m_stringType));
 
 	for (const auto& frame : vm->m_callStack)
 	{
-		allocator.addObj(reinterpret_cast<Obj*>(frame.function));
+		if (frame.function != nullptr)
+			allocator.addObj(reinterpret_cast<Obj*>(frame.function));
 	}
 
 	for (auto upvalue : vm->m_openUpvalues)

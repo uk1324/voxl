@@ -73,6 +73,7 @@ enum class TokenType
 	Finally,
 	Impl,
 	Match,
+	In,
 
 	// Other
 	Identifier,

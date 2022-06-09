@@ -236,7 +236,10 @@ void Allocator::markObj(Obj* obj)
 		{
 			const auto instance = obj->asNativeInstance();
 			addObj(reinterpret_cast<Obj*>(instance->class_));
-			instance->class_->mark(instance, *this);
+			if (instance->class_->mark != nullptr)
+			{
+				instance->class_->mark(instance, *this);
+			}
 			return;
 		}
 
@@ -365,6 +368,7 @@ void Allocator::runGc()
 
 void Allocator::addObj(Obj* obj)
 {
+	ASSERT(obj != nullptr);
 	m_markedObjs.push_back(obj);
 }
 

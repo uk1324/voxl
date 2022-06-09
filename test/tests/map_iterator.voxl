@@ -1,0 +1,26 @@
+list : List();
+list.push(1);
+list.push(2);
+list.push(3);
+list.push(4);
+list.push(5);
+
+class Map {
+	$init(function, iterable) {
+		$.function = function;
+		$.iterator = iterable.$iter();
+		ret $;
+	}
+
+	$iter() {
+		ret $;
+	}
+
+	$next() {
+		ret $.function($.iterator.$next());
+	}
+}
+
+for x in Map(|x| x * x * x, list) {
+	print(x ++ " ");
+}

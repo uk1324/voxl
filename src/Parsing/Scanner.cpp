@@ -232,6 +232,7 @@ Token Scanner::keywordOrIdentifier()
 		{ "throw", TokenType::Throw },
 		{ "impl", TokenType::Impl },
 		{ "match", TokenType::Match },
+		{ "in", TokenType::In },
 	};
 
 	// TODO: Could check here if identifiers starting with "$" (reserved identifiers) are spelled correctly.

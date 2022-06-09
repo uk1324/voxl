@@ -1,4 +1,5 @@
 #include <Vm/List.hpp>
+#include <Vm/Vm.hpp>
 #include <Allocator.hpp>
 
 using namespace Lang;
@@ -10,6 +11,11 @@ VOXL_NATIVE_FN(List::init)
 	list->data = 0;
 	list->size = 0;
 	return Value(reinterpret_cast<Obj*>(list));
+}
+
+VOXL_NATIVE_FN(List::iter)
+{
+	return vm.call(Value(reinterpret_cast<Obj*>(vm.m_listIteratorType)), args, 1);
 }
 
 VOXL_NATIVE_FN(List::push)
@@ -72,4 +78,30 @@ void List::mark(List* list, Allocator& allocator)
 	{
 		allocator.addValue(list->data[i]);
 	}
+}
+
+VOXL_NATIVE_FN(ListIterator::init)
+{
+	auto iterator = reinterpret_cast<ListIterator*>(args[0].as.obj);
+	auto list = reinterpret_cast<List*>(args[1].as.obj);
+	iterator->list = list;
+	iterator->index = 0;
+	return Value(reinterpret_cast<Obj*>(iterator));
+}
+
+VOXL_NATIVE_FN(ListIterator::next)
+{
+	auto iterator = reinterpret_cast<ListIterator*>(args[0].as.obj);
+	if (iterator->index >= iterator->list->size) 
+	{
+		throw NativeException(vm.call(Value(reinterpret_cast<Obj*>(vm.m_stopIterationType)), nullptr, 0));
+	}
+	const auto& result = iterator->list->data[iterator->index];
+	iterator->index++;
+	return result;
+}
+
+void ListIterator::mark(ListIterator* iterator, Allocator& allocator)
+{
+	allocator.addObj(reinterpret_cast<Obj*>(iterator));
 }

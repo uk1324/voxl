@@ -56,6 +56,8 @@ std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "exception_from_native_function", "10" },
 	{ "calling_functions_from_native_functions", "553353" },
 	{ "match_class", "XY" },
+	{ "list_iterator", "12345" },
+	{ "map_iterator", "1 8 27 64 125 " },
 };
 
 void testFailed(std::string_view name)

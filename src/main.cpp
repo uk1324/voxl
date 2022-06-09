@@ -156,6 +156,10 @@ Maybe set some timeout outside of the language.
 
 */
 
+// TODO destructing values
+// x, y = (x, y);
+// [x, y] = [x, y];
+
 VOXL_NATIVE_FN(add)
 {
 	if ((args[0].type != ValueType::Int) || (args[1].type != ValueType::Int))

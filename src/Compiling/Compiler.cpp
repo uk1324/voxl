@@ -253,7 +253,13 @@ Compiler::Status Compiler::ifStmt(const IfStmt& stmt)
 
 Compiler::Status Compiler::loopStmt(const LoopStmt& stmt)
 {
-	auto beginning = currentLocation();
+	beginScope();
+	if (stmt.initStmt.has_value())
+	{
+		TRY(compile(*stmt.initStmt));
+	}
+
+	const auto beginning = currentLocation();
 	m_loops.push_back(Loop{ beginning, m_scopes.size() });
 	size_t jumpToEnd = 0; // Won't be used if there is no condition.
 	if (stmt.condition.has_value())
@@ -264,6 +270,10 @@ Compiler::Status Compiler::loopStmt(const LoopStmt& stmt)
 
 	beginScope();
 	TRY(compile(stmt.block));
+	if (stmt.iterationExpr.has_value())
+	{
+		TRY(compile(*stmt.iterationExpr));
+	}
 	endScope();
 
 	emitJump(Op::JumpBack, beginning);
@@ -278,6 +288,8 @@ Compiler::Status Compiler::loopStmt(const LoopStmt& stmt)
 	{
 		setJumpToHere(location);
 	}
+
+	endScope();
 
 	m_loops.pop_back();
 
