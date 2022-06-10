@@ -3,6 +3,7 @@
 #include <Parsing/Parser.hpp>
 #include <Compiling/Compiler.hpp>
 #include <Vm/Vm.hpp>
+#include <Debug/DebugOptions.hpp>
 #include <fstream>
 #include <sstream>
 
@@ -58,6 +59,7 @@ std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "match_class", "XY" },
 	{ "list_iterator", "12345" },
 	{ "map_iterator", "1 8 27 64 125 " },
+	{ "nested_iterators", "(0,0)(0,1)(0,2)(1,0)(1,1)(1,2)(2,0)(2,1)(2,2)" },
 };
 
 void testFailed(std::string_view name)
@@ -72,7 +74,10 @@ void testFailed(std::string_view name, std::string_view got, std::string_view ex
 
 int main()
 {
+// TODO: Make a function to register the hash map to the GC.
+#ifndef VOXL_DEBUG_STRESS_TEST_GC
 	hashMapTests();
+#endif 
 
 	std::cout << "Language tests\n";
 	Scanner scanner;

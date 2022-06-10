@@ -68,8 +68,6 @@ namespace Lang
 
 		Call, // argCount [function, args...]
 		Return,
-		// TODO: Should probably take the relative jump. The aboslute jump could be calculated at runtime.
-		// Could I just calculate the jump at compile time?
 		TryBegin, // absolute jump to catch stmt.
 		TryEnd,
 		Throw, // [value]

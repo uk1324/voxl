@@ -273,6 +273,7 @@ Compiler::Status Compiler::loopStmt(const LoopStmt& stmt)
 	if (stmt.iterationExpr.has_value())
 	{
 		TRY(compile(*stmt.iterationExpr));
+		emitOp(Op::PopStack);
 	}
 	endScope();
 

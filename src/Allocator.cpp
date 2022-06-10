@@ -32,6 +32,10 @@ Allocator::~Allocator()
 
 Obj* Allocator::allocateObj(size_t size, ObjType type)
 {
+#ifdef VOXL_DEBUG_STRESS_TEST_GC
+	runGc();
+#endif 
+
 	auto obj = reinterpret_cast<Obj*>(::operator new(size));
 	obj->type = type;
 	obj->isMarked = false;

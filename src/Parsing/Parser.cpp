@@ -193,10 +193,26 @@ std::unique_ptr<Stmt> Parser::forStmt()
 	auto stmts = block();
 	const auto end = peekPrevious().end;
 
+	/*
+	Desugars to
+	{
+		.iterator : (<expr>).$iter();
+		try {
+			<item> : .iterator.$next();
+			loop {
+				<stmts>
+
+				<item> = .iterator.$next();
+			}
+		} catch StopIteration {}
+	}
+	*/
+
 	auto iterator = std::make_unique<CallExpr>(
 		std::make_unique<GetFieldExpr>(std::move(expression), "$iter", expressionStart, expressionEnd),
 		decltype(CallExpr::arguments)(),
-		expressionStart, expressionEnd);
+		expressionStart, expressionEnd
+	);
 
 	// Using push because std::initializer_list doesn't work with move only types.
 	decltype(VariableDeclarationStmt::variables) iteratorVariable;
@@ -206,7 +222,7 @@ std::unique_ptr<Stmt> Parser::forStmt()
 #define NEXT_ITEM \
 	std::make_unique<CallExpr>( \
 		std::make_unique<GetFieldExpr>( \
-			std::make_unique<IdentifierExpr>(".iterator", itemNameToken.start, itemNameToken.start), \
+			std::make_unique<IdentifierExpr>(".iterator", itemNameToken.start, itemNameToken.end), \
 			"$next", \
 			itemNameToken.start, itemNameToken.end \
 		), \
