@@ -85,13 +85,21 @@ Vm::Vm(Allocator& allocator)
 	, m_geString(m_allocator->allocateStringConstant("$ge").value)
 	, m_getIndexString(m_allocator->allocateStringConstant("$get_index").value)
 	, m_setIndexString(m_allocator->allocateStringConstant("$set_index").value)
+// TODO: The GC might run during the constructor so the values have to be check for begin null.
+// This also may be fixable by making constant classes that are always marked.
+// Currently only strings and functions can be constant because they don't contain any changing content.
+	, m_listType(nullptr)
+	, m_intType(nullptr)
+	, m_listIteratorType(nullptr)
+	, m_stopIterationType(nullptr)
+	, m_stringType(nullptr)
 {
 	auto listString = m_allocator->allocateStringConstant("List").value;
 	m_listType = m_allocator->allocateClass(listString, sizeof(List), reinterpret_cast<MarkingFunction>(List::mark));	
 
 	auto addFn = [this](ObjClass* type, std::string_view name, NativeFunction function, int argCount)
 	{
-		auto nameObj = m_allocator->allocateString(name);
+		auto nameObj = m_allocator->allocateStringConstant(name).value;
 		auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount);
 		type->fields.set(nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
 	};
@@ -125,7 +133,11 @@ VmResult Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 	m_stack.clear();
 	m_errorPrinter = &errorPrinter;
 
-	ASSERT(m_callStack.push() == true);
+	if (m_callStack.push() == false)
+	{
+		ASSERT_NOT_REACHED();
+		return VmResult::RuntimeError;
+	}
 	auto& frame = m_callStack.top();
 	frame.instructionPointer = program->byteCode.code.data();
 	frame.values = m_stack.topPtr;
@@ -908,7 +920,7 @@ Vm::Result Vm::run()
 
 void Vm::defineNativeFunction(std::string_view name, NativeFunction function, int argCount)
 {
-	auto nameObj = m_allocator->allocateString(name);
+	auto nameObj = m_allocator->allocateStringConstant(name).value;
 	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount);
 	m_globals.set(nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
 }
@@ -1095,7 +1107,6 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 				: reinterpret_cast<Obj*>(m_allocator->allocateNativeInstance(class_));
 
 			// TODO: Handle special classes like Int.
-
 			m_stack.topPtr[-argCount - 1] = Value(instance); // Replace the class with the instance.
 			if (const auto initializer = class_->fields.get(m_initString); initializer.has_value())
 			{
@@ -1185,22 +1196,22 @@ ObjClass* Vm::getClassOrNullptr(const Value& value)
 
 void Vm::mark(Vm* vm, Allocator& allocator)
 {
-	for (auto value = vm->m_stack.data(); value != vm->m_stack.topPtr; value++)
-	{
-		allocator.addValue(*value);
-	}
-
 	for (auto& value : vm->m_stack)
 	{
 		allocator.addValue(value);
 	}
 
 	allocator.addHashTable(vm->m_globals);
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_listType));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_intType));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_listIteratorType));
+	if (vm->m_listType != nullptr)
+		allocator.addObj(reinterpret_cast<Obj*>(vm->m_listType));
+	if (vm->m_intType != nullptr)
+		allocator.addObj(reinterpret_cast<Obj*>(vm->m_intType));
+	if (vm->m_listIteratorType != nullptr)
+		allocator.addObj(reinterpret_cast<Obj*>(vm->m_listIteratorType));
+	if (vm->m_stopIterationType != nullptr)
 	allocator.addObj(reinterpret_cast<Obj*>(vm->m_stopIterationType));
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_stringType));
+	if (vm->m_stringType != nullptr)
+		allocator.addObj(reinterpret_cast<Obj*>(vm->m_stringType));
 
 	for (const auto& frame : vm->m_callStack)
 	{

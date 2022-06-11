@@ -1,27 +1,43 @@
-class Range {
-	$init(n) {
-		$.current = 0;
-		$.max = n;
-		ret $;
-	}
+x : List();
 
-	$iter() {
-		ret $;
-	}
-
-	$next() {
-		if $.current == $.max {
-			throw StopIteration();
-		}
-		result : $.current;
-		$.current += 1;
-		ret result;
+impl List {
+	contains(item) {
+		i : 0;
+		while i < $.size() {
+			if $[i] == item {
+				ret true;
+			}
+			i += 1;
+		}	
+		ret false;
 	}
 }
 
-
-for i in Range(3) {
-	for j in Range(3) {
-		print("(" ++ i ++ ", " ++ j ++ ")");
-	}
-}
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);
+x.push(1);
+x.contains(5);

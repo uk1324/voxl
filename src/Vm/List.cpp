@@ -8,7 +8,7 @@ VOXL_NATIVE_FN(List::init)
 {
 	auto list = reinterpret_cast<List*>(args[0].as.obj);
 	list->capacity = 0;
-	list->data = 0;
+	list->data = nullptr;
 	list->size = 0;
 	return Value(reinterpret_cast<Obj*>(list));
 }

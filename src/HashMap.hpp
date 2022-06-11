@@ -71,7 +71,7 @@ bool Lang::HashMap<Key, Value, KeyTraits>::set(const Key& newKey, Value newValue
 	{
 		const auto oldData = m_data;
 		const auto oldCapacity = m_capacity;
-		m_capacity = (m_data == nullptr) ? INITIAL_SIZE : capacity() * 2;
+		m_capacity = (m_capacity == 0) ? INITIAL_SIZE : capacity() * 2;
 		m_data = reinterpret_cast<Bucket*>(::operator new(sizeof(Bucket) * m_capacity));
 		m_size = 0;
 		setAllKeysToNull();
@@ -81,25 +81,34 @@ bool Lang::HashMap<Key, Value, KeyTraits>::set(const Key& newKey, Value newValue
 			const auto& [key, value] = oldData[i];
 			if ((KeyTraits::isKeyNull(key) == false) && (KeyTraits::isKeyTombstone(key) == false))
 			{
-				set(key, value);
+				const auto isNewItem = set(key, value);
+				// TODO: This can be slightly optmized by changing the call to set() with just 
+				// inserting the item without doing the check if it is a new item becuase
+				// when rehashing it should always be a new key.
+				ASSERT(isNewItem);
 			}
 		}
+
+		::operator delete(oldData);
 	}
 
 	auto& bucket = findBucket(newKey);
-	const auto wasNotAlreadySet = isBucketEmpty(bucket);
-	if (wasNotAlreadySet)
+	const auto isNewItem = isBucketEmpty(bucket);
+	if (isNewItem)
 		m_size++;
 
 	bucket.key = newKey;
 	bucket.value = newValue;
 
-	return wasNotAlreadySet;
+	return isNewItem;
 }
 
 template<typename Key, typename Value, typename KeyTraits>
 bool Lang::HashMap<Key, Value, KeyTraits>::remove(const Key& key)
 {
+	if (m_size == 0)
+		return false;
+
 	auto& bucket = findBucket(key);
 	if (KeyTraits::isKeyTombstone(bucket.key) || KeyTraits::isKeyNull(bucket.key))
 	{
@@ -115,6 +124,7 @@ std::optional<Value*> Lang::HashMap<Key, Value, KeyTraits>::get(const Key& key)
 {
 	if (m_size == 0)
 		return std::nullopt;
+
 	auto& bucket = findBucket(key);
 	if (KeyTraits::isKeyNull(bucket.key) || KeyTraits::isKeyTombstone(bucket.key))
 	{
@@ -128,7 +138,7 @@ typename Lang::HashMap<Key, Value, KeyTraits>::Bucket& Lang::HashMap<Key, Value,
 {
 	auto index = KeyTraits::hashKey(key) % m_capacity;
 	
-	Bucket* grave = nullptr;
+	Bucket* tombstone = nullptr;
 
 	for (;;)
 	{
@@ -136,17 +146,31 @@ typename Lang::HashMap<Key, Value, KeyTraits>::Bucket& Lang::HashMap<Key, Value,
 		
 		if (KeyTraits::isKeyNull(bucket.key))
 		{
-			return (grave == nullptr) ? bucket : *grave;
+			return (tombstone == nullptr) ? bucket : *tombstone;
 		}
 		else if (KeyTraits::isKeyTombstone(bucket.key))
 		{
-			grave = &bucket;
+			// This check makes it so the first found tombstone is always used.
+			// When using linear probing this check makes it so the elements are inserted closer
+			// to their ideal spot.
+			// Example without the if check
+			// [_, 1, 2, _]
+			// [_, T, T, _]
+			// [_, T, 1, _]
+			// [_, T, 1, 2]
+			// The probe length increased for both buckets and an extra tombstone exists.
+			if (tombstone == nullptr)
+			{
+				tombstone = &bucket;
+			}
 		}
 		else if (KeyTraits::compareKeys(bucket.key, key))
 		{
 			return bucket;
 		}
 
+		// TODO: Find a better probing method
+		// Robing hood probing and siwsstables implementation are apparently good.
 		index = (index + 1) % capacity();
 	}
 }

@@ -317,10 +317,6 @@ size_t Allocator::createConstant(const Value& value)
 void Allocator::runGc()
 {
 	m_markedObjs.clear();
-	for (auto value : m_constants)
-	{
-		addValue(value);
-	}
 
 	for (auto& [function, data, _] : m_markingFunctions)
 	{
@@ -334,12 +330,14 @@ void Allocator::runGc()
 		markObj(obj);
 	}
 
-	//m_stringPool.erase(
-	//	m_stringPool.begin(),
-	//	std::remove_if(
-	//		m_stringPool.begin(),
-	//		m_stringPool.end(),
-	//		[](const ObjString* obj) { return obj->obj.isMarked == false; }));
+	// Can't use erase remove on sets.
+	for (auto it = m_stringPool.begin(); it != m_stringPool.end();)
+	{
+		if ((*it)->obj.isMarked)
+			++it;
+		else
+			it = m_stringPool.erase(it);
+	}
 
 	Obj* previous = nullptr;
 	auto obj = m_head;
