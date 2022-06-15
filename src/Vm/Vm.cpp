@@ -12,6 +12,12 @@
 
 using namespace Lang;
 
+static VOXL_NATIVE_FN(putln)
+{
+	std::cout << args[0] << '\n';
+	return Value::null();
+}
+
 static VOXL_NATIVE_FN(floor)
 {
 	if (args[0].isInt())
@@ -170,6 +176,7 @@ void Vm::reset()
 	defineNativeFunction("invoke", invoke, 1);
 	defineNativeFunction("get_5", get_5, 0);
 	defineNativeFunction("throw_3", throw_3, 0);
+	defineNativeFunction("putln", putln, 1);
 }
 
 Vm::Result Vm::run()

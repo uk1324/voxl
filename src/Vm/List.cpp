@@ -43,7 +43,6 @@ VOXL_NATIVE_FN(List::get_size)
 	return Value(static_cast<Int>(list->size));
 }
 
-
 VOXL_NATIVE_FN(List::get_index)
 {
 	auto list = reinterpret_cast<List*>(args[0].as.obj);

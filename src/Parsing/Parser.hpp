@@ -21,11 +21,13 @@ public:
 	{
 	public:
 		bool hadError;
+		bool errorAtEof;
 		StmtList ast;
 	};
 
 public:
 	Parser();
+	Parser(bool ignoreEofErrors);
 
 	// Could use move here on return.
 	Result parse(const std::vector<Token>& tokens, const SourceInfo& sourceInfo, ErrorPrinter& errorPrinter);
@@ -86,6 +88,7 @@ private:
 	size_t m_currentTokenIndex;
 
 	bool m_hadError;
+	bool m_ignoreEofErrors;
 
 	const SourceInfo* m_sourceInfo;
 	ErrorPrinter* m_errorPrinter;

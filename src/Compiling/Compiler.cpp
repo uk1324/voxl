@@ -415,6 +415,7 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 
 	const auto [classNameConstant, className] = m_allocator->allocateStringConstant(stmt.name);
 
+	// TODO: When inheriting from native classes also allocate a native class.
 	TRY(loadConstant(classNameConstant));
 	emitOp(Op::CreateClass);
 

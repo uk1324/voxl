@@ -2,6 +2,7 @@
 #include <Parsing/Parser.hpp>
 #include <ErrorPrinter.hpp>
 #include <Compiling/Compiler.hpp>
+#include <Repl.hpp>
 #include <Vm/Vm.hpp>
 #include <iostream>
 #include <fstream>
@@ -171,6 +172,8 @@ VOXL_NATIVE_FN(add)
 
 int main()
 {
+	return runRepl();
+
 	// TODO: Lambda vs function vs macro for reading instructions.
 	bool shouldCompile = true;
 

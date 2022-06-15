@@ -3,11 +3,16 @@
 using namespace Lang;
 
 Parser::Parser()
+	: Parser(false)
+{}
+
+Parser::Parser(bool ignoreEofErrors)
 	: m_tokens(nullptr)
 	, m_currentTokenIndex(0)
 	, m_sourceInfo(nullptr)
-	, m_hadError(false)
 	, m_errorPrinter(nullptr)
+	, m_hadError(false)
+	, m_ignoreEofErrors(ignoreEofErrors)
 {}
 
 Parser::Result Parser::parse(const std::vector<Token>& tokens, const SourceInfo& sourceInfo, ErrorPrinter& errorPrinter)
@@ -16,7 +21,9 @@ Parser::Result Parser::parse(const std::vector<Token>& tokens, const SourceInfo&
 	m_tokens = &tokens;
 	m_sourceInfo = &sourceInfo;
 	m_currentTokenIndex = 0;
+	m_hadError = false;
 
+	bool eofError = false;
 	StmtList ast;
 	while (isAtEnd() == false)
 	{
@@ -29,11 +36,13 @@ Parser::Result Parser::parse(const std::vector<Token>& tokens, const SourceInfo&
 		}
 		catch (const ParsingError&)
 		{
+			if (check(TokenType::Eof))
+				eofError = true;
 			synchronize();
 		}
 	}
 
-	return Result{ m_hadError, std::move(ast) };
+	return Result{ m_hadError, eofError, std::move(ast) };
 }
 
 std::unique_ptr<Stmt> Parser::stmt()
@@ -434,9 +443,10 @@ std::vector<std::unique_ptr<Stmt>> Parser::block()
 {
 	expect(TokenType::LeftBrace, "expected '{'");
 	StmtList stmts;
-	while ((isAtEnd() == false) && (match(TokenType::RightBrace) == false))
+
+	while ((isAtEnd() == false) && (check(TokenType::RightBrace) == false))
 	{
-		try 
+		try
 		{
 			stmts.push_back(stmt());
 		}
@@ -445,6 +455,8 @@ std::vector<std::unique_ptr<Stmt>> Parser::block()
 			synchronize();
 		}
 	}
+	expect(TokenType::RightBrace, "expected '}'");
+	
 	return stmts;
 }
 
@@ -795,7 +807,7 @@ Parser::ParsingError Parser::errorAt(const Token& token, const char* format, ...
 void Parser::errorAtImplementation(size_t start, size_t end, const char* format, va_list args)
 {
 	m_hadError = true;
-	if (peek().type == TokenType::Error)
+	if (check(TokenType::Error) || (m_ignoreEofErrors && check(TokenType::Eof)))
 	{
 		return;
 	}

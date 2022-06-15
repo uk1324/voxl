@@ -10,7 +10,7 @@
 namespace Lang
 {
 
-enum class [[nodiscard]] VmResult
+enum class VmResult
 {
 	Success,
 	RuntimeError,
