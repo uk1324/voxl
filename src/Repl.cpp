@@ -3,6 +3,7 @@
 #include <Parsing/Scanner.hpp>
 #include <Compiling/Compiler.hpp>
 #include <Vm/Vm.hpp>
+#include <iostream>
 
 using namespace Lang;
 

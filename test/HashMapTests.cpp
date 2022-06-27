@@ -7,7 +7,7 @@ using namespace Lang;
 
 #define INIT() \
 	Allocator _a; \
-	HashMap<ObjString*, int, ObjStringKeyTraits> _m; \
+	HashTable _m; \
 
 #define PUT(k, v) _m.set(_a.allocateString(k), v)
 #define GET(k) (_m.get(_a.allocateString(k)))
@@ -17,10 +17,10 @@ static void insertTest()
 {
 	INIT();
 
-	PUT("abc", 5);
+	PUT("abc", Value::integer(5));
 	const auto v = GET("abc");
 	ASSERT_TRUE(v.has_value());
-	ASSERT_EQ(**GET("abc"), 5);
+	ASSERT_EQ(GET("abc")->asInt(), 5);
 
 	SUCCESS();
 }
@@ -29,10 +29,10 @@ static void insertAndDeleteTest()
 {
 	INIT();
 
-	PUT("test", 2);
+	PUT("test", Value::integer(2));
 	const auto v = GET("test");
 	ASSERT_TRUE(v.has_value());
-	ASSERT_EQ(**GET("test"), 2);
+	ASSERT_EQ(GET("test")->asInt(), 2);
 	DEL("test");
 	ASSERT_FALSE(GET("test").has_value());
 
@@ -47,7 +47,7 @@ static void rehashTest()
 	for (char i = 0; i < SIZE; i++)
 	{
 		char key[] = { 'a' + i, '\0' };
-		PUT(key, i);
+		PUT(key, Value::integer(i));
 	}
 
 	for (char i = 0; i < SIZE; i += 2)
@@ -61,7 +61,7 @@ static void rehashTest()
 		char key[] = { 'a' + i, '\0' };
 		auto v = GET(key);
 		ASSERT_TRUE(v.has_value());
-		ASSERT_EQ(**v, i);
+		ASSERT_EQ(v->asInt(), i);
 	}
 
 	for (char i = 0; i < SIZE; i += 2)

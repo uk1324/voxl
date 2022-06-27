@@ -225,7 +225,7 @@ Vm::Result Vm::run()
 			auto optMethod = instance->class_->fields.get(overloadNameString); \
 			if (optMethod.has_value()) \
 			{ \
-				TRY(callValue(**optMethod, 2, 0)); \
+				TRY(callValue(*optMethod, 2, 0)); \
 			} \
 			else \
 			{ \
@@ -274,7 +274,7 @@ Vm::Result Vm::run()
 				auto optMethod = instance->class_->fields.get(m_modString);
 				if (optMethod.has_value())
 				{
-					TRY(callValue(**optMethod, 2, 0));
+					TRY(callValue(*optMethod, 2, 0));
 				}
 				else
 				{
@@ -318,7 +318,7 @@ Vm::Result Vm::run()
 				auto optMethod = instance->class_->fields.get(m_modString);
 				if (optMethod.has_value())
 				{
-					TRY(callValue(**optMethod, 2, 0));
+					TRY(callValue(*optMethod, 2, 0));
 				}
 				else
 				{
@@ -373,7 +373,7 @@ Vm::Result Vm::run()
 				auto optMethod = instance->class_->fields.get(overloadNameString); \
 				if (optMethod.has_value()) \
 				{ \
-					TRY(callValue(**optMethod, 2, 0)); \
+					TRY(callValue(*optMethod, 2, 0)); \
 				} \
 				else \
 				{ \
@@ -527,7 +527,7 @@ Vm::Result Vm::run()
 				return fatalError("'%s' is not defined", name->chars);
 			}
 			m_stack.pop();
-			TRY_PUSH(**value);
+			TRY_PUSH(*value);
 			break;
 		}
 
@@ -567,10 +567,10 @@ Vm::Result Vm::run()
 			if (auto class_ = getClassOrNullptr(lhs); class_ != nullptr)
 			{
 				if (auto function = class_->fields.get(fieldName);
-					function.has_value() && (*function)->isObj()
-					&& ((*function)->as.obj->isFunction() || (*function)->as.obj->isNativeFunction()))
+					function.has_value() && function->isObj()
+					&& (function->as.obj->isFunction() || function->as.obj->isNativeFunction()))
 				{
-					auto boundFunction = m_allocator->allocateBoundFunction((*function)->as.obj, lhs);
+					auto boundFunction = m_allocator->allocateBoundFunction(function->as.obj, lhs);
 					m_stack.pop();
 					m_stack.pop();
 					TRY_PUSH(Value(boundFunction));
@@ -590,7 +590,7 @@ Vm::Result Vm::run()
 			{
 				if (auto value = obj->asInstance()->fields.get(fieldName); value.has_value())
 				{
-					TRY_PUSH(**value);
+					TRY_PUSH(*value);
 				}
 				else
 				{
@@ -602,7 +602,7 @@ Vm::Result Vm::run()
 			{
 				if (auto value = obj->asClass()->fields.get(fieldName); value.has_value())
 				{
-					TRY_PUSH(**value);
+					TRY_PUSH(*value);
 				}
 				else
 				{
@@ -668,7 +668,7 @@ Vm::Result Vm::run()
 				{
 					return fatalError("type doesn't define an index function");
 				}
-				TRY(callValue(**getIndexFunction, 2, 0));
+				TRY(callValue(*getIndexFunction, 2, 0));
 			}
 			break;
 		}
@@ -683,7 +683,7 @@ Vm::Result Vm::run()
 				{
 					return fatalError("type doesn't define an set index function");
 				}
-				TRY(callValue(**setIndexFunction, 3, 0));
+				TRY(callValue(*setIndexFunction, 3, 0));
 			}
 			else
 			{
@@ -978,7 +978,7 @@ Value Vm::call(const Value& calle, Value* values, int argCount)
 		{
 			auto optInitializer = calle.as.obj->asClass()->fields.get(m_initString);
 			if ((optInitializer.has_value() == false) 
-				|| ((*optInitializer)->isObj() && (*optInitializer)->as.obj->isNativeFunction()))
+				|| (optInitializer->isObj() && optInitializer->as.obj->isNativeFunction()))
 			{
 				shouldCallRun = false;
 			}
@@ -1124,7 +1124,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			m_stack.topPtr[-argCount - 1] = Value(instance); // Replace the class with the instance.
 			if (const auto initializer = class_->fields.get(m_initString); initializer.has_value())
 			{
-				TRY(callValue(**initializer, argCount + 1, 0));
+				TRY(callValue(*initializer, argCount + 1, 0));
 				// Could check if the function returns null like python,
 				// or I could just ignore the return value like javascript and it with the instance.
 				// Another option would be to check if it return value is the instance or maybe the same type as class.
@@ -1208,7 +1208,7 @@ ObjClass* Vm::getClassOrNullptr(const Value& value)
 	return nullptr;
 }
 
-Value Vm::typeErrorExpected(ObjClass* type)
+Value Vm::typeErrorExpected(ObjClass*)
 {
 	return Value(m_allocator->allocateInstance(m_typeErrorType));
 }

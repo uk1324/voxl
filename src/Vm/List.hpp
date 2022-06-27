@@ -1,4 +1,5 @@
 #include <Value.hpp>
+#include <Allocator.hpp>
 
 namespace Lang
 {

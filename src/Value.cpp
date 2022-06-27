@@ -1,4 +1,5 @@
 #include <Value.hpp>
+#include <Obj.hpp>
 #include <Context.hpp>
 #include <Asserts.hpp>
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Value.hpp>
+#include <Obj.hpp>
 #include <unordered_set>
 #include <string_view>
 
