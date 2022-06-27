@@ -116,20 +116,14 @@ public:
 	} as;
 };
 
-class Vm;
-class Alloactor;
-#define VOXL_NATIVE_FN(name) Value name( \
-	[[maybe_unused]] Value* args, \
-	[[maybe_unused]] int argCount, \
-	[[maybe_unused]] Vm& vm, \
-	[[maybe_unused]] Allocator& allocator)
-using NativeFunction = Value (*)(Value* /*arguments*/, int /*argumentCount*/, Vm&, Allocator&);
+class Context;
+class LocalValue;
+using NativeFunction = LocalValue(*)(Context&);
 
 struct NativeException
 {
-	NativeException(const Value& value)
-		: value(value)
-	{}
+	NativeException(const LocalValue& value);
+	NativeException(const Value& value);
 
 	Value value;
 };

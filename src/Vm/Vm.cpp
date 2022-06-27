@@ -3,6 +3,7 @@
 #include <Utf8.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
+#include <Context.hpp>
 #include <iostream>
 #include <sstream>
 
@@ -12,39 +13,40 @@
 
 using namespace Lang;
 
-static VOXL_NATIVE_FN(putln)
+static LocalValue putln(Context& c)
 {
-	std::cout << args[0] << '\n';
-	return Value::null();
+	std::cout << c.args(0).value << '\n';
+	return c.nullValue();
 }
 
-static VOXL_NATIVE_FN(floor)
+static LocalValue floor(Context& c)
 {
-	if (args[0].isInt())
+	const auto arg = c.args(0);
+	if (arg.isInt())
 	{
-		return args[0];
+		return arg;
 	}
-	if (args[0].isFloat())
+	if (arg.isFloat())
 	{
-		return Value(static_cast<Int>(::floor(args[0].as.floatNumber)));
+		return c.intValue(static_cast<Int>(::floor(arg.asFloat())));
 	}
-
-	throw NativeException(Value::integer(0));
+	throw NativeException(c.intValue(0));
+	//throw NativeException(c.typeErrorMustBe("a real number"));
 }
 
-static VOXL_NATIVE_FN(invoke)
+static LocalValue invoke(Context& c)
 {
-	return vm.call(args[0], nullptr, 0);
+	return c.call(c.args(0));
 }
 
-static VOXL_NATIVE_FN(get_5)
+static LocalValue get_5(Context& c)
 {
-	return Value::integer(5);
+	return c.intValue(5);
 }
 
-static VOXL_NATIVE_FN(throw_3)
+static LocalValue throw_3(Context& c)
 {
-	throw NativeException(Value::integer(3));
+	throw NativeException(c.intValue(3));
 }
 
 #define TRY(somethingThatReturnsResult) \
@@ -99,6 +101,7 @@ Vm::Vm(Allocator& allocator)
 	, m_listIteratorType(nullptr)
 	, m_stopIterationType(nullptr)
 	, m_stringType(nullptr)
+	, m_typeErrorType(nullptr)
 {
 	auto listString = m_allocator->allocateStringConstant("List").value;
 	m_listType = m_allocator->allocateClass(listString, sizeof(List), reinterpret_cast<MarkingFunction>(List::mark));	
@@ -129,6 +132,9 @@ Vm::Vm(Allocator& allocator)
 
 	auto stopIterationString = m_allocator->allocateStringConstant("StopIteration").value;
 	m_stopIterationType = m_allocator->allocateClass(stopIterationString, 0, nullptr);
+
+	auto typeErrorString = m_allocator->allocateStringConstant("TypeError").value;
+	m_typeErrorType = m_allocator->allocateClass(typeErrorString, 0, nullptr);
 
 	reset();
 }
@@ -1089,9 +1095,10 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			frame.setNativeFunction();
 			try
 			{
-				const auto result = function->function(m_stack.topPtr - argCount, argCount, *this, *m_allocator);
+				Context context(m_stack.topPtr - argCount, argCount, *m_allocator, *this);
+				const auto result = function->function(context);
 				m_stack.topPtr -= numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount);
-				TRY_PUSH(result);
+				TRY_PUSH(result.value);
 				m_callStack.pop();
 			}
 			catch (const NativeException& exception)
@@ -1201,6 +1208,11 @@ ObjClass* Vm::getClassOrNullptr(const Value& value)
 	return nullptr;
 }
 
+Value Vm::typeErrorExpected(ObjClass* type)
+{
+	return Value(reinterpret_cast<Obj*>(m_allocator->allocateInstance(m_typeErrorType)));
+}
+
 void Vm::mark(Vm* vm, Allocator& allocator)
 {
 	for (auto& value : vm->m_stack)
@@ -1219,6 +1231,8 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 	allocator.addObj(reinterpret_cast<Obj*>(vm->m_stopIterationType));
 	if (vm->m_stringType != nullptr)
 		allocator.addObj(reinterpret_cast<Obj*>(vm->m_stringType));
+	if (vm->m_typeErrorType)
+		allocator.addObj(reinterpret_cast<Obj*>(vm->m_typeErrorType));
 
 	for (const auto& frame : vm->m_callStack)
 	{

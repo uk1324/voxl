@@ -120,6 +120,7 @@ private:
 	// Could make a RAII class
 	void beginScope();
 	void endScope();
+	void popOffLocals(const Scope& scope);
 	// TODO: Just make function for get and set that will call variable() or making a function resolveVariable
 	// would be more complicated and require a new type that could be either global, local, orUpvalue and have an
 	// index or a string.

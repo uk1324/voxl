@@ -1,4 +1,5 @@
 #include <Value.hpp>
+#include <Context.hpp>
 #include <Asserts.hpp>
 
 using namespace Lang;
@@ -182,3 +183,11 @@ bool operator==(const Value& lhs, const Value& rhs)
 			return false;
 	}
 }
+
+NativeException::NativeException(const LocalValue& value)
+	: value(value.value)
+{}
+
+NativeException::NativeException(const Value& value)
+	: value(value)
+{}

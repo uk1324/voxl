@@ -1,43 +1,8 @@
 x : List();
+x.push(5);
+x.push(2);
+x.push(1);
 
-impl List {
-	contains(item) {
-		i : 0;
-		while i < $.size() {
-			if $[i] == item {
-				ret true;
-			}
-			i += 1;
-		}	
-		ret false;
-	}
+for item in x {
+	putln(item);
 }
-
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);
-x.push(1);
-x.contains(5);

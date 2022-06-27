@@ -5,12 +5,12 @@ namespace Lang
 
 struct List
 {
-	static VOXL_NATIVE_FN(init);
-	static VOXL_NATIVE_FN(iter);
-	static VOXL_NATIVE_FN(push);
-	static VOXL_NATIVE_FN(get_size);
-	static VOXL_NATIVE_FN(get_index);
-	static VOXL_NATIVE_FN(set_index);
+	static LocalValue init(Context& c);
+	static LocalValue iter(Context& c);
+	static LocalValue push(Context& c);
+	static LocalValue get_size(Context& c);
+	static LocalValue get_index(Context& c);
+	static LocalValue set_index(Context& c);
 
 	static void free(List* list);
 	static void mark(List* list, Allocator& allocator);
@@ -23,8 +23,8 @@ struct List
 
 struct ListIterator
 {
-	static VOXL_NATIVE_FN(init);
-	static VOXL_NATIVE_FN(next);
+	static LocalValue init(Context& c);
+	static LocalValue next(Context& c);
 
 	static void mark(ListIterator* iterator, Allocator& allocator);
 

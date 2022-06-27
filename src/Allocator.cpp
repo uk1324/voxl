@@ -323,6 +323,15 @@ void Allocator::runGc()
 		function(data, *this);
 	}
 
+	for (auto& obj : m_localObjs)
+	{
+		addObj(*obj);
+	}
+	for (auto& value : m_localValues)
+	{
+		addValue(*value);
+	}
+
 	while (m_markedObjs.empty() == false)
 	{
 		auto obj = m_markedObjs.back();
@@ -425,6 +434,26 @@ void Allocator::freeObj(Obj* obj)
 const Value& Allocator::getConstant(size_t id) const
 {
 	return m_constants[id];
+}
+
+void Allocator::registerLocal(Obj** obj)
+{
+	m_localObjs.insert(obj);
+}
+
+void Allocator::unregisterLocal(Obj** obj)
+{
+	m_localObjs.erase(obj);
+}
+
+void Allocator::registerLocal(Value* value)
+{
+	m_localValues.insert(value);
+}
+
+void Allocator::unregisterLocal(Value* value)
+{
+	m_localValues.erase(value);
 }
 
 Allocator::MarkingFunctionHandle::~MarkingFunctionHandle()

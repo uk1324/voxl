@@ -88,6 +88,7 @@ private:
 	Result callValue(Value value, int argCount, int numberOfValuesToPopOffExceptArgs);
 	Result throwValue(const Value& value);
 	ObjClass* getClassOrNullptr(const Value& value);
+	Value typeErrorExpected(ObjClass* type);
 
 private:
 	static void mark(Vm* vm, Allocator& allocator);
@@ -123,6 +124,7 @@ public:
 	ObjClass* m_intType;
 	ObjClass* m_stringType;
 	ObjClass* m_stopIterationType;
+	ObjClass* m_typeErrorType;
 
 	Allocator::MarkingFunctionHandle m_rootMarkingFunctionHandle;
 };

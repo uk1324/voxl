@@ -1,27 +1,31 @@
 #include <Vm/List.hpp>
 #include <Vm/Vm.hpp>
 #include <Allocator.hpp>
+#include <Context.hpp>
 
 using namespace Lang;
 
-VOXL_NATIVE_FN(List::init)
+LocalValue List::init(Context& c)
 {
-	auto list = reinterpret_cast<List*>(args[0].as.obj);
+	auto list = c.args(0).asObj<List>();
 	list->capacity = 0;
-	list->data = nullptr;
 	list->size = 0;
-	return Value(reinterpret_cast<Obj*>(list));
+	list->data = nullptr;
+	// TODO return null from constructors.
+	return LocalValue(list);
 }
 
-VOXL_NATIVE_FN(List::iter)
+LocalValue List::iter(Context& c)
 {
-	return vm.call(Value(reinterpret_cast<Obj*>(vm.m_listIteratorType)), args, 1);
+	// Could use __PRETTY_FUNC__ for getting the types lol.
+	auto iteratorType = c.getGlobal("ListIterator");
+	ASSERT(iteratorType.has_value());
+	return c.call(*iteratorType, c.args(0));
 }
 
-VOXL_NATIVE_FN(List::push)
+LocalValue List::push(Context& c)
 {
-	auto list = reinterpret_cast<List*>(args[0].as.obj);
-	const auto& value = args[1];
+	auto list = c.args(0).asObj<List>();
 
 	if (list->size + 1 > list->capacity)
 	{
@@ -31,39 +35,34 @@ VOXL_NATIVE_FN(List::push)
 		memcpy(list->data, oldData, sizeof(Value) * list->size);
 	}
 
-	list->data[list->size] = value;
+	list->data[list->size] = c.args(1).value;
 	list->size++;
-
-	return Value::null();
+	// TODO: Maybe return the array back to allow chaining though in most languages
+	// methods with side effects don't allow chaining. Could also return the inserted element.
+	// value : null;
+	// x.push(value = <expr>;
+	// ---
+	// value : x.push(<expr>);
+	return c.nullValue();
 }
 
-VOXL_NATIVE_FN(List::get_size)
+LocalValue List::get_size(Context& c)
 {
-	auto list = reinterpret_cast<List*>(args[0].as.obj);
-	return Value(static_cast<Int>(list->size));
+	auto list = c.args(0).asObj<List>();
+	return c.intValue(static_cast<Int>(list->size));
 }
 
-VOXL_NATIVE_FN(List::get_index)
+LocalValue List::get_index(Context& c)
 {
-	auto list = reinterpret_cast<List*>(args[0].as.obj);
-	const auto& index = args[1];
-	if (index.isInt() == false)
-	{
-		throw NativeException(Value::null());
-	}
-	return list->data[index.as.intNumber];
+	auto list = c.args(0).asObj<List>();
+	// TODO: LocalValue(<value>, c) vs c.localValue(<value>);
+	return LocalValue(list->data[c.args(1).asInt()], c);
 }
 
-VOXL_NATIVE_FN(List::set_index)
+LocalValue List::set_index(Context& c)
 {
-	const auto& value = args[0];
-	auto list = reinterpret_cast<List*>(args[1].as.obj);
-	const auto& index = args[2];
-	if (index.isInt() == false)
-	{
-		throw NativeException(Value::null());
-	}
-	return list->data[index.as.intNumber] = value;
+	// TODO: Change the order of arguments.
+	return LocalValue(c.args(1).asObj<List>()->data[c.args(2).asInt()] = c.args(0).value, c);
 }
 
 void List::free(List* list)
@@ -79,25 +78,27 @@ void List::mark(List* list, Allocator& allocator)
 	}
 }
 
-VOXL_NATIVE_FN(ListIterator::init)
+LocalValue ListIterator::init(Context& c)
 {
-	auto iterator = reinterpret_cast<ListIterator*>(args[0].as.obj);
-	auto list = reinterpret_cast<List*>(args[1].as.obj);
-	iterator->list = list;
+	auto iterator = c.args(0).asObj<ListIterator>();
+	auto list = c.args(1).asObj<List>();
+	iterator->list = list.obj;
 	iterator->index = 0;
-	return Value(reinterpret_cast<Obj*>(iterator));
+	return LocalValue(iterator);
 }
 
-VOXL_NATIVE_FN(ListIterator::next)
+LocalValue ListIterator::next(Context& c)
 {
-	auto iterator = reinterpret_cast<ListIterator*>(args[0].as.obj);
+	auto iterator = c.args(0).asObj<ListIterator>();
 	if (iterator->index >= iterator->list->size) 
 	{
-		throw NativeException(vm.call(Value(reinterpret_cast<Obj*>(vm.m_stopIterationType)), nullptr, 0));
+		auto stopIterationType = c.getGlobal("StopIteration");
+		ASSERT(stopIterationType.has_value());
+		throw NativeException(c.call(*stopIterationType));
 	}
 	const auto& result = iterator->list->data[iterator->index];
 	iterator->index++;
-	return result;
+	return LocalValue(result, c);
 }
 
 void ListIterator::mark(ListIterator* iterator, Allocator& allocator)

@@ -82,6 +82,10 @@ public:
 	void addValue(Value& value);
 	void addHashTable(HashTable& hashTable);
 	const Value& getConstant(size_t id) const;
+	void registerLocal(Obj** obj);
+	void unregisterLocal(Obj** obj);
+	void registerLocal(Value* value);
+	void unregisterLocal(Value* value);
 
 private:
 	void markObj(Obj* obj);
@@ -97,6 +101,9 @@ private:
 	std::vector<Obj*> m_markedObjs;
 
 	std::vector<Value> m_constants;
+
+	std::unordered_set<Obj**> m_localObjs;
+	std::unordered_set<Value*> m_localValues;
 
 	struct ObjStringHasher
 	{

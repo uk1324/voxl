@@ -2,6 +2,7 @@
 #include <Parsing/Parser.hpp>
 #include <ErrorPrinter.hpp>
 #include <Compiling/Compiler.hpp>
+#include <Context.hpp>
 #include <Repl.hpp>
 #include <Vm/Vm.hpp>
 #include <iostream>
@@ -161,18 +162,11 @@ Maybe set some timeout outside of the language.
 // x, y = (x, y);
 // [x, y] = [x, y];
 
-VOXL_NATIVE_FN(add)
-{
-	if ((args[0].type != ValueType::Int) || (args[1].type != ValueType::Int))
-	{
-		throw NativeException(Value::null());
-	}
-	return Value(args[0].as.intNumber + args[1].as.intNumber);
-}
+#include <TypeId.hpp>
 
 int main()
 {
-	return runRepl();
+	//return runRepl();
 
 	// TODO: Lambda vs function vs macro for reading instructions.
 	bool shouldCompile = true;
@@ -205,7 +199,6 @@ int main()
 	if (compilerResult.hadError == false)
 	{
 		auto vm = std::make_unique<Vm>(allocator);
-		vm->defineNativeFunction("add", add, 2);
 		auto result = vm->execute(compilerResult.program, errorPrinter);
 	}
 }

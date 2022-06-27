@@ -15,7 +15,7 @@ struct KeyTraits
 	static bool isKeyTombstone(const Key& key);
 }
 */
-
+// TODO: Make this non templated and implement getting a key from a string view instead of ObjString
 namespace Lang
 {
 

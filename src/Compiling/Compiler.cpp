@@ -1,3 +1,4 @@
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -304,15 +305,11 @@ Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
 		return errorAt(stmt, "cannot use break outside of a loop");
 	}
 	auto& loop = m_loops.back();
-	// TODO: This doesn't handle upvalues.
 	for (auto scope = m_scopes.begin() + loop.scopeDepth; scope != m_scopes.end(); scope++)
 	{
-		for (size_t _ = 0; _ < scope->localVariables.size(); _++)
-		{
-			emitOp(Op::PopStack);
-		}
+		popOffLocals(*scope);
 	}
-	auto jump = emitJump(Op::Jump);
+	const auto jump = emitJump(Op::Jump);
 	loop.breakJumpLocations.push_back(jump);
 	return Status::Ok;
 }
@@ -323,10 +320,6 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 	// TODO: Currently this isn't handled properly.
 	ASSERT((stmt.finallyBlock.has_value() && stmt.catchBlocks.empty()) == false);
 
-	//emitOp(Op::TryBegin);
-	//// TODO: Make it so the absolute jump is calculated at runtime.
-	//const auto jumpToCatchBlocks = currentLocation();
-	//emitUint32(0);
 	const auto jumpToCatchBlocks = emitJump(Op::TryBegin);
 	beginScope();
 	TRY(compile(stmt.tryBlock));
@@ -432,7 +425,7 @@ Compiler::Status Compiler::implStmt(const ImplStmt& stmt)
 {
 	if (m_scopes.size() > 0)
 		return errorAt(stmt, "impl statements can only appear at global scope");
-	// TODO: Add type checking if the type is a type either here or in Op::StoreMethod.
+	// TODO: Add type checking if the type is a class either here or in Op::StoreMethod.
 	TRY(variable(stmt.typeName, VariableOp::Get));
 	TRY(compileMethods(stmt.typeName, stmt.methods));
 	emitOp(Op::PopStack);
@@ -619,7 +612,9 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 		TRY(compile(expr.rhs));
 	}
 
-	// TODO: Lhs get evaluted twice - improve this
+	// TODO: Lhs get evaluted twice this can be fixed changing the order of the operands of get 
+	// and set field.
+	// Evaluating lhs, duplicating it, evaluating rhs, evaluating op, assigning.
 	if (expr.lhs->type == ExprType::Identifier)
 	{
 		const auto lhs = static_cast<IdentifierExpr&>(*expr.lhs.get()).identifier;
@@ -946,18 +941,23 @@ void Compiler::endScope()
 	if ((m_scopes.back().functionDepth == 0)
 		|| ((m_scopes.size() > 1) && (m_scopes.back().functionDepth == (&m_scopes.back())[-1].functionDepth)))
 	{
-		for (const auto& [_, local] : m_scopes.back().localVariables)
-		{
-			emitOp(Op::PopStack);
-			if (local.isCaptured)
-			{
-				emitOp(Op::CloseUpvalue);
-				emitUint8(static_cast<uint8_t>(local.index));
-			}
-		}
+		popOffLocals(m_scopes.back());
 	}
 
 	m_scopes.pop_back();
+}
+
+void Compiler::popOffLocals(const Scope& scope)
+{
+	for (const auto& [_, local] : scope.localVariables)
+	{
+		emitOp(Op::PopStack);
+		if (local.isCaptured)
+		{
+			emitOp(Op::CloseUpvalue);
+			emitUint8(static_cast<uint8_t>(local.index));
+		}
+	}
 }
 
 Compiler::Status Compiler::errorAt(size_t start, size_t end, const char* format, ...)
