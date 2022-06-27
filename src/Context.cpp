@@ -73,8 +73,8 @@ LocalValue Context::typeErrorMustBe(std::string_view /*whatItMustBe*/)
 std::optional<LocalValue> Context::getGlobal(std::string_view name)
 {
 	if (name == "ListIterator")
-		return LocalValue(Value(reinterpret_cast<Obj*>(vm.m_listIteratorType)), *this);
+		return LocalValue(Value(vm.m_listIteratorType), *this);
 	if (name == "StopIteration")
-		return LocalValue(Value(reinterpret_cast<Obj*>(vm.m_stopIterationType)), *this);
+		return LocalValue(Value(vm.m_stopIterationType), *this);
 	return std::nullopt;
 }

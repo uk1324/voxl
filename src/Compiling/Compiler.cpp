@@ -60,7 +60,7 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 	}
 #endif
 
-	return Result{ m_hadError, reinterpret_cast<ObjFunction*>(scriptFunction) };
+	return Result{ m_hadError, scriptFunction };
 }
 
 Compiler::Status Compiler::compileFunction( 

@@ -73,7 +73,7 @@ ObjString* Allocator::allocateString(std::string_view chars, size_t length)
 		return *result;
 	}
 
-	auto obj = reinterpret_cast<ObjString*>(allocateObj(sizeof(ObjString) + (chars.size() + 1), ObjType::String));
+	auto obj = allocateObj(sizeof(ObjString) + (chars.size() + 1), ObjType::String)->asString();
 	auto data = reinterpret_cast<char*>(obj) + sizeof(ObjString);
 	obj->size = chars.size();
 	obj->length = length;
@@ -87,7 +87,7 @@ ObjString* Allocator::allocateString(std::string_view chars, size_t length)
 
 ObjFunction* Allocator::allocateFunction(ObjString* name, int argCount)
 {
-	auto obj = reinterpret_cast<ObjFunction*>(allocateObj(sizeof(ObjFunction), ObjType::Function));
+	auto obj = allocateObj(sizeof(ObjFunction), ObjType::Function)->asFunction();
 	obj->argCount = argCount;
 	obj->name = name;
 	new (&obj->byteCode) ByteCode();
@@ -96,7 +96,7 @@ ObjFunction* Allocator::allocateFunction(ObjString* name, int argCount)
 
 ObjClosure* Allocator::allocateClosure(ObjFunction* function)
 {
-	auto obj = reinterpret_cast<ObjClosure*>(allocateObj(sizeof(ObjClosure), ObjType::Closure));
+	auto obj = allocateObj(sizeof(ObjClosure), ObjType::Closure)->asClosure();
 	obj->function = function;
 	obj->upvalueCount = function->upvalueCount;
 	obj->upvalues = reinterpret_cast<ObjUpvalue**>(::operator new(sizeof(ObjUpvalue*) * obj->upvalueCount));
@@ -105,7 +105,7 @@ ObjClosure* Allocator::allocateClosure(ObjFunction* function)
 
 ObjUpvalue* Allocator::allocateUpvalue(Value* localVariable)
 {
-	auto obj = reinterpret_cast<ObjUpvalue*>(allocateObj(sizeof(ObjUpvalue), ObjType::Upvalue));
+	auto obj = allocateObj(sizeof(ObjUpvalue), ObjType::Upvalue)->asUpvalue();
 	obj->location = localVariable;
 	obj->value = Value::null();
 	return obj;
@@ -148,37 +148,37 @@ Allocator::StringConstant Allocator::allocateStringConstant(std::string_view cha
 	auto result = m_stringPool.find(&string);
 	if (result != m_stringPool.end())
 	{
-		return { createConstant(Value(reinterpret_cast<Obj*>(*result))), *result };
+		return { createConstant(Value(*result)), *result };
 	}
 
 	auto obj = reinterpret_cast<ObjString*>(::operator new(sizeof(ObjString) + chars.size() + 1));
-	obj->obj.isMarked = false;
-	obj->obj.type = ObjType::String;
+	obj->isMarked = false;
+	obj->type = ObjType::String;
 	auto data = reinterpret_cast<char*>(obj + 1);
 	memcpy(data, chars.data(), chars.size());
 	obj->size = chars.size();
 	data[chars.size()] = '\0';
 	obj->chars = data;
 	obj->length = length;
-	return { createConstant(Value(reinterpret_cast<Obj*>(obj))), obj };
+	return { createConstant(Value(obj)), obj };
 }
 
 Allocator::FunctionConstant Allocator::allocateFunctionConstant(ObjString* name, int argCount)
 {
 	auto obj = reinterpret_cast<ObjFunction*>(::operator new(sizeof(ObjFunction)));
-	obj->obj.type = ObjType::Function;
+	obj->type = ObjType::Function;
 	obj->argCount = argCount;
 	obj->name = name;
-	obj->obj.isMarked = false;
+	obj->isMarked = false;
 	obj->upvalueCount = 0;
 	new (&obj->byteCode) ByteCode();
-	return { createConstant(Value(reinterpret_cast<Obj*>(obj))), obj };
+	return { createConstant(Value(obj)), obj };
 }
 
 ObjNativeFunction* Allocator::allocateForeignFunction(ObjString* name, NativeFunction function, int argCount)
 {
-	auto obj = reinterpret_cast<ObjNativeFunction*>(allocateObj(sizeof(ObjNativeFunction), ObjType::NativeFunction));
-	obj->obj.type = ObjType::NativeFunction;
+	auto obj = allocateObj(sizeof(ObjNativeFunction), ObjType::NativeFunction)->asNativeFunction();
+	obj->type = ObjType::NativeFunction;
 	obj->name = name;
 	obj->function = function;
 	obj->argCount = argCount;
@@ -208,15 +208,15 @@ void Allocator::markObj(Obj* obj)
 
 		case ObjType::Function:
 		{
-			const auto function = reinterpret_cast<ObjFunction*>(obj);
-			addObj(reinterpret_cast<Obj*>(function->name));
+			const auto function = obj->asFunction();
+			addObj(function->name);
 			return;
 		}
 
 		case ObjType::NativeFunction:
 		{
-			const auto function = reinterpret_cast<ObjNativeFunction*>(obj);
-			addObj(reinterpret_cast<Obj*>(function->name));
+			const auto function = obj->asNativeFunction();
+			addObj(function->name);
 			return;
 		}
 
@@ -224,14 +224,14 @@ void Allocator::markObj(Obj* obj)
 		{
 			const auto class_ = obj->asClass();
 			addHashTable(class_->fields);
-			addObj(reinterpret_cast<Obj*>(class_->name));
+			addObj(class_->name);
 			return;
 		}
 
 		case ObjType::Instance:
 		{
 			const auto instance = obj->asInstance();
-			addObj(reinterpret_cast<Obj*>(instance->class_));
+			addObj(instance->class_);
 			addHashTable(instance->fields);
 			return;
 		}
@@ -239,7 +239,7 @@ void Allocator::markObj(Obj* obj)
 		case ObjType::NativeInstance:
 		{
 			const auto instance = obj->asNativeInstance();
-			addObj(reinterpret_cast<Obj*>(instance->class_));
+			addObj(instance->class_);
 			if (instance->class_->mark != nullptr)
 			{
 				instance->class_->mark(instance, *this);
@@ -260,9 +260,9 @@ void Allocator::markObj(Obj* obj)
 			const auto closure = obj->asClosure();
 			for (size_t i = 0; i < closure->upvalueCount; i++)
 			{
-				addObj(reinterpret_cast<Obj*>(closure->upvalues[i]));
+				addObj(closure->upvalues[i]);
 			}
-			addObj(reinterpret_cast<Obj*>(closure->function));
+			addObj(closure->function);
 			return;
 		}
 		
@@ -342,7 +342,7 @@ void Allocator::runGc()
 	// Can't use erase remove on sets.
 	for (auto it = m_stringPool.begin(); it != m_stringPool.end();)
 	{
-		if ((*it)->obj.isMarked)
+		if ((*it)->isMarked)
 			++it;
 		else
 			it = m_stringPool.erase(it);
@@ -385,9 +385,9 @@ void Allocator::addObj(Obj* obj)
 
 void Allocator::addValue(Value& value)
 {
-	if (value.type == ValueType::Obj)
+	if (value.isObj())
 	{
-		addObj(value.as.obj);
+		addObj(value.asObj());
 	}
 }
 
@@ -399,7 +399,7 @@ void Allocator::addHashTable(HashTable& hashTable)
 
 		if (hashTable.isBucketEmpty(bucket) == false)
 		{
-			addObj(reinterpret_cast<Obj*>((bucket.key)));
+			addObj((bucket.key));
 			addValue(bucket.value);
 		}
 	}
@@ -421,7 +421,7 @@ void Allocator::freeObj(Obj* obj)
 	{
 		case ObjType::Function:
 		{
-			auto function = reinterpret_cast<ObjFunction*>(obj);
+			auto function = obj->asFunction();
 			function->byteCode.~ByteCode();
 			break;
 		}

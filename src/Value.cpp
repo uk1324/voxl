@@ -28,31 +28,6 @@ Value::Value(bool boolean)
 	as.boolean = boolean;
 }
 
-bool Value::isInt() const
-{
-	return type == ValueType::Int;
-}
-
-bool Value::isFloat() const
-{
-	return type == ValueType::Float;
-}
-
-bool Value::isObj() const
-{
-	return type == ValueType::Obj;
-}
-
-bool Value::isNull() const
-{
-	return type == ValueType::Null;
-}
-
-bool Value::isBool() const
-{
-	return type == ValueType::Bool;
-}
-
 Value Value::null()
 {
 	Value value;
@@ -104,46 +79,42 @@ std::ostream& operator<< (std::ostream& os, Lang::Obj* obj)
 	{
 		case ObjType::String:
 		{
-			const auto string = reinterpret_cast<ObjString*>(obj);
-			for (size_t i = 0; i < string->size; i++)
-			{
-				os << string->chars[i];
-			}
+			os << obj->asString()->chars;
 			break;
 		}
 
 		case ObjType::Function:
 		{
-			const auto function = reinterpret_cast<ObjFunction*>(obj);
-			os << '<' << reinterpret_cast<Obj*>(function->name) << '>';
+			const auto function = obj->asFunction();
+			os << '<' << function->name->chars << '>';
 			break;
 		}
 
 		case ObjType::NativeFunction:
 		{
-			const auto function = reinterpret_cast<ObjNativeFunction*>(obj);
-			os << '<' << reinterpret_cast<Obj*>(function->name) << '>';
+			const auto function = obj->asNativeFunction();
+			os << '<' << function->name->chars << '>';
 			break;
 		}
 
 		case ObjType::Class:
 		{
-			auto class_ = obj->asClass();
-			os << "<class '" << reinterpret_cast<Obj*>(class_->name) << "'>";
+			const auto class_ = obj->asClass();
+			os << "<class '" << class_->name->chars << "'>";
 			break;
 		}
 
 		case ObjType::Instance:
 		{
-			auto instance = obj->asInstance();
-			os << "<instance of '" << reinterpret_cast<Obj*>(instance->class_->name) << "'>";
+			const auto instance = obj->asInstance();
+			os << "<instance of '" << instance->class_->name->chars << "'>";
 			break;
 		}
 
 		case ObjType::NativeInstance:
 		{
-			auto instance = obj->asNativeInstance();
-			os << "<native instance of '" << reinterpret_cast<Obj*>(instance->class_->name) << "'>";
+			const auto instance = obj->asNativeInstance();
+			os << "<native instance of '" << instance->class_->name->chars << "'>";
 			break;
 		}
 
@@ -154,7 +125,7 @@ std::ostream& operator<< (std::ostream& os, Lang::Obj* obj)
 		case ObjType::Closure:
 		{
 			auto closure = obj->asClosure();
-			os << '<' << "closure of " << reinterpret_cast<Obj*>(closure->function->name) << '>';
+			os << '<' << "closure of " << closure->function->name->chars << '>';
 			break;
 		}
 

@@ -162,8 +162,6 @@ Maybe set some timeout outside of the language.
 // x, y = (x, y);
 // [x, y] = [x, y];
 
-#include <TypeId.hpp>
-
 int main()
 {
 	//return runRepl();

@@ -110,7 +110,7 @@ Vm::Vm(Allocator& allocator)
 	{
 		auto nameObj = m_allocator->allocateStringConstant(name).value;
 		auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount);
-		type->fields.set(nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
+		type->fields.set(nameObj, Value(functionObj));
 	};
 	addFn(m_listType, "$init", List::init, 1);
 	addFn(m_listType, "$iter", List::iter, 1);
@@ -174,10 +174,10 @@ VmResult Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 void Vm::reset()
 {
 	m_globals.clear();
-	m_globals.set(m_listType->name, Value(reinterpret_cast<Obj*>(m_listType)));
-	m_globals.set(m_intType->name, Value(reinterpret_cast<Obj*>(m_intType)));
-	m_globals.set(m_stringType->name, Value(reinterpret_cast<Obj*>(m_stringType)));
-	m_globals.set(m_stopIterationType->name, Value(reinterpret_cast<Obj*>(m_stopIterationType)));
+	m_globals.set(m_listType->name, Value(m_listType));
+	m_globals.set(m_intType->name, Value(m_intType));
+	m_globals.set(m_stringType->name, Value(m_stringType));
+	m_globals.set(m_stopIterationType->name, Value(m_stopIterationType));
 	defineNativeFunction("floor", floor, 1);
 	defineNativeFunction("invoke", invoke, 1);
 	defineNativeFunction("get_5", get_5, 0);
@@ -450,7 +450,7 @@ Vm::Result Vm::run()
 			ObjString* string = m_allocator->allocateString(result.str());
 			m_stack.pop();
 			m_stack.pop();
-			TRY_PUSH(Value(reinterpret_cast<Obj*>(string)));
+			TRY_PUSH(Value(string));
 			break;
 		}
 
@@ -506,8 +506,8 @@ Vm::Result Vm::run()
 		case Op::CreateGlobal:
 		{
 			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
-			ObjString* name = reinterpret_cast<ObjString*>(m_stack.peek(0).as.obj);
-			Value value = m_stack.peek(1);
+			auto name = m_stack.peek(0).asObj()->asString();
+			auto& value = m_stack.peek(1);
 			bool doesNotAlreadyExist = m_globals.set(name, value);
 			if (doesNotAlreadyExist == false)
 			{
@@ -520,8 +520,8 @@ Vm::Result Vm::run()
 
 		case Op::GetGlobal:
 		{
-			ObjString* name = reinterpret_cast<ObjString*>(m_stack.peek(0).as.obj);
-			const auto value = m_globals.get(name);
+			auto name = m_stack.peek(0).asObj()->asString();
+			const auto& value = m_globals.get(name);
 			if (value.has_value() == false)
 			{
 				return fatalError("'%s' is not defined", name->chars);
@@ -534,8 +534,8 @@ Vm::Result Vm::run()
 		case Op::SetGlobal:
 		{
 			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
-			ObjString* name = reinterpret_cast<ObjString*>(m_stack.peek(0).as.obj);
-			Value value = m_stack.peek(1);
+			auto name = m_stack.peek(0).asObj()->asString();
+			auto& value = m_stack.peek(1);
 			bool doesNotAlreadyExist = m_globals.set(name, value);
 			if (doesNotAlreadyExist)
 			{
@@ -573,7 +573,7 @@ Vm::Result Vm::run()
 					auto boundFunction = m_allocator->allocateBoundFunction((*function)->as.obj, lhs);
 					m_stack.pop();
 					m_stack.pop();
-					TRY_PUSH(Value(reinterpret_cast<Obj*>(boundFunction)));
+					TRY_PUSH(Value(boundFunction));
 					break;
 				}
 			}
@@ -840,7 +840,7 @@ Vm::Result Vm::run()
 			auto name = nameValue.as.obj->asString();
 			auto class_ = m_allocator->allocateClass(name, 0, nullptr);
 			m_stack.pop();
-			TRY_PUSH(Value(reinterpret_cast<Obj*>(class_)));
+			TRY_PUSH(Value(class_));
 			break;
 		}
 
@@ -888,7 +888,7 @@ Vm::Result Vm::run()
 				}
 			}
 			m_stack.pop();
-			TRY_PUSH(Value(reinterpret_cast<Obj*>(closure)));
+			TRY_PUSH(Value(closure));
 			break;
 		}
 
@@ -935,7 +935,7 @@ void Vm::defineNativeFunction(std::string_view name, NativeFunction function, in
 {
 	auto nameObj = m_allocator->allocateStringConstant(name).value;
 	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount);
-	m_globals.set(nameObj, Value(reinterpret_cast<Obj*>(functionObj)));
+	m_globals.set(nameObj, Value(functionObj));
 }
 
 Value Vm::call(const Value& calle, Value* values, int argCount)
@@ -1117,8 +1117,8 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 
 			auto class_ = obj->asClass();
 			auto instance = (class_->instanceSize == 0)
-				? reinterpret_cast<Obj*>(m_allocator->allocateInstance(class_))
-				: reinterpret_cast<Obj*>(m_allocator->allocateNativeInstance(class_));
+				? static_cast<Obj*>(m_allocator->allocateInstance(class_))
+				: static_cast<Obj*>(m_allocator->allocateNativeInstance(class_));
 
 			// TODO: Handle special classes like Int.
 			m_stack.topPtr[-argCount - 1] = Value(instance); // Replace the class with the instance.
@@ -1149,7 +1149,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			{
 				return fatalError("cannot bind a function twice");
 			}
-			TRY(callValue(Value(reinterpret_cast<Obj*>(boundFunction->callable)), argCount + 1, 0))
+			TRY(callValue(Value(boundFunction->callable), argCount + 1, 0))
 			break;
 		}
 
@@ -1210,7 +1210,7 @@ ObjClass* Vm::getClassOrNullptr(const Value& value)
 
 Value Vm::typeErrorExpected(ObjClass* type)
 {
-	return Value(reinterpret_cast<Obj*>(m_allocator->allocateInstance(m_typeErrorType)));
+	return Value(m_allocator->allocateInstance(m_typeErrorType));
 }
 
 void Vm::mark(Vm* vm, Allocator& allocator)
@@ -1222,27 +1222,27 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 
 	allocator.addHashTable(vm->m_globals);
 	if (vm->m_listType != nullptr)
-		allocator.addObj(reinterpret_cast<Obj*>(vm->m_listType));
+		allocator.addObj(vm->m_listType);
 	if (vm->m_intType != nullptr)
-		allocator.addObj(reinterpret_cast<Obj*>(vm->m_intType));
+		allocator.addObj(vm->m_intType);
 	if (vm->m_listIteratorType != nullptr)
-		allocator.addObj(reinterpret_cast<Obj*>(vm->m_listIteratorType));
+		allocator.addObj(vm->m_listIteratorType);
 	if (vm->m_stopIterationType != nullptr)
-	allocator.addObj(reinterpret_cast<Obj*>(vm->m_stopIterationType));
+	allocator.addObj(vm->m_stopIterationType);
 	if (vm->m_stringType != nullptr)
-		allocator.addObj(reinterpret_cast<Obj*>(vm->m_stringType));
+		allocator.addObj(vm->m_stringType);
 	if (vm->m_typeErrorType)
-		allocator.addObj(reinterpret_cast<Obj*>(vm->m_typeErrorType));
+		allocator.addObj(vm->m_typeErrorType);
 
 	for (const auto& frame : vm->m_callStack)
 	{
 		if (frame.function != nullptr)
-			allocator.addObj(reinterpret_cast<Obj*>(frame.function));
+			allocator.addObj(frame.function);
 	}
 
 	for (auto upvalue : vm->m_openUpvalues)
 	{
-		allocator.addObj(reinterpret_cast<Obj*>(upvalue));
+		allocator.addObj(upvalue);
 	}
 }
 
