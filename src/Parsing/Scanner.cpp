@@ -55,6 +55,16 @@ Token Scanner::token()
 
 			return makeToken(TokenType::Plus);
 		}
+		case '-': 
+		{
+			if (match('>'))
+				return makeToken(TokenType::ThinArrow);
+
+			if (match('='))
+				return makeToken(TokenType::MinusEquals);
+
+			return makeToken(TokenType::Minus);
+		}
 		case '/': 
 		{
 			if (match('/'))
@@ -93,9 +103,6 @@ Token Scanner::token()
 		case '>': return match('=')
 			? makeToken(TokenType::MoreEquals)
 			: makeToken(TokenType::More);
-		case '-': return match('=') 
-			? makeToken(TokenType::MinusEquals)
-			: makeToken(TokenType::Minus);
 		case '%': return match('=')
 			? makeToken(TokenType::PercentEquals)
 			: makeToken(TokenType::Percent);
@@ -151,10 +158,10 @@ Token Scanner::number()
 	{
 		if (match('.'))
 		{
+			while ((isAtEnd() == false) && isDigit(peek()))
+				advance();
 			if (base != 10)
 			{
-				while ((isAtEnd() == false) && isDigit(peek()))
-					advance();
 				return errorToken("cannot use non base 10 floating point constants");
 			}
 			isInt = false;
@@ -167,15 +174,18 @@ Token Scanner::number()
 		advance();
 	}
 
-	auto start = &m_sourceInfo->source[m_tokenStartIndex];
+	const auto start = &m_sourceInfo->source[m_tokenStartIndex];
+	const auto end = m_sourceInfo->source.data() + m_currentCharIndex;
+	// std::errc::invalid_argument should never happen becuase the number is verified to be correct above.
 	if (isInt)
 	{
 		Int value;
-		auto result = std::from_chars(start, &m_sourceInfo->source.back(), value, base);
-		m_currentCharIndex = m_tokenStartIndex + (result.ptr - start);
+		auto result = std::from_chars(start, end, value, base);
+		ASSERT(m_tokenStartIndex + (result.ptr - start) == m_currentCharIndex);
 
 		if (result.ec == std::errc::invalid_argument)
 		{
+			ASSERT_NOT_REACHED();
 			return errorToken("invalid number");
 		}
 		else if (result.ec == std::errc::result_out_of_range)
@@ -190,11 +200,12 @@ Token Scanner::number()
 	else
 	{
 		Float value;
-		auto result = std::from_chars(&m_sourceInfo->source[m_tokenStartIndex], &m_sourceInfo->source.back(), value);
-		m_currentCharIndex = m_tokenStartIndex + (result.ptr - start);
+		auto result = std::from_chars(start, end, value);
+		ASSERT(m_tokenStartIndex + (result.ptr - start) == m_currentCharIndex);
 
 		if (result.ec == std::errc::invalid_argument)
 		{
+			ASSERT_NOT_REACHED();
 			return errorToken("invalid number");
 		}
 		else if (result.ec == std::errc::result_out_of_range)
@@ -233,6 +244,7 @@ Token Scanner::keywordOrIdentifier()
 		{ "impl", TokenType::Impl },
 		{ "match", TokenType::Match },
 		{ "in", TokenType::In },
+		{ "use", TokenType::Use },
 	};
 
 	// TODO: Could check here if identifiers starting with "$" (reserved identifiers) are spelled correctly.
