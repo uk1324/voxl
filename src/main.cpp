@@ -3,56 +3,15 @@
 #include <ErrorPrinter.hpp>
 #include <Compiling/Compiler.hpp>
 #include <Context.hpp>
+#include <ReadFile.hpp>
 #include <Repl.hpp>
 #include <Vm/Vm.hpp>
 #include <iostream>
-#include <fstream>
 
 using namespace Lang;
 
-std::string stringFromFile(std::string_view path)
-{
-	std::ifstream file(path.data(), std::ios::binary);
-
-	if (file.fail())
-	{
-		std::cerr << "couldn't open file \"" << path << "\"\n";
-		exit(EXIT_FAILURE);
-	}
-
-	auto start = file.tellg();
-	file.seekg(0, std::ios::end);
-	auto end = file.tellg();
-	file.seekg(start);
-	auto fileSize = end - start;
-
-	// Pointless memset
-	std::string result;
-
-	result.resize(fileSize);
-
-	file.read(result.data(), fileSize);
-	if (file.fail())
-	{
-		std::cerr << "couldn't read file \"" << path << "\"\n";
-		exit(EXIT_FAILURE);
-	}
-
-	return result;
-}
-
 // If I wanted to I could implement things like scopes and lineNumberStack as a linked list on the call stack though I don't see what
 // would be the point.
-
-Value print2(Value* args, int argCount)
-{
-	if (argCount != 0)
-	{
-		std::cout << args[0] << '\n';
-	}
-
-	return Value::null();
-}
 
 //NativeFunctionResult add(Value* args, int argCount, Vm& vm, Allocator& allocator)
 
@@ -167,36 +126,33 @@ int main()
 	//return runRepl();
 
 	// TODO: Lambda vs function vs macro for reading instructions.
-	bool shouldCompile = true;
-
-	std::string filename = "../../../src/test2.voxl";
-	std::string source = stringFromFile(filename);
+	std::string_view filename("../../../src/test2.voxl");
+	const auto source = stringFromFile(filename);
 	SourceInfo sourceInfo;
 	sourceInfo.source = source;
-	sourceInfo.filename = filename;
+	sourceInfo.displayedFilename = filename;
+	sourceInfo.directory = std::filesystem::path(filename).parent_path();
 	
 	ErrorPrinter errorPrinter(std::cerr, sourceInfo);
 
 	Scanner scanner;
-	auto scannerResult = scanner.parse(sourceInfo, errorPrinter);
-	shouldCompile &= !scannerResult.hadError;
+	const auto scannerResult = scanner.parse(sourceInfo, errorPrinter);
 
 	Parser parser;
-	auto parserResult = parser.parse(scannerResult.tokens, sourceInfo, errorPrinter);
-	shouldCompile &= !parserResult.hadError;
+	const auto parserResult = parser.parse(scannerResult.tokens, sourceInfo, errorPrinter);
 
-	if (shouldCompile == false)
+	if (scannerResult.hadError || parserResult.hadError)
 	{
 		return EXIT_FAILURE;
 	}
 
 	Allocator allocator;
-	Compiler compiler;
-	auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
+	Compiler compiler(allocator);
+	auto compilerResult = compiler.compile(parserResult.ast, errorPrinter);
 
 	if (compilerResult.hadError == false)
 	{
 		auto vm = std::make_unique<Vm>(allocator);
-		auto result = vm->execute(compilerResult.program, errorPrinter);
+		auto result = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, errorPrinter);
 	}
 }

@@ -51,6 +51,7 @@ enum class TokenType
 	LeftBracket,
 	RightBracket,
 	Arrow,
+	ThinArrow,
 
 	// Keywords
 	Print,
@@ -74,6 +75,7 @@ enum class TokenType
 	Impl,
 	Match,
 	In,
+	Use,
 
 	// Other
 	Identifier,

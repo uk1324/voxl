@@ -1,0 +1,4 @@
+use "imported";
+
+print(imported.get_number());
+print(imported.number);

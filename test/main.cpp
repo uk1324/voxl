@@ -4,40 +4,11 @@
 #include <Compiling/Compiler.hpp>
 #include <Vm/Vm.hpp>
 #include <Debug/DebugOptions.hpp>
+#include <ReadFile.hpp>
 #include <fstream>
 #include <sstream>
 
 using namespace Lang;
-
-std::string stringFromFile(std::string_view path)
-{
-	std::ifstream file(path.data(), std::ios::binary);
-
-	if (file.fail())
-	{
-		std::cerr << "couldn't open file \"" << path << "\"\n";
-		exit(EXIT_FAILURE);
-	}
-
-	auto start = file.tellg();
-	file.seekg(0, std::ios::end);
-	auto end = file.tellg();
-	file.seekg(start);
-	auto fileSize = end - start;
-
-	std::string result;
-	// Pointless memset 0
-	result.resize(fileSize);
-
-	file.read(result.data(), fileSize);
-	if (file.fail())
-	{
-		std::cerr << "couldn't read file \"" << path << "\"\n";
-		exit(EXIT_FAILURE);
-	}
-
-	return result;
-}
 
 std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "variable_scoping", "0010" },
@@ -60,6 +31,7 @@ std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "list_iterator", "12345" },
 	{ "map_iterator", "1 8 27 64 125 " },
 	{ "nested_iterators", "(0,0)(0,1)(0,2)(1,0)(1,1)(1,2)(2,0)(2,1)(2,2)" },
+	{ "import", "123456123456" },
 };
 
 void testFailed(std::string_view name)
@@ -78,12 +50,11 @@ int main()
 #ifndef VOXL_DEBUG_STRESS_TEST_GC
 	hashMapTests();
 #endif 
-
 	std::cout << "Language tests\n";
 	Scanner scanner;
 	Parser parser;
-	Compiler compiler;
 	Allocator allocator;
+	Compiler compiler(allocator);
 	auto vm = std::make_unique<Vm>(allocator);
 
 	std::stringstream output;
@@ -93,24 +64,19 @@ int main()
 	{
 		auto filename = std::string("test/tests/") + std::string(name) + std::string(".voxl");
 		auto source = stringFromFile(filename);
-		SourceInfo sourceInfo{ filename,  source };
+		SourceInfo sourceInfo{ filename, std::filesystem::path(filename).parent_path(), source };
 		ErrorPrinter errorPrinter(std::cerr, sourceInfo);
 
-		bool hadParsingError = false;
-
 		auto scannerResult = scanner.parse(sourceInfo, errorPrinter);
-		hadParsingError &= scannerResult.hadError;
-
 		auto parserResult = parser.parse(scannerResult.tokens, sourceInfo, errorPrinter);
-		hadParsingError &= parserResult.hadError;
 
-		if (hadParsingError)
+		if (scannerResult.hadError || parserResult.hadError)
 		{
 			testFailed(name);
 			continue;
 		}
 
-		auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
+		auto compilerResult = compiler.compile(parserResult.ast, errorPrinter);
 		if (compilerResult.hadError)
 		{
 			testFailed(name);
@@ -119,7 +85,7 @@ int main()
 
 		output.str(std::string());
 		vm->reset();
-		auto vmResult = vm->execute(compilerResult.program, errorPrinter);
+		auto vmResult = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, errorPrinter);
 		if (vmResult == VmResult::RuntimeError)
 		{
 			testFailed(name);

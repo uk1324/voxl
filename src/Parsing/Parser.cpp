@@ -77,6 +77,8 @@ std::unique_ptr<Stmt> Parser::stmt()
 		return throwStmt();
 	if (match(TokenType::Match))
 		return matchStmt();
+	if (match(TokenType::Use))
+		return useStmt();
 	else
 	{
 		if (check(TokenType::Identifier) && (peekNext().type == TokenType::Colon))
@@ -415,6 +417,50 @@ std::unique_ptr<Stmt> Parser::matchStmt()
 	expect(TokenType::RightBrace, "expected '}'");
 	
 	return std::make_unique<MatchStmt>(std::move(expression), std::move(cases), start, peekPrevious().end);
+}
+
+std::unique_ptr<Stmt> Parser::useStmt()
+{
+	const auto start = peekPrevious().start;
+	expect(TokenType::StringConstant, "expected path string");
+	const auto& path = peekPrevious().string.text;
+
+	if (match(TokenType::Semicolon))
+	{
+		return std::make_unique<UseStmt>(path, std::nullopt, start, peekPrevious().end);
+	}
+
+	expect(TokenType::ThinArrow, "expected '->'");
+	if (match(TokenType::Identifier))
+	{
+		const auto variableName = peekPrevious().identifier;
+		expect(TokenType::Semicolon, "expected ';'");
+		return std::make_unique<UseStmt>(path, variableName, start, peekPrevious().end);
+	}
+	else if (match(TokenType::Star))
+	{
+		return std::make_unique<UseAllStmt>(path, start, peekPrevious().end);
+	}
+
+	expect(TokenType::LeftParen, "expected '('");
+	decltype(UseSelectiveStmt::variablesToImport) imports;
+	while (match(TokenType::RightParen) == false)
+	{
+		expect(TokenType::Identifier, "expected name of variable to import");
+		const auto original= peekPrevious().identifier;
+		if (match(TokenType::ThinArrow))
+		{
+			expect(TokenType::Identifier, "expected import alias name");
+			const auto alias = peekPrevious().identifier;
+			imports.push_back({ original, alias });
+			// TODO in compiler make an error if the original name is the same as the alias.
+		}
+		else
+		{
+			imports.push_back({ original, std::nullopt });
+		}
+	}
+	return std::make_unique<UseSelectiveStmt>(path, std::move(imports), start, peekPrevious().end);
 }
 
 std::unique_ptr<FnStmt> Parser::function(size_t start)

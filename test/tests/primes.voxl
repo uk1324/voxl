@@ -2,16 +2,16 @@ n : 50;
 i : 2;
 while i < n {
 	j : 2;
-	isPrime : true;
+	is_prime : true;
 	while j < i {
 		if (i % j) == 0 {
-			isPrime = false;
+			is_prime = false;
 			break;
 		}
 		j += 1;
 	}
 	
-	if isPrime {
+	if is_prime {
 		print(i ++ " ");
 	}
 	i += 1;

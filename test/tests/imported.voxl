@@ -1,0 +1,5 @@
+number : 123456;
+
+fn get_number() {
+	ret number;
+}

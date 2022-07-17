@@ -1,4 +1,7 @@
 #include "Compiler.hpp"
+#include "Compiler.hpp"
+#include "Compiler.hpp"
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -19,20 +22,22 @@
 
 using namespace Lang;
 
-Compiler::Compiler()
+Compiler::Compiler(Allocator& allocator)
 	: m_hadError(false)
-	, m_allocator(nullptr)
+	, m_allocator(allocator)
 	, m_errorPrinter(nullptr)
+	, m_rootMarkingFunctionHandle(allocator.registerMarkingFunction(this, Compiler::mark))
+	, m_module(nullptr)
 {}
 
-Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast, ErrorPrinter& errorPrinter, Allocator& allocator)
+Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast, ErrorPrinter& errorPrinter)
 {
 	m_hadError = false;
 	m_errorPrinter = &errorPrinter;
-	m_allocator = &allocator;
 
-	const auto scriptName = m_allocator->allocateStringConstant("script").value;
-	auto scriptFunction = m_allocator->allocateFunctionConstant(scriptName, 0).value;
+	m_module = m_allocator.allocateModule();
+	const auto scriptName = m_allocator.allocateStringConstant("script").value;
+	auto scriptFunction = m_allocator.allocateFunctionConstant(scriptName, 0, &m_module->globals).value;
 	m_functionByteCodeStack.push_back(&scriptFunction->byteCode);
 	m_functions.push_back(Function{});
 
@@ -46,6 +51,9 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 
 	// The return from program is on the last line of the file.
 	m_lineNumberStack.push_back(m_errorPrinter->sourceInfo().lineStartOffsets.size());
+	// Have to load null becuase module functions have to return just like normal functions.
+	// If nothing was on the stack it might return a value from an empty stack.
+	emitOp(Op::LoadNull);
 	emitOp(Op::Return);
 	m_lineNumberStack.pop_back();
 
@@ -56,11 +64,12 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 	if (m_hadError == false)
 	{
 		std::cout << "----<script>\n";
-		disassembleByteCode(scriptFunction->byteCode, *m_allocator);
+		disassembleByteCode(scriptFunction->byteCode, m_allocator);
 	}
 #endif
 
-	return Result{ m_hadError, scriptFunction };
+	// Could set module to nullptr here though it probably doesn't matter.
+	return Result{ m_hadError, scriptFunction, m_module };
 }
 
 Compiler::Status Compiler::compileFunction( 
@@ -88,7 +97,7 @@ Compiler::Status Compiler::compileFunction(
 
 #ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
 	std::cout << "----" << function->name->chars << '\n';
-	disassembleByteCode(function->byteCode, *m_allocator);
+	disassembleByteCode(function->byteCode, m_allocator);
 #endif
 
 	endScope();
@@ -139,6 +148,8 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 		CASE_STMT_TYPE(Try, tryStmt)
 		CASE_STMT_TYPE(Throw, throwStmt)
 		CASE_STMT_TYPE(Match, matchStmt)
+		CASE_STMT_TYPE(Use, useStmt)
+		CASE_STMT_TYPE(UseAll, useAllStmt)
 	}
 #undef CASE_STMT_STMT
 	m_lineNumberStack.pop_back();
@@ -188,7 +199,6 @@ Compiler::Status Compiler::variableDeclarationStmt(const VariableDeclarationStmt
 
 	}
 	return Status::Ok;
-
 }
 
 Compiler::Status Compiler::blockStmt(const BlockStmt& stmt)
@@ -202,8 +212,9 @@ Compiler::Status Compiler::blockStmt(const BlockStmt& stmt)
 
 Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 {
-	const auto [nameConstant, name] = m_allocator->allocateStringConstant(stmt.name);
-	const auto [functionConstant, function] = m_allocator->allocateFunctionConstant(name, static_cast<int>(stmt.arguments.size()));
+	const auto [nameConstant, name] = m_allocator.allocateStringConstant(stmt.name);
+	const auto [functionConstant, function] =
+		m_allocator.allocateFunctionConstant(name, static_cast<int>(stmt.arguments.size()), &m_module->globals);
 	TRY(loadConstant(functionConstant));
 	TRY(createVariable(stmt.name, stmt.start, stmt.end()));
 	return compileFunction(function, stmt.arguments, stmt.stmts, stmt.start, stmt.end());
@@ -383,14 +394,14 @@ Compiler::Status Compiler::compileMethods(std::string_view className, const std:
 	{
 		auto arguments = method->arguments;
 		arguments.insert(arguments.begin(), "$");
-		const auto [nameConstant, name] = m_allocator->allocateStringConstant(
+		const auto [nameConstant, name] = m_allocator.allocateStringConstant(
 			std::string(className) + '.' + std::string(method->name));
 		const auto [functionConstant, function] =
-			m_allocator->allocateFunctionConstant(name, static_cast<int>(arguments.size()));
+			m_allocator.allocateFunctionConstant(name, static_cast<int>(arguments.size()), &m_module->globals);
 
 		TRY(compileFunction(function, arguments, method->stmts, method->start, method->end()));
 
-		const auto methodNameConstant = m_allocator->allocateStringConstant(method->name).constant;
+		const auto methodNameConstant = m_allocator.allocateStringConstant(method->name).constant;
 		TRY(loadConstant(functionConstant));
 		TRY(loadConstant(methodNameConstant));
 		emitOp(Op::StoreMethod);
@@ -406,7 +417,7 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 	if (m_scopes.size() > 0)
 		return errorAt(stmt, "classes can only be created at global scope");
 
-	const auto [classNameConstant, className] = m_allocator->allocateStringConstant(stmt.name);
+	const auto [classNameConstant, className] = m_allocator.allocateStringConstant(stmt.name);
 
 	// TODO: When inheriting from native classes also allocate a native class.
 	TRY(loadConstant(classNameConstant));
@@ -452,6 +463,42 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 	}
 
 	emitOp(Op::PopStack);
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::loadModule(std::string_view filePath)
+{
+	auto path = std::filesystem::path(filePath);
+	if (path.has_extension() == false)
+		path.replace_extension("voxl");
+	const auto filenameConstant = m_allocator.allocateStringConstant(path.string()).constant;
+	TRY(loadConstant(filenameConstant));
+	emitOp(Op::Import);
+	// Pop the return value of the module main function. This can't be done inside Op::Import becuase to execute a non native main
+	// the instruction has to move onto the next one. It also may be posible to fix this by making module calls special; making them not return
+	// a value and removing the code for getting the return value in Op::Return.
+	emitOp(Op::PopStack);
+	emitOp(Op::ModuleSetLoaded);
+}
+
+Compiler::Status Compiler::useStmt(const UseStmt& stmt)
+{
+	TRY(loadModule(stmt.path));
+	// TODO Maybe check if this is a valid UTF-8 string.
+	auto variableName = stmt.variableName.has_value()
+		? *stmt.variableName
+		: std::filesystem::path(stmt.path).stem();
+
+	TRY(createVariable(variableName.u8string(), stmt.start, stmt.end()));
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::useAllStmt(const UseAllStmt& stmt)
+{
+	if (m_scopes.size() > 0)
+		return errorAt(stmt, "use all can only appear at global scope");
+	TRY(loadModule(stmt.path));
+	emitOp(Op::ModuleImportAllToGlobalNamespace);
 	return Status::Ok;
 }
 
@@ -531,14 +578,14 @@ Compiler::Status Compiler::compileBinaryExpr(const std::unique_ptr<Expr>& lhs, T
 
 Compiler::Status Compiler::intConstantExpr(const IntConstantExpr& expr)
 {
-	auto constant = m_allocator->createConstant(Value(expr.value));
+	auto constant = m_allocator.createConstant(Value(expr.value));
 	TRY(loadConstant(constant));
 	return Status::Ok;
 }
 
 Compiler::Status Compiler::floatConstantExpr(const FloatConstantExpr& expr)
 {
-	auto constant = m_allocator->createConstant(Value(expr.value));
+	auto constant = m_allocator.createConstant(Value(expr.value));
 	TRY(loadConstant(constant));
 	return Status::Ok;
 }
@@ -564,7 +611,7 @@ Compiler::Status Compiler::nullExpr(const NullExpr&)
 
 Compiler::Status Compiler::stringConstantExpr(const StringConstantExpr& expr)
 {
-	const auto constant = m_allocator->allocateStringConstant(expr.text, expr.length).constant;
+	const auto constant = m_allocator.allocateStringConstant(expr.text, expr.length).constant;
 	TRY(loadConstant(constant));
 	return Status::Ok;
 }
@@ -625,7 +672,7 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 	{
 		const auto lhs = static_cast<GetFieldExpr*>(expr.lhs.get());
 		TRY(compile(lhs->lhs));
-		const auto fieldNameConstant = m_allocator->allocateStringConstant(lhs->fieldName).constant;
+		const auto fieldNameConstant = m_allocator.allocateStringConstant(lhs->fieldName).constant;
 		TRY(loadConstant(fieldNameConstant));
 		emitOp(Op::SetField);
 		return Status::Ok;
@@ -697,8 +744,9 @@ Compiler::Status Compiler::classPtrn(const ClassPtrn& ptrn)
 Compiler::Status Compiler::lambdaExpr(const LambdaExpr& expr)
 {
 	static constexpr std::string_view ANONYMOUS_FUNCTION_NAME = "";
-	const auto [nameConstant, name] = m_allocator->allocateStringConstant(ANONYMOUS_FUNCTION_NAME);
-	const auto [functionConstant, function] = m_allocator->allocateFunctionConstant(name, static_cast<int>(expr.arguments.size()));
+	const auto [nameConstant, name] = m_allocator.allocateStringConstant(ANONYMOUS_FUNCTION_NAME);
+	const auto [functionConstant, function] = 
+		m_allocator.allocateFunctionConstant(name, static_cast<int>(expr.arguments.size()), &m_module->globals);
 	TRY(compileFunction(function, expr.arguments, expr.stmts, expr.start, expr.end()));
 	TRY(loadConstant(functionConstant));
 	return Status::Ok;
@@ -707,7 +755,7 @@ Compiler::Status Compiler::lambdaExpr(const LambdaExpr& expr)
 Compiler::Status Compiler::getFieldExpr(const GetFieldExpr& expr)
 {
 	TRY(compile(expr.lhs));
-	auto fieldNameConstant = m_allocator->allocateStringConstant(expr.fieldName).constant;
+	auto fieldNameConstant = m_allocator.allocateStringConstant(expr.fieldName).constant;
 	TRY(loadConstant(fieldNameConstant));
 	emitOp(Op::GetField);
 	return Status::Ok;
@@ -717,7 +765,7 @@ Compiler::Status Compiler::createVariable(std::string_view name, size_t start, s
 {
 	if (m_scopes.size() == 0)
 	{
-		TRY(loadConstant(m_allocator->allocateStringConstant(name).constant));
+		TRY(loadConstant(m_allocator.allocateStringConstant(name).constant));
 		emitOp(Op::CreateGlobal);
 		return Status::Ok;
 	}
@@ -821,7 +869,7 @@ Compiler::Status Compiler::variable(std::string_view name, VariableOp op)
 		}
 	}
 
-	const auto constant = m_allocator->allocateStringConstant(name).constant;
+	const auto constant = m_allocator.allocateStringConstant(name).constant;
 	TRY(loadConstant(constant));
 	if (op == VariableOp::Set)
 	{
@@ -998,4 +1046,10 @@ Compiler::Status Compiler::errorAt(const Token& token, const char* format, ...)
 	m_errorPrinter->at(token.start, token.end, format, args);
 	va_end(args);
 	return Status::Error;
+}
+
+void Compiler::mark(Compiler* compiler, Allocator& allocator)
+{
+	if (compiler->m_module != nullptr)
+		allocator.addObj(compiler->m_module);
 }

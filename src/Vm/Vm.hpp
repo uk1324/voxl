@@ -4,6 +4,9 @@
 #include <ByteCode.hpp>
 #include <ErrorPrinter.hpp>
 #include <StaticStack.hpp>
+#include <Parsing/Scanner.hpp>
+#include <Parsing/Parser.hpp>
+#include <Compiling/Compiler.hpp>
 #include <unordered_map>
 #include <array>
 
@@ -28,6 +31,7 @@ private:
 		Value* values;
 		ObjUpvalue** upvalues;
 		ObjFunction* function;
+		Obj* callable;
 		Value* caughtValue;
 		int numberOfValuesToPopOffExceptArgs;
 		// TODO: Try catch doesn't pop the block off the stack when an exception happens.
@@ -69,7 +73,13 @@ public:
 	Vm(Allocator& allocator);
 
 public:
-	VmResult execute(ObjFunction* program, ErrorPrinter& errorPrinter);
+	VmResult execute(
+		ObjFunction* program,
+		ObjModule* module,
+		Scanner& scanner,
+		Parser& parser,
+		Compiler& compiler,
+		ErrorPrinter& errorPrinter);
 	void reset();
 
 	void defineNativeFunction(std::string_view name, NativeFunction function, int argCount);
@@ -89,16 +99,26 @@ private:
 	Result throwValue(const Value& value);
 	ObjClass* getClassOrNullptr(const Value& value);
 	Value typeErrorExpected(ObjClass* type);
+	std::optional<Value&> getGlobal(ObjString* name);
+	bool setGlobal(ObjString* name, const Value& value);
 
 private:
 	static void mark(Vm* vm, Allocator& allocator);
 
 public:
-	HashTable m_globals;
+	HashTable m_modules;
+
+	HashTable m_builtins;
+	// Don't use directly use getGlobal() and setGlobal() instead.
+	HashTable* m_globals;
 	
 	StaticStack<Value, 1024> m_stack;
 	StaticStack<CallFrame, 128> m_callStack;
 	StaticStack<ExceptionHandler, 128> m_exceptionHandlers;
+
+	Scanner* m_scanner;
+	Parser* m_parser;
+	Compiler* m_compiler;
 
 	Allocator* m_allocator;
 

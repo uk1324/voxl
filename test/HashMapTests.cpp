@@ -74,12 +74,54 @@ static void rehashTest()
 	SUCCESS();
 }
 
-void getNonExistingKeyTest()
+static void getNonExistingKeyTest()
 {
 	INIT();
 
 	const auto v = GET("123");
 	ASSERT_FALSE(v.has_value());
+
+	SUCCESS();
+}
+
+static void iteratorTest()
+{
+	INIT();
+
+	// TODO: Instead of this generate random pairs and insert them into a vector then insert them into the hash table
+	const auto ITEMS_COUNT = 10;
+	for (auto i = 0; i < ITEMS_COUNT; i++)
+	{
+		char key[] = { 'a' + i, '\0' };
+		PUT(key, Value::integer(i));
+	}
+
+#define CHECK(expectedKey, expectedValue) \
+	else if (strcmp(key->chars, expectedKey) == 0) \
+	{ \
+		ASSERT_TRUE(value.isInt()); \
+		ASSERT_EQ(value.as.intNumber, expectedValue); \
+		count++; \
+	}
+	auto count = 0;
+	for (const auto& [key, value] : _m)
+	{
+		if (false) {}
+		CHECK("a", 0)
+		CHECK("b", 1)
+		CHECK("c", 2)
+		CHECK("d", 3)
+		CHECK("e", 4)
+		CHECK("f", 5)
+		CHECK("g", 6)
+		CHECK("h", 7)
+		CHECK("i", 8)
+		CHECK("j", 9)
+		else
+			ASSERT_TRUE(false);
+	}
+#undef CHECK
+	ASSERT_EQ(count, ITEMS_COUNT);
 
 	SUCCESS();
 }
@@ -93,4 +135,5 @@ void hashMapTests()
 	insertAndDeleteTest();
 	rehashTest();
 	getNonExistingKeyTest();
+	iteratorTest();
 }

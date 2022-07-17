@@ -78,18 +78,18 @@ ObjString* Allocator::allocateString(std::string_view chars, size_t length)
 	obj->size = chars.size();
 	obj->length = length;
 	memcpy(data, chars.data(), obj->size);
-	// Null terminating for compatiblity with foreign functions. There maybe be some issue if I wanted to create a string view like Obj
-	// It would be simpler to just store everything as not null terminated then but I would still have to somehow maintain the gc roots.
+	// Null terminating for compatiblity with foreign functions. There maybe be some issue if I wanted to create a string view like Obj.
 	data[obj->size] = '\0';
 	obj->chars = data;
 	return obj;
 }
 
-ObjFunction* Allocator::allocateFunction(ObjString* name, int argCount)
+ObjFunction* Allocator::allocateFunction(ObjString* name, int argCount, HashTable* globals)
 {
 	auto obj = allocateObj(sizeof(ObjFunction), ObjType::Function)->asFunction();
 	obj->argCount = argCount;
 	obj->name = name;
+	obj->globals = globals;
 	new (&obj->byteCode) ByteCode();
 	return obj;
 }
@@ -134,6 +134,14 @@ ObjBoundFunction* Allocator::allocateBoundFunction(Obj* callable, const Value& v
 	return obj;
 }
 
+ObjModule* Allocator::allocateModule()
+{
+	auto obj = allocateObj(sizeof(ObjModule), ObjType::Module)->asModule();
+	obj->isLoaded = false;
+	new (&obj->globals) HashTable();
+	return obj;
+}
+
 Allocator::StringConstant Allocator::allocateStringConstant(std::string_view chars)
 {
 	return allocateStringConstant(chars, Utf8::strlen(chars.data(), chars.size()));
@@ -163,7 +171,7 @@ Allocator::StringConstant Allocator::allocateStringConstant(std::string_view cha
 	return { createConstant(Value(obj)), obj };
 }
 
-Allocator::FunctionConstant Allocator::allocateFunctionConstant(ObjString* name, int argCount)
+Allocator::FunctionConstant Allocator::allocateFunctionConstant(ObjString* name, int argCount, HashTable* globals)
 {
 	auto obj = reinterpret_cast<ObjFunction*>(::operator new(sizeof(ObjFunction)));
 	obj->type = ObjType::Function;
@@ -171,17 +179,19 @@ Allocator::FunctionConstant Allocator::allocateFunctionConstant(ObjString* name,
 	obj->name = name;
 	obj->isMarked = false;
 	obj->upvalueCount = 0;
+	obj->globals = globals;
 	new (&obj->byteCode) ByteCode();
 	return { createConstant(Value(obj)), obj };
 }
 
-ObjNativeFunction* Allocator::allocateForeignFunction(ObjString* name, NativeFunction function, int argCount)
+ObjNativeFunction* Allocator::allocateForeignFunction(ObjString* name, NativeFunction function, int argCount, HashTable* globals)
 {
 	auto obj = allocateObj(sizeof(ObjNativeFunction), ObjType::NativeFunction)->asNativeFunction();
 	obj->type = ObjType::NativeFunction;
 	obj->name = name;
 	obj->function = function;
 	obj->argCount = argCount;
+	obj->globals = globals;
 	return obj;
 }
 
@@ -270,6 +280,13 @@ void Allocator::markObj(Obj* obj)
 		{
 			const auto upvalue = obj->asUpvalue();
 			addValue(upvalue->value);
+			return;
+		}
+
+		case ObjType::Module:
+		{
+			const auto module = obj->asModule();
+			addHashTable(module->globals);
 			return;
 		}
 
@@ -379,6 +396,9 @@ void Allocator::runGc()
 
 void Allocator::addObj(Obj* obj)
 {
+	// Allowing nullptrs might make it harder to find bugs when objects are erroneously set to nullptr or
+	// for example when using a copying GC in debug mode the memory of the old region is be memset to 0
+	// which would cause a segfault if the pointer is used and this assert would trigger if something were to try mark old memory.
 	ASSERT(obj != nullptr);
 	m_markedObjs.push_back(obj);
 }

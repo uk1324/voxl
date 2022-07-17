@@ -50,6 +50,7 @@ private:
 	std::unique_ptr<Stmt> throwStmt();
 	std::unique_ptr<Stmt> variableDeclarationStmt();
 	std::unique_ptr<Stmt> matchStmt();
+	std::unique_ptr<Stmt> useStmt();
 
 	std::unique_ptr<FnStmt> function(size_t start);
 	std::vector<std::unique_ptr<Stmt>> block();

@@ -72,7 +72,7 @@ void ErrorPrinter::printErrorStart(size_t line, size_t charInLine, const char* f
 	// Not "<=" because of the terminating null.
 	assert(bytesWritten < sizeof(message));
 
-	m_out << m_sourceInfo.filename
+	m_out << m_sourceInfo.displayedFilename
 		<< ':' << line + 1
 		<< ':' << charInLine
 		<< ":" TERM_COL_RED " error: " TERM_COL_RESET

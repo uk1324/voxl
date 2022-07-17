@@ -25,6 +25,7 @@ public:
 	public:
 		bool hadError;
 		ObjFunction* program;
+		ObjModule* module;
 	};
 
 private:
@@ -66,9 +67,9 @@ private:
 	};
 
 public:
-	Compiler();
+	Compiler(Allocator& allocator);
 
-	Result compile(const std::vector<std::unique_ptr<Stmt>>& ast, ErrorPrinter& errorPrinter, Allocator& allocator);
+	Result compile(const std::vector<std::unique_ptr<Stmt>>& ast, ErrorPrinter& errorPrinter);
 
 private:
 	Status compileFunction(
@@ -94,6 +95,9 @@ private:
 	Status tryStmt(const TryStmt& stmt);
 	Status throwStmt(const ThrowStmt& stmt);
 	Status matchStmt(const MatchStmt& stmt);
+	Status loadModule(std::string_view filePath);
+	Status useStmt(const UseStmt& stmt);
+	Status useAllStmt(const UseAllStmt& stmt);
 
 	Status compile(const std::unique_ptr<Expr>& expr);
 	Status compileBinaryExpr(const std::unique_ptr<Expr>& lhs, TokenType op, const std::unique_ptr<Expr>& rhs);
@@ -143,8 +147,11 @@ private:
 	Status errorAt(const Expr& expr, const char* format, ...);
 	Status errorAt(const Token& token, const char* format, ...);
 
+	// If only constants are allocated by the compiler the marking function probably isn't needed.
+	static void mark(Compiler* compiler, Allocator& allocator);
+
 private:
-	Allocator* m_allocator;
+	Allocator& m_allocator;
 
 	// If I needed to reduce allocation I could flatten these data structures. 
 	// For example converting m_loops into multiple arrays. Each entry would store a depth.
@@ -158,6 +165,8 @@ private:
 
 	std::vector<ByteCode*> m_functionByteCodeStack;
 
+	ObjModule* m_module;
+	Allocator::MarkingFunctionHandle m_rootMarkingFunctionHandle;
 
 	bool m_hadError;
 	ErrorPrinter* m_errorPrinter;

@@ -130,6 +130,12 @@ std::ostream& operator<< (std::ostream& os, Lang::Obj* obj)
 			break;
 		}
 
+		case ObjType::Module:
+		{
+			os << "<module>";
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 	}

@@ -58,6 +58,13 @@ enum class StmtType
 	Try,
 	Throw,
 	Match,
+
+	// There isn't a nice way to store all the possiblites in one type.
+	// Could use sum types but that would take up more space.
+	// Can't use inheritance without adding special constructors that take in the StmtType.
+	Use,
+	UseAll,
+	UseSelective,
 };
 
 struct Stmt
@@ -336,6 +343,38 @@ struct MatchStmt final : public Stmt
 
 	std::unique_ptr<Expr> expr;
 	std::vector<Pair> cases;
+};
+
+struct UseStmt final : public Stmt
+{
+	UseStmt(std::string_view path, std::optional<std::string_view>, size_t start, size_t end);
+
+	std::string_view path;
+	// Could find the import path stem in the parser and then this wouldn't need to use optional but that seems like
+	// something the compiler should do.
+	// If I were to use std::filesystem::path::stem() then it would also require multiple pointless allocations.
+	std::optional<std::string_view> variableName;
+};
+
+struct UseAllStmt final : public Stmt
+{
+	UseAllStmt(std::string_view path, size_t start, size_t end);
+
+	std::string_view path;
+};
+
+struct UseSelectiveStmt final : public Stmt
+{
+	struct Variable
+	{
+		std::string_view originalName;
+		std::optional<std::string_view> newName;
+	};
+
+	UseSelectiveStmt(std::string_view path, std::vector<Variable> variablesToImport, size_t start, size_t end);
+
+	std::string_view path;
+	std::vector<Variable> variablesToImport;
 };
 
 struct ClassPtrn final : public Ptrn

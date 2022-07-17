@@ -15,7 +15,8 @@ namespace Lang
 	macro(NativeInstance) \
 	macro(Class) \
 	macro(Instance) \
-	macro(BoundFunction)	
+	macro(BoundFunction) \
+	macro(Module)
 
 enum class ObjType
 {
@@ -67,6 +68,7 @@ struct ObjFunction : public Obj
 	int argCount;
 	ByteCode byteCode;
 	int upvalueCount;
+	HashTable* globals;
 };
 
 class Context;
@@ -86,6 +88,7 @@ struct ObjNativeFunction : public Obj
 	ObjString* name;
 	int argCount;
 	NativeFunction function;
+	HashTable* globals;
 };
 
 struct ObjClass : public Obj
@@ -93,7 +96,6 @@ struct ObjClass : public Obj
 	ObjString* name;
 	HashTable fields;
 	size_t instanceSize;
-
 	MarkingFunction mark;
 };
 
@@ -126,5 +128,13 @@ struct ObjClosure : public Obj
 	ObjUpvalue** upvalues;
 	int upvalueCount;
 };
+
+struct ObjModule : public Obj
+{
+	HashTable globals;
+	bool isLoaded;
+};
+
+#undef OBJ_TYPE_LIST
 
 }

@@ -153,6 +153,7 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::CloseUpvalue: return closeUpvalueOp("closeUpvalue", byteCode, offset);
 		case Op::MatchClass: return justOp("matchClass");
 		case Op::Rethrow: return justOp("rethrow");
+		case Op::Import: return justOp("import");
 
 		default:
 			std::cout << "invalid op";

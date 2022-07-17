@@ -213,6 +213,23 @@ MatchStmt::MatchStmt(std::unique_ptr<Expr> expr, std::vector<Pair> cases, size_t
 	, cases(std::move(cases))
 {}
 
+UseStmt::UseStmt(std::string_view path, std::optional<std::string_view> variableName, size_t start, size_t end)
+	: Stmt(start, end, StmtType::Use)
+	, path(path)
+	, variableName(variableName)
+{}
+
+UseAllStmt::UseAllStmt(std::string_view path, size_t start, size_t end)
+	: Stmt(start, end, StmtType::UseAll)
+	, path(path)
+{}
+
+UseSelectiveStmt::UseSelectiveStmt(std::string_view path, std::vector<Variable> variablesToImport, size_t start, size_t end)
+	: Stmt(start, end, StmtType::UseSelective)
+	, path(path)
+	, variablesToImport(std::move(variablesToImport))
+{}
+
 ClassPtrn::ClassPtrn(std::string_view className, size_t start, size_t end)
 	: Ptrn(start, end, PtrnType::Class)
 	, className(className)

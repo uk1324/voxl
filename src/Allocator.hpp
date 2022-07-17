@@ -7,12 +7,6 @@
 
 namespace Lang
 {
-// Could use custom destory function for std::unique_ptr for handles
-
-
-// Maybe store a public bool that would make it so constants are allocated in a different place making them not needed to be compressed.
-// Could just store the constant pool inside the allocator.
-// Consants would also need to store the GcNode they could set newLocation that just points to itself so updating pointers works.
 
 class Allocator
 {
@@ -37,7 +31,7 @@ private:
 private:
 	// Not sure if I should put the Node inside the Obj struct. Having the struct seperate from the Obj makes it possible to choose a GC at
 	// runtime. But there are many differences between different collectors. A simple mark and sweep doesn't need to update pointers.
-	// And more complicated collectors probably require a lot more thing to work than this copying collector.
+	// And more complicated collectors probably require a lot more things to work than a simple copying collector.
 
 public:
 	Allocator();
@@ -49,17 +43,17 @@ public:
 
 	Obj* allocateObj(size_t size, ObjType type);
 
-	// Function allocating constants should return const Obj because they shouldn't be marked.
 	ObjString* allocateString(std::string_view chars);
 	ObjString* allocateString(std::string_view chars, size_t length);
-	ObjFunction* allocateFunction(ObjString* name, int argCount);
+	ObjFunction* allocateFunction(ObjString* name, int argCount, HashTable* globals);
 	ObjClosure* allocateClosure(ObjFunction* function);
 	ObjUpvalue* allocateUpvalue(Value* localVariable);
-	ObjNativeFunction* allocateForeignFunction(ObjString* name, NativeFunction function, int argCount);
+	ObjNativeFunction* allocateForeignFunction(ObjString* name, NativeFunction function, int argCount, HashTable* globals);
 	ObjClass* allocateClass(ObjString* name, size_t instanceSize, MarkingFunction mark);
 	ObjInstance* allocateInstance(ObjClass* class_);
 	ObjNativeInstance* allocateNativeInstance(ObjClass* class_);
 	ObjBoundFunction* allocateBoundFunction(Obj* callable, const Value& value);
+	ObjModule* allocateModule();
 
 	struct StringConstant
 	{
@@ -73,7 +67,7 @@ public:
 	{
 		size_t index;
 		ObjFunction* value;
-	} allocateFunctionConstant(ObjString* name, int argCount);
+	} allocateFunctionConstant(ObjString* name, int argCount, HashTable* globals);
 
 	size_t createConstant(const Value& value);
 

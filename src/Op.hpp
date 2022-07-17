@@ -10,11 +10,11 @@ namespace Lang
 	{
 		// [lhs, rhs] -> [result]
 		// {
-		Add, 
-		Subtract, 
-		Multiply, 
-		Divide, 
-		Modulo, 
+		Add,
+		Subtract,
+		Multiply,
+		Divide,
+		Modulo,
 		Concat,
 		Less,
 		LessEqual,
@@ -75,5 +75,8 @@ namespace Lang
 		CloseUpvalue, // index
 		MatchClass, // [value, class] -> [value, isInstanceBool]
 		PopStack,
+		Import, // [filename] -> [module]
+		ModuleSetLoaded, // [module] -> [module]
+		ModuleImportAllToGlobalNamespace, // [module] -> []
 	};
 }

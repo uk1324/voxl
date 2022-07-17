@@ -10,13 +10,14 @@ using namespace Lang;
 int Lang::runRepl()
 {
 	SourceInfo sourceInfo;
-	sourceInfo.filename = "<repl>";
+	sourceInfo.displayedFilename = "<repl>";
+	sourceInfo.directory = std::filesystem::current_path();
 
 	ErrorPrinter errorPrinter(std::cerr, sourceInfo);
 	Allocator allocator;
 	Parser parser(true);
 	Scanner scanner;
-	Compiler compiler;
+	Compiler compiler(allocator);
 	auto vm = std::make_unique<Vm>(allocator);
 
 	std::string source;
@@ -49,12 +50,12 @@ int Lang::runRepl()
 				break;
 			}
 
-			const auto compilerResult = compiler.compile(parserResult.ast, errorPrinter, allocator);
+			const auto compilerResult = compiler.compile(parserResult.ast, errorPrinter);
 
 			if (compilerResult.hadError)
 				break;
 
-			const auto vmResult = vm->execute(compilerResult.program, errorPrinter);
+			const auto vmResult = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, errorPrinter);
 			break;
 		}
 		source.clear();

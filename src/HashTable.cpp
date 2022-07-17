@@ -1,3 +1,6 @@
+#include "HashTable.hpp"
+#include "HashTable.hpp"
+#include "HashTable.hpp"
 #include <HashTable.hpp>
 #include <Obj.hpp>
 #include <iostream>
@@ -11,7 +14,7 @@ HashTable::HashTable()
 	m_data = nullptr;
 }
 
-bool HashTable::set(ObjString* newKey, Value newValue)
+bool HashTable::set(ObjString* newKey, const Value& newValue)
 {
 	if ((static_cast<float>(m_size + 1) / static_cast<float>(m_capacity)) > MAX_LOAD_FACTOR)
 	{
@@ -149,6 +152,36 @@ void HashTable::clear()
 	}
 }
 
+HashTable::Iterator HashTable::begin()
+{
+	auto bucket = m_data;
+	while ((bucket < m_data + m_capacity) && isBucketEmpty(*bucket))
+	{
+		bucket++;
+	}
+	return Iterator(*this, bucket);
+}
+
+HashTable::Iterator HashTable::end()
+{
+	return Iterator(*this, m_data + m_capacity);
+}
+
+HashTable::ConstIterator HashTable::cbegin() const
+{
+	auto bucket = m_data;
+	while ((bucket < m_data + m_capacity) && isBucketEmpty(*bucket))
+	{
+		bucket++;
+	}
+	return ConstIterator(*this, bucket);
+}
+
+HashTable::ConstIterator HashTable::cend() const
+{
+	return ConstIterator(*this, m_data + m_capacity);
+}
+
 size_t HashTable::capacity() const
 {
 	return m_capacity;
@@ -190,4 +223,79 @@ bool HashTable::isKeyNull(const ObjString* key)
 bool HashTable::isKeyTombstone(const ObjString* key)
 {
 	return key == reinterpret_cast<ObjString*>(1);
+}
+
+HashTable::Iterator::Iterator(HashTable& hashTable, Bucket* bucket)
+	: m_hashTable(hashTable)
+	, m_bucket(bucket)
+{}
+
+HashTable::Bucket* HashTable::Iterator::operator->()
+{
+	return m_bucket;
+}
+
+HashTable::Bucket& HashTable::Iterator::operator*()
+{
+	return *m_bucket;
+}
+
+HashTable::Iterator& HashTable::Iterator::operator++()
+{
+	if (*this == m_hashTable.end())
+		return *this;
+	do
+	{
+		m_bucket++;
+	} while (*this != m_hashTable.end() && HashTable::isBucketEmpty(*m_bucket));
+	return *this;
+}
+
+bool HashTable::Iterator::operator==(const Iterator& other) const
+{
+	ASSERT(&m_hashTable == &other.m_hashTable);
+	return m_bucket == other.m_bucket;
+}
+
+bool HashTable::Iterator::operator!=(const Iterator& other) const
+{
+	return !(*this == other);
+}
+
+
+HashTable::ConstIterator::ConstIterator(const HashTable& hashTable, const Bucket* bucket)
+	: m_hashTable(hashTable)
+	, m_bucket(bucket)
+{}
+
+const HashTable::Bucket* HashTable::ConstIterator::operator->() const
+{
+	return m_bucket;
+}
+
+const HashTable::Bucket& HashTable::ConstIterator::operator*() const
+{
+	return *m_bucket;
+}
+
+HashTable::ConstIterator& HashTable::ConstIterator::operator++()
+{
+	if (*this == m_hashTable.cend())
+		return *this;
+	do
+	{
+		m_bucket++;
+	} while (*this != m_hashTable.cend() && HashTable::isBucketEmpty(*m_bucket));
+	return *this;
+}
+
+bool HashTable::ConstIterator::operator==(const ConstIterator& other) const
+{
+	ASSERT(&m_hashTable == &other.m_hashTable);
+	return m_bucket == other.m_bucket;
+}
+
+bool HashTable::ConstIterator::operator!=(const ConstIterator& other) const
+{
+	return !(*this == other);
 }

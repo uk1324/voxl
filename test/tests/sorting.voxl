@@ -66,7 +66,7 @@ fn bubblesort(list) {
 
 fn selectionsort(list) {
 	fn find_min_index(list, left) {
-		min : 123456789; // assume it is inf
+		min : 123456789; // assume this is inf
 		min_index : 0;
 		i : left;
 		while i < list.size() {

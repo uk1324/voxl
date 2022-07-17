@@ -87,5 +87,4 @@ std::ostream& operator<< (std::ostream& os, Lang::Value value);
 std::ostream& operator<< (std::ostream& os, Lang::Obj* obj);
 bool operator== (const Lang::Value& lhs, const Lang::Value& rhs);
 
-#undef OBJ_TYPE_LIST
 #undef VALUE_TYPE_LIST

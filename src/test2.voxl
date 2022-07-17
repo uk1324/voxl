@@ -1,8 +1,6 @@
-x : List();
-x.push(5);
-x.push(2);
-x.push(1);
+use "test2";
 
-for item in x {
-	putln(item);
-}
+x : test2.y;
+
+y : 1.2;
+

@@ -4,14 +4,20 @@
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
 #include <Context.hpp>
+#include <ReadFile.hpp>
 #include <iostream>
 #include <sstream>
+#include <filesystem>
 
 #ifdef VOXL_DEBUG_PRINT_VM_EXECUTION_TRACE
 	#include <Debug/Disassembler.hpp>
 #endif
 
 using namespace Lang;
+
+// TODO: Calling stack.top requires 2 levles of indirection 
+// Using the global variable requires 1 level of indirection but also requires setting and unsetting the pointer on call and return.
+// The former is simpler.
 
 static LocalValue putln(Context& c)
 {
@@ -109,7 +115,7 @@ Vm::Vm(Allocator& allocator)
 	auto addFn = [this](ObjClass* type, std::string_view name, NativeFunction function, int argCount)
 	{
 		auto nameObj = m_allocator->allocateStringConstant(name).value;
-		auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount);
+		auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount, &m_builtins);
 		type->fields.set(nameObj, Value(functionObj));
 	};
 	addFn(m_listType, "$init", List::init, 1);
@@ -139,8 +145,21 @@ Vm::Vm(Allocator& allocator)
 	reset();
 }
 
-VmResult Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
+VmResult Vm::execute(
+	ObjFunction* program,
+	ObjModule* module,
+	Scanner& scanner,
+	Parser& parser,
+	Compiler& compiler,
+	ErrorPrinter& errorPrinter)
 {
+	auto path = std::filesystem::absolute(errorPrinter.sourceInfo().displayedFilename);
+	m_modules.set(m_allocator->allocateStringConstant(std::string_view(path.string())).value, Value(module));
+
+	m_scanner = &scanner;
+	m_parser = &parser;
+	m_compiler = &compiler;
+
 	m_callStack.clear();
 	m_stack.clear();
 	m_errorPrinter = &errorPrinter;
@@ -151,10 +170,13 @@ VmResult Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 		return VmResult::RuntimeError;
 	}
 	auto& frame = m_callStack.top();
+	// TODO: Maybe just call callValue()?
 	frame.instructionPointer = program->byteCode.code.data();
 	frame.values = m_stack.topPtr;
 	frame.function = program;
 	frame.numberOfValuesToPopOffExceptArgs = 0;
+	frame.callable = program;
+	m_globals = program->globals;
 
 	try 
 	{
@@ -173,11 +195,12 @@ VmResult Vm::execute(ObjFunction* program, ErrorPrinter& errorPrinter)
 
 void Vm::reset()
 {
-	m_globals.clear();
-	m_globals.set(m_listType->name, Value(m_listType));
-	m_globals.set(m_intType->name, Value(m_intType));
-	m_globals.set(m_stringType->name, Value(m_stringType));
-	m_globals.set(m_stopIterationType->name, Value(m_stopIterationType));
+	// TODO: Don't reset the builtins. Reset the modules.
+	m_builtins.clear();
+	m_builtins.set(m_listType->name, Value(m_listType));
+	m_builtins.set(m_intType->name, Value(m_intType));
+	m_builtins.set(m_stringType->name, Value(m_stringType));
+	m_builtins.set(m_stopIterationType->name, Value(m_stopIterationType));
 	defineNativeFunction("floor", floor, 1);
 	defineNativeFunction("invoke", invoke, 1);
 	defineNativeFunction("get_5", get_5, 0);
@@ -508,7 +531,7 @@ Vm::Result Vm::run()
 			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
 			auto name = m_stack.peek(0).asObj()->asString();
 			auto& value = m_stack.peek(1);
-			bool doesNotAlreadyExist = m_globals.set(name, value);
+			bool doesNotAlreadyExist = setGlobal(name, value);
 			if (doesNotAlreadyExist == false)
 			{
 				return fatalError("redeclaration of '%s'", name->chars);
@@ -521,7 +544,7 @@ Vm::Result Vm::run()
 		case Op::GetGlobal:
 		{
 			auto name = m_stack.peek(0).asObj()->asString();
-			const auto& value = m_globals.get(name);
+			const auto& value = getGlobal(name);
 			if (value.has_value() == false)
 			{
 				return fatalError("'%s' is not defined", name->chars);
@@ -536,7 +559,7 @@ Vm::Result Vm::run()
 			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
 			auto name = m_stack.peek(0).asObj()->asString();
 			auto& value = m_stack.peek(1);
-			bool doesNotAlreadyExist = m_globals.set(name, value);
+			bool doesNotAlreadyExist = setGlobal(name, value);
 			if (doesNotAlreadyExist)
 			{
 				return fatalError("'%s' is not defined", name->chars);
@@ -583,6 +606,7 @@ Vm::Result Vm::run()
 				return fatalError("type has no field '%s'", fieldName->chars);
 			}
 
+			// TODO: maybe use a switch.
 			auto obj = lhs.as.obj;
 			m_stack.pop();
 			m_stack.pop();
@@ -607,6 +631,26 @@ Vm::Result Vm::run()
 				else
 				{
 					TRY_PUSH(Value::null());
+				}
+				break;
+			}
+			else if (obj->isModule())
+			{
+				auto module = obj->asModule();
+				if (auto value = module->globals.get(fieldName); value.has_value())
+				{
+					TRY_PUSH(*value);
+				}
+				else
+				{
+					if (module->isLoaded)
+					{
+						TRY_PUSH(Value::null());
+					}
+					else
+					{
+						return fatalError("partially initialized module 'TODO' has no attribute 'TODO' (most likely due to a circular import)");
+					}
 				}
 				break;
 			}
@@ -789,6 +833,7 @@ Vm::Result Vm::run()
 			if (m_callStack.size() == 1)
 			{
 				m_callStack.pop();
+				m_stack.pop();
 				return Result::ok();
 			}
 			else
@@ -821,6 +866,21 @@ Vm::Result Vm::run()
 				}
 
 				m_callStack.pop();
+
+				auto callable = m_callStack.top().callable;
+				switch (callable->type)
+				{
+				case ObjType::Function:
+					m_globals = callable->asFunction()->globals;
+					break;
+
+				case ObjType::NativeFunction:
+					m_globals = callable->asNativeFunction()->globals;
+					break;
+
+				default:
+					ASSERT_NOT_REACHED();
+				}
 
 				TRY_PUSH(result);
 
@@ -870,6 +930,14 @@ Vm::Result Vm::run()
 		{
 			auto function = m_stack.peek(0).as.obj->asFunction();
 			auto closure = m_allocator->allocateClosure(function);
+			// Setting the upvalue count to 0 so if the GC runs while upvalues are allocated it 
+			// doesn't try to add unititalized pointers.
+			// Could set some flag for half initialized closures for example setting each pointer in closure->upvalues to nullptr.
+			// This would require a check every time a closure is marked or just to assume that pointers can be 
+			// nullptr (read Allocator::addObj).
+			closure->upvalueCount = 0;
+			m_stack.pop();
+			TRY_PUSH(Value(closure));
 			const auto upvalueCount = readUint8();
 			for (uint8_t i = 0; i < upvalueCount; i++)
 			{
@@ -887,8 +955,7 @@ Vm::Result Vm::run()
 					closure->upvalues[i] = m_callStack.top().upvalues[index];
 				}
 			}
-			m_stack.pop();
-			TRY_PUSH(Value(closure));
+			closure->upvalueCount = function->upvalueCount;
 			break;
 		}
 
@@ -924,6 +991,74 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::Import:
+		{
+			auto filename = m_stack.peek(0).asObj()->asString();
+			m_stack.pop();
+			// At the end the stack has to contain the module and the return value of the main function which is always null.
+			// If a module is already loaded the value has to be pushed anyway.
+			if (const auto module = m_modules.get(filename); module.has_value())
+			{
+				TRY_PUSH(*module);
+				TRY_PUSH(Value::null());
+				break;
+			}
+			auto path = std::filesystem::absolute(
+				m_errorPrinter->sourceInfo().directory / std::filesystem::path(std::string_view(filename->chars, filename->size)));
+			auto pathString = m_allocator->allocateStringConstant(path.string()).value;
+			if (auto module = m_modules.get(pathString); module.has_value())
+			{
+				TRY_PUSH(*module);
+				TRY_PUSH(Value::null());
+				break;
+			}
+			SourceInfo sourceInfo;
+			// Should this be filename or pathString?
+			sourceInfo.displayedFilename = filename->chars;
+			sourceInfo.directory = std::move(path.remove_filename());
+			auto source = stringFromFile(pathString->chars);
+			sourceInfo.source = source;
+			auto scannerResult = m_scanner->parse(sourceInfo, *m_errorPrinter);
+			auto parserResult = m_parser->parse(scannerResult.tokens, sourceInfo, *m_errorPrinter);
+			if (scannerResult.hadError || parserResult.hadError)
+			{
+				return fatalError("import error");
+			}
+			auto compilerResult = m_compiler->compile(parserResult.ast, *m_errorPrinter);
+			if (compilerResult.hadError)
+			{
+				return fatalError("import error");
+			}
+			m_modules.set(pathString, Value(compilerResult.module));
+			TRY_PUSH(Value(compilerResult.module));
+			TRY(callObjFunction(compilerResult.program, 0, 0));
+			break;
+		}
+
+		case Op::ModuleSetLoaded:
+		{
+			auto module = m_stack.peek(0).asObj()->asModule();
+			module->isLoaded = true;
+			break;
+		}
+
+		case Op::ModuleImportAllToGlobalNamespace:
+		{
+			auto module = m_stack.peek(0).asObj()->asModule();
+			if (module->isLoaded == false)
+			{
+				return fatalError("import error");
+			}
+			for (auto& [key, value] : module->globals)
+			{
+				// TODO: maybe check if this overrides.
+				// Would require the function to return if the key already exits. Right now it sets it and returns false.
+				setGlobal(key, value);
+			}
+			m_stack.pop();
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 			return Result::fatal();
@@ -934,8 +1069,8 @@ Vm::Result Vm::run()
 void Vm::defineNativeFunction(std::string_view name, NativeFunction function, int argCount)
 {
 	auto nameObj = m_allocator->allocateStringConstant(name).value;
-	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount);
-	m_globals.set(nameObj, Value(functionObj));
+	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount, &m_builtins);
+	m_builtins.set(nameObj, Value(functionObj));
 }
 
 Value Vm::call(const Value& calle, Value* values, int argCount)
@@ -961,9 +1096,9 @@ Value Vm::call(const Value& calle, Value* values, int argCount)
 	const auto callResult = callValue(calle, argCount, numberOfValuesToPopOffExceptArgs);
 	switch (callResult.type)
 	{
-		case ResultType::Ok: break;
-		case ResultType::Fatal: throw FatalException{};
-		case ResultType::Exception: throw NativeException(callResult.value);
+	case ResultType::Ok: break;
+	case ResultType::Fatal: throw FatalException{};
+	case ResultType::Exception: throw NativeException(callResult.value);
 	}
 
 	// TODO: Would also need to check for native function in constructors.
@@ -1055,6 +1190,8 @@ Vm::Result Vm::callObjFunction(ObjFunction* function, int argCount, int numberOf
 	frame.instructionPointer = function->byteCode.code.data();
 	frame.values = m_stack.topPtr - argCount;
 	frame.function = function;
+	frame.callable = function;
+	m_globals = function->globals;
 	frame.numberOfValuesToPopOffExceptArgs = numberOfValuesToPopOffExceptArgs;
 	return Result::ok();
 }
@@ -1093,6 +1230,8 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			TRY_PUSH_CALL_STACK();
 			auto& frame = m_callStack.top();
 			frame.setNativeFunction();
+			frame.callable = function;
+			m_globals = function->globals;
 			try
 			{
 				Context context(m_stack.topPtr - argCount, argCount, *m_allocator, *this);
@@ -1100,10 +1239,40 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 				m_stack.topPtr -= numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount);
 				TRY_PUSH(result.value);
 				m_callStack.pop();
+				auto callable = m_callStack.top().callable;
+				switch (callable->type)
+				{
+				case ObjType::Function:
+					m_globals = callable->asFunction()->globals;
+					break;
+
+				case ObjType::NativeFunction:
+					m_globals = callable->asNativeFunction()->globals;
+					break;
+
+				default:
+					ASSERT_NOT_REACHED();
+				}
 			}
 			catch (const NativeException& exception)
 			{
 				m_callStack.pop();
+
+				auto callable = m_callStack.top().callable;
+				switch (callable->type)
+				{
+				case ObjType::Function:
+					m_globals = callable->asFunction()->globals;
+					break;
+
+				case ObjType::NativeFunction:
+					m_globals = callable->asNativeFunction()->globals;
+					break;
+
+				default:
+					ASSERT_NOT_REACHED();
+				}
+
 				TRY(throwValue(exception.value));
 			}
 
@@ -1213,6 +1382,20 @@ Value Vm::typeErrorExpected(ObjClass*)
 	return Value(m_allocator->allocateInstance(m_typeErrorType));
 }
 
+std::optional<Value&> Vm::getGlobal(ObjString* name)
+{
+	auto optValue = m_globals->get(name);
+	if (optValue.has_value())
+		return *optValue;
+
+	return m_builtins.get(name);
+}
+
+bool Vm::setGlobal(ObjString* name, const Value& value)
+{
+	return m_globals->set(name, value);
+}
+
 void Vm::mark(Vm* vm, Allocator& allocator)
 {
 	for (auto& value : vm->m_stack)
@@ -1220,7 +1403,16 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 		allocator.addValue(value);
 	}
 
-	allocator.addHashTable(vm->m_globals);
+	for (size_t i = 0; i < vm->m_modules.capacity(); i++)
+	{
+		auto bucket = vm->m_modules.data()[i];
+		if (HashTable::isBucketEmpty(bucket) == false)
+		{
+			allocator.addValue(bucket.value);
+		}
+	}
+
+	allocator.addHashTable(vm->m_builtins);
 	if (vm->m_listType != nullptr)
 		allocator.addObj(vm->m_listType);
 	if (vm->m_intType != nullptr)
