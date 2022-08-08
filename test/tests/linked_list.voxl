@@ -66,16 +66,16 @@ class LinkedList {
 	}
 
 	log() {
-		print("[");
+		put("[");
 		node : $.data;
 		while node != null {
-			print(node.value);
+			put(node.value);
 			if node.next != null {
-				print(", ");
+				put(", ");
 			}
 			node = node.next;
 		}
-		print("] ");
+		put("] ");
 	}
 }
 
@@ -85,7 +85,7 @@ x.pop();
 try {
 	x.pop();
 } catch String => error {
-	print(error ++ " ");
+	put(error ++ " ");
 }
 x.push(1);
 x.push(2);

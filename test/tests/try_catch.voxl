@@ -8,9 +8,9 @@ fn recursion(n)
 
 try {
 	recursion(0);
-	print("try");
+	put("try");
 } catch String => value {
-	print(value);
+	put(value);
 } finally {
-	print("finally");
+	put("finally");
 }

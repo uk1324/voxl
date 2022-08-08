@@ -81,7 +81,6 @@ private:
 	Status compile(const std::unique_ptr<Stmt>& stmt);
 	Status compile(const std::vector<std::unique_ptr<Stmt>>& stmts);
 	Status exprStmt(const ExprStmt& stmt);
-	Status printStmt(const PrintStmt& stmt);
 	Status variableDeclarationStmt(const VariableDeclarationStmt& stmt);
 	Status blockStmt(const BlockStmt& stmt);
 	Status fnStmt(const FnStmt& stmt);
@@ -98,6 +97,7 @@ private:
 	Status loadModule(std::string_view filePath);
 	Status useStmt(const UseStmt& stmt);
 	Status useAllStmt(const UseAllStmt& stmt);
+	Status useSelectiveStmt(const UseSelectiveStmt& stmt);
 
 	Status compile(const std::unique_ptr<Expr>& expr);
 	Status compileBinaryExpr(const std::unique_ptr<Expr>& lhs, TokenType op, const std::unique_ptr<Expr>& rhs);
@@ -150,7 +150,7 @@ private:
 	// If only constants are allocated by the compiler the marking function probably isn't needed.
 	static void mark(Compiler* compiler, Allocator& allocator);
 
-private:
+public:
 	Allocator& m_allocator;
 
 	// If I needed to reduce allocation I could flatten these data structures. 

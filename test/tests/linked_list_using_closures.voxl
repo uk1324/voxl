@@ -19,7 +19,7 @@ fn for_each(func, list) {
 }
 
 fn log(value) {
-	print(value);
+	put(value);
 }
 
 list : linked_list(1, linked_list(2, linked_list(3, linked_list(4, null))));

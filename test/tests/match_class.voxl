@@ -4,10 +4,10 @@ class Y {}
 fn match_instance(instance) {
 	match instance {
 		X => {
-			print("X");
+			put("X");
 		}
 		Y => {
-			print("Y");
+			put("Y");
 		}
 	}
 }

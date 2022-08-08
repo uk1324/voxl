@@ -45,7 +45,6 @@ struct Expr
 enum class StmtType
 {
 	Expr,
-	Print,
 	VariableDeclaration,
 	Block,
 	Fn,
@@ -200,14 +199,6 @@ struct ExprStmt final : public Stmt
 {
 public:
 	ExprStmt(std::unique_ptr<Expr> expr, size_t start, size_t end);
-
-	std::unique_ptr<Expr> expr;
-};
-
-struct PrintStmt final : public Stmt
-{
-public:
-	PrintStmt(std::unique_ptr<Expr> expr, size_t start, size_t end);
 
 	std::unique_ptr<Expr> expr;
 };

@@ -19,6 +19,12 @@ using namespace Lang;
 // Using the global variable requires 1 level of indirection but also requires setting and unsetting the pointer on call and return.
 // The former is simpler.
 
+static LocalValue put(Context& c)
+{
+	std::cout << c.args(0).value;
+	return c.nullValue();
+}
+
 static LocalValue putln(Context& c)
 {
 	std::cout << c.args(0).value << '\n';
@@ -159,6 +165,7 @@ VmResult Vm::execute(
 	m_scanner = &scanner;
 	m_parser = &parser;
 	m_compiler = &compiler;
+	m_compiler->m_module = nullptr;
 
 	m_callStack.clear();
 	m_stack.clear();
@@ -195,8 +202,8 @@ VmResult Vm::execute(
 
 void Vm::reset()
 {
-	// TODO: Don't reset the builtins. Reset the modules.
 	m_builtins.clear();
+	m_modules.clear();
 	m_builtins.set(m_listType->name, Value(m_listType));
 	m_builtins.set(m_intType->name, Value(m_intType));
 	m_builtins.set(m_stringType->name, Value(m_stringType));
@@ -206,6 +213,7 @@ void Vm::reset()
 	defineNativeFunction("get_5", get_5, 0);
 	defineNativeFunction("throw_3", throw_3, 0);
 	defineNativeFunction("putln", putln, 1);
+	defineNativeFunction("put", put, 1);
 }
 
 Vm::Result Vm::run()
@@ -462,8 +470,8 @@ Vm::Result Vm::run()
 
 		case Op::Concat:
 		{
-			Value lhs = m_stack.peek(1);
-			Value rhs = m_stack.peek(0);
+			const auto& lhs = m_stack.peek(1);
+			const auto& rhs = m_stack.peek(0);
 			std::stringstream result;
 			// Could optmize this by not recalculating the length using Utf8::strlen every time.
 			// Could also create an stream for ObjString* objects to avoid pointless allocating in std::stringstream.
@@ -816,12 +824,6 @@ Vm::Result Vm::run()
 			break;
 		}
 
-		case Op::Print:
-		{
-			std::cout << m_stack.peek(0);
-			break;
-		}
-
 		case Op::PopStack:
 		{
 			m_stack.pop();
@@ -1029,8 +1031,8 @@ Vm::Result Vm::run()
 			{
 				return fatalError("import error");
 			}
-			m_modules.set(pathString, Value(compilerResult.module));
 			TRY_PUSH(Value(compilerResult.module));
+			m_modules.set(pathString, Value(compilerResult.module));
 			TRY(callObjFunction(compilerResult.program, 0, 0));
 			break;
 		}
@@ -1403,14 +1405,16 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 		allocator.addValue(value);
 	}
 
-	for (size_t i = 0; i < vm->m_modules.capacity(); i++)
+	// Maybe be faster not to add the strings becuase they are constans.
+	allocator.addHashTable(vm->m_modules);
+	/*for (size_t i = 0; i < vm->m_modules.capacity(); i++)
 	{
 		auto bucket = vm->m_modules.data()[i];
 		if (HashTable::isBucketEmpty(bucket) == false)
 		{
 			allocator.addValue(bucket.value);
 		}
-	}
+	}*/
 
 	allocator.addHashTable(vm->m_builtins);
 	if (vm->m_listType != nullptr)

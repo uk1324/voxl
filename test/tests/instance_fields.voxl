@@ -3,7 +3,7 @@ class X
 
 x : X();
 
-print(x.a);
+put(x.a);
 x.a = 4;
-print(x.a);
-print(x.b);
+put(x.a);
+put(x.b);

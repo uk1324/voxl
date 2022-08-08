@@ -49,8 +49,6 @@ std::unique_ptr<Stmt> Parser::stmt()
 {
 	// Could shorten this by first advancing the token then switching over the previous token and 
 	// going back one token on default and returning exprStmt();
-	if (match(TokenType::Print))
-		return printStmt();
 	if (match(TokenType::LeftBrace))
 		return blockStmt();
 	if (match(TokenType::Fn))
@@ -93,23 +91,12 @@ std::unique_ptr<Stmt> Parser::stmt()
 
 std::unique_ptr<Stmt> Parser::exprStmt()
 {
-	size_t start = peek().start;
+	const auto start = peek().start;
 	auto expression = expr();
 	expect(TokenType::Semicolon, "expected ';'");
-	size_t end = peekPrevious().end;
+	const auto end = peekPrevious().end;
 
 	auto stmt = std::make_unique<ExprStmt>(std::move(expression), start, end);
-	return stmt;
-}
-
-std::unique_ptr<Stmt> Parser::printStmt()
-{
-	auto start = peekPrevious().start;
-	expect(TokenType::LeftParen, "expected '('");
-	auto expression = expr();
-	expect(TokenType::RightParen, "expected ')'");
-	expect(TokenType::Semicolon, "expected ';'");
-	auto stmt = std::make_unique<PrintStmt>(std::move(expression), start, peekPrevious().end);
 	return stmt;
 }
 
@@ -599,7 +586,7 @@ std::unique_ptr<Expr> Parser::unary()
 
 std::unique_ptr<Expr> Parser::callOrFieldAccessOrIndex()
 {
-	size_t start = peek().start;
+	const auto start = peek().start;
 	auto expression = primary();
 
 	for (;;)
@@ -607,7 +594,7 @@ std::unique_ptr<Expr> Parser::callOrFieldAccessOrIndex()
 		if (match(TokenType::LeftParen))
 		{
 			std::vector<std::unique_ptr<Expr>> arguments;
-			if (peek().type != TokenType::RightParen)
+			if ((isAtEnd() == false) && (peek().type != TokenType::RightParen))
 			{
 				do
 				{

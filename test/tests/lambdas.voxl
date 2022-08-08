@@ -4,10 +4,10 @@ fn print_range(f, start, end) {
 	}
 	current : start;
 	while current <= end {
-		print(f(current) ++ " ");
+		put(f(current) ++ " ");
 		current += 1;
 	}
-	print("\n");
+	put("\n");
 }
 
 || {

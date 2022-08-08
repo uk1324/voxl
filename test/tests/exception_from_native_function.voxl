@@ -1,7 +1,7 @@
-print(floor(1.2));
+put(floor(1.2));
 
 try {
 	floor("abc");
 } catch Int => error {
-	print(error);
+	put(error);
 }

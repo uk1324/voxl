@@ -10,7 +10,7 @@
 
 using namespace Lang;
 
-std::unordered_map<std::string_view, std::string_view> tests = {
+std::pair<std::string_view, std::string_view> tests[] = {
 	{ "variable_scoping", "0010" },
 	{ "numbers_loop", "0123456789" },
 	{ "ret", "6" },
@@ -32,6 +32,7 @@ std::unordered_map<std::string_view, std::string_view> tests = {
 	{ "map_iterator", "1 8 27 64 125 " },
 	{ "nested_iterators", "(0,0)(0,1)(0,2)(1,0)(1,1)(1,2)(2,0)(2,1)(2,2)" },
 	{ "import", "123456123456" },
+	{ "import_all", "123456123456" },
 };
 
 void testFailed(std::string_view name)
@@ -44,8 +45,17 @@ void testFailed(std::string_view name, std::string_view got, std::string_view ex
 	std::cerr << "[FAILED] " << name << " | expected \"" << expected << "\" got \"" << got << "\"\n";
 }
 
+//#define LOOP_TESTS
+
 int main()
 {
+	std::stringstream output;
+	std::cout.set_rdbuf(output.rdbuf());
+
+#if LOOP_TESTS
+	for (;;)
+	{
+#endif
 // TODO: Make a function to register the hash map to the GC.
 #ifndef VOXL_DEBUG_STRESS_TEST_GC
 	hashMapTests();
@@ -56,9 +66,6 @@ int main()
 	Allocator allocator;
 	Compiler compiler(allocator);
 	auto vm = std::make_unique<Vm>(allocator);
-
-	std::stringstream output;
-	std::cout.set_rdbuf(output.rdbuf());
 
 	for (const auto& [name, expectedResult] : tests)
 	{
@@ -101,4 +108,7 @@ int main()
 
 		std::cerr << "[PASSED] " << name << '\n';
 	}
+#if LOOP_TESTS
+	}
+#endif
 }

@@ -56,6 +56,15 @@ Obj* Allocator::allocateObj(size_t size, ObjType type)
 	return obj;
 }
 
+Obj* Allocator::allocateObjConstant(size_t size, ObjType type)
+{
+	auto obj = reinterpret_cast<Obj*>(::operator new(size));
+	obj->type = type;
+	obj->isMarked = true;
+	obj->next = nullptr;
+	return obj;
+}
+
 ObjString* Allocator::allocateString(std::string_view chars)
 {
 	return allocateString(chars, Utf8::strlen(chars.data(), chars.size()));
@@ -81,18 +90,19 @@ ObjString* Allocator::allocateString(std::string_view chars, size_t length)
 	// Null terminating for compatiblity with foreign functions. There maybe be some issue if I wanted to create a string view like Obj.
 	data[obj->size] = '\0';
 	obj->chars = data;
+	m_stringPool.insert(obj);
 	return obj;
 }
 
-ObjFunction* Allocator::allocateFunction(ObjString* name, int argCount, HashTable* globals)
-{
-	auto obj = allocateObj(sizeof(ObjFunction), ObjType::Function)->asFunction();
-	obj->argCount = argCount;
-	obj->name = name;
-	obj->globals = globals;
-	new (&obj->byteCode) ByteCode();
-	return obj;
-}
+//ObjFunction* Allocator::allocateFunction(ObjString* name, int argCount, HashTable* globals)
+//{
+//	auto obj = allocateObj(sizeof(ObjFunction), ObjType::Function)->asFunction();
+//	obj->argCount = argCount;
+//	obj->name = name;
+//	obj->globals = globals;
+//	new (&obj->byteCode) ByteCode();
+//	return obj;
+//}
 
 ObjClosure* Allocator::allocateClosure(ObjFunction* function)
 {
@@ -159,25 +169,23 @@ Allocator::StringConstant Allocator::allocateStringConstant(std::string_view cha
 		return { createConstant(Value(*result)), *result };
 	}
 
-	auto obj = reinterpret_cast<ObjString*>(::operator new(sizeof(ObjString) + chars.size() + 1));
-	obj->isMarked = false;
-	obj->type = ObjType::String;
-	auto data = reinterpret_cast<char*>(obj + 1);
+	auto obj = allocateObjConstant(sizeof(ObjString) + chars.size() + 1, ObjType::String)->asString();
+	//auto data = reinterpret_cast<char*>(obj + 1);
+	auto data = reinterpret_cast<char*>(obj) + sizeof(ObjString);
 	memcpy(data, chars.data(), chars.size());
 	obj->size = chars.size();
 	data[chars.size()] = '\0';
 	obj->chars = data;
 	obj->length = length;
+	m_stringPool.insert(obj);
 	return { createConstant(Value(obj)), obj };
 }
 
 Allocator::FunctionConstant Allocator::allocateFunctionConstant(ObjString* name, int argCount, HashTable* globals)
 {
-	auto obj = reinterpret_cast<ObjFunction*>(::operator new(sizeof(ObjFunction)));
-	obj->type = ObjType::Function;
+	auto obj = allocateObjConstant(sizeof(ObjFunction), ObjType::Function)->asFunction();
 	obj->argCount = argCount;
 	obj->name = name;
-	obj->isMarked = false;
 	obj->upvalueCount = 0;
 	obj->globals = globals;
 	new (&obj->byteCode) ByteCode();
@@ -186,7 +194,7 @@ Allocator::FunctionConstant Allocator::allocateFunctionConstant(ObjString* name,
 
 ObjNativeFunction* Allocator::allocateForeignFunction(ObjString* name, NativeFunction function, int argCount, HashTable* globals)
 {
-	auto obj = allocateObj(sizeof(ObjNativeFunction), ObjType::NativeFunction)->asNativeFunction();
+	auto obj = allocateObjConstant(sizeof(ObjNativeFunction), ObjType::NativeFunction)->asNativeFunction();
 	obj->type = ObjType::NativeFunction;
 	obj->name = name;
 	obj->function = function;
@@ -205,6 +213,7 @@ ObjClass* Allocator::allocateClass(ObjString* name, size_t instanceSize, Marking
 	return obj;
 }
 
+// Probably don't need to add constants like function names.
 void Allocator::markObj(Obj* obj)
 {
 	if (obj->isMarked)
@@ -315,8 +324,12 @@ size_t Allocator::createConstant(const Value& value)
 				case ValueType::Obj:
 					if ((value.as.obj->type == ObjType::String)
 						&& (constant.as.obj->type == ObjType::String)
+						/*&& (constant.as.obj->asString()->size == value.as.obj->asString()->size)
+						&& (memcmp(constant.as.obj->asString()->chars, value.as.obj->asString()->chars, value.as.obj->asString()->size) == 0))*/
 						&& (value.as.obj == constant.as.obj))
+					{
 						return i;
+					}
 					break;
 
 				case ValueType::Null:
@@ -356,6 +369,15 @@ void Allocator::runGc()
 		markObj(obj);
 	}
 
+	// Remove this
+	for (const auto o : m_constants)
+	{
+		if (o.isObj())
+		{
+			ASSERT(o.as.obj->isMarked);
+		}
+	}
+
 	// Can't use erase remove on sets.
 	for (auto it = m_stringPool.begin(); it != m_stringPool.end();)
 	{
@@ -368,6 +390,7 @@ void Allocator::runGc()
 	Obj* previous = nullptr;
 	auto obj = m_head;
 
+	// Constant's don't need to be added because this only deletes objects created normally.
 	while (obj != nullptr)
 	{
 		if (obj->isMarked)
@@ -392,6 +415,7 @@ void Allocator::runGc()
 			obj = next;
 		}
 	}
+	m_tail = previous;
 }
 
 void Allocator::addObj(Obj* obj)
@@ -458,22 +482,22 @@ const Value& Allocator::getConstant(size_t id) const
 
 void Allocator::registerLocal(Obj** obj)
 {
-	m_localObjs.insert(obj);
+	ASSERT(m_localObjs.insert(obj).second == true);
 }
 
 void Allocator::unregisterLocal(Obj** obj)
 {
-	m_localObjs.erase(obj);
+	ASSERT(m_localObjs.erase(obj) == 1);
 }
 
 void Allocator::registerLocal(Value* value)
 {
-	m_localValues.insert(value);
+	ASSERT(m_localValues.insert(value).second == true);
 }
 
 void Allocator::unregisterLocal(Value* value)
 {
-	m_localValues.erase(value);
+	ASSERT(m_localValues.erase(value) == 1);
 }
 
 Allocator::MarkingFunctionHandle::~MarkingFunctionHandle()

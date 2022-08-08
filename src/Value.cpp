@@ -41,7 +41,7 @@ Value Value::integer(Int value)
 	return Value(value);
 }
 
-std::ostream& operator<<(std::ostream& os, Value value)
+std::ostream& operator<<(std::ostream& os, const Value value)
 {
 	using namespace Lang;
 
@@ -152,7 +152,6 @@ bool operator==(const Value& lhs, const Value& rhs)
 	{
 		case ValueType::Int: return lhs.as.intNumber == rhs.as.intNumber;
 		case ValueType::Float: return lhs.as.floatNumber == rhs.as.floatNumber;
-		//case ValueType::Obj: return lhs.as.floatNumber == rhs.as.ob;
 		case ValueType::Null: return true;
 		case ValueType::Bool: return lhs.as.boolean == rhs.as.boolean;
 

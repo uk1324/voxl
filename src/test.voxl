@@ -1,7 +1,9 @@
-fn test() {
-	ret 15;
-}
+class X
+{}
 
-fn add(x, y) {
-	ret x + y;
-}
+x : X();
+
+put(x.a);
+x.a = 4;
+put(x.a);
+put(x.b);

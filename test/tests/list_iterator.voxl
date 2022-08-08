@@ -6,5 +6,5 @@ list.push(4);
 list.push(5);
 
 for x in list {
-	print(x);
+	put(x);
 }

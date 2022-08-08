@@ -1,0 +1,4 @@
+use "imported" -> *;
+
+put(get_number());
+put(number);

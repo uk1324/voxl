@@ -22,5 +22,5 @@ class Map {
 }
 
 for x in Map(|x| x * x * x, list) {
-	print(x ++ " ");
+	put(x ++ " ");
 }

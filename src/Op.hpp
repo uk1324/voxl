@@ -64,8 +64,6 @@ namespace Lang
 		// }
 		JumpBack, // bytesToJumpBack
 
-		Print, // [value]
-
 		Call, // argCount [function, args...]
 		Return,
 		TryBegin, // absolute jump to catch stmt.

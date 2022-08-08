@@ -22,6 +22,6 @@ class Range {
 
 for i in Range(3) {
 	for j in Range(3) {
-		print("(" ++ i ++ "," ++ j ++ ")");
+		put("(" ++ i ++ "," ++ j ++ ")");
 	}
 }

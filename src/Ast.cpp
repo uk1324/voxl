@@ -113,11 +113,6 @@ ExprStmt::ExprStmt(std::unique_ptr<Expr> expr, size_t start, size_t end)
 	, expr(std::move(expr))
 {}
 
-PrintStmt::PrintStmt(std::unique_ptr<Expr> expr, size_t start, size_t end)
-	: Stmt(start, end, StmtType::Print)
-	, expr(std::move(expr))
-{}
-
 VariableDeclarationStmt::VariableDeclarationStmt(
 	std::vector<std::pair<std::string_view, std::optional<std::unique_ptr<Expr>>>> variables,
 	size_t start,

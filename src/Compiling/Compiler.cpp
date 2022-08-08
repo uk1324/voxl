@@ -1,7 +1,3 @@
-#include "Compiler.hpp"
-#include "Compiler.hpp"
-#include "Compiler.hpp"
-#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -68,7 +64,6 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 	}
 #endif
 
-	// Could set module to nullptr here though it probably doesn't matter.
 	return Result{ m_hadError, scriptFunction, m_module };
 }
 
@@ -135,7 +130,6 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 	switch (stmt.get()->type)
 	{
 		CASE_STMT_TYPE(Expr, exprStmt)
-		CASE_STMT_TYPE(Print, printStmt)
 		CASE_STMT_TYPE(VariableDeclaration, variableDeclarationStmt)
 		CASE_STMT_TYPE(Block, blockStmt)
 		CASE_STMT_TYPE(Fn, fnStmt)
@@ -150,6 +144,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 		CASE_STMT_TYPE(Match, matchStmt)
 		CASE_STMT_TYPE(Use, useStmt)
 		CASE_STMT_TYPE(UseAll, useAllStmt)
+		CASE_STMT_TYPE(UseSelective, useSelectiveStmt)
 	}
 #undef CASE_STMT_STMT
 	m_lineNumberStack.pop_back();
@@ -168,14 +163,6 @@ Compiler::Status Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& stm
 Compiler::Status Compiler::exprStmt(const ExprStmt& stmt)
 {
 	TRY(compile(stmt.expr));
-	emitOp(Op::PopStack);
-	return Status::Ok;
-}
-
-Compiler::Status Compiler::printStmt(const PrintStmt& stmt)
-{
-	TRY(compile(stmt.expr));
-	emitOp(Op::Print);
 	emitOp(Op::PopStack);
 	return Status::Ok;
 }
@@ -479,6 +466,7 @@ Compiler::Status Compiler::loadModule(std::string_view filePath)
 	// a value and removing the code for getting the return value in Op::Return.
 	emitOp(Op::PopStack);
 	emitOp(Op::ModuleSetLoaded);
+	return Status::Ok;
 }
 
 Compiler::Status Compiler::useStmt(const UseStmt& stmt)
@@ -500,6 +488,12 @@ Compiler::Status Compiler::useAllStmt(const UseAllStmt& stmt)
 	TRY(loadModule(stmt.path));
 	emitOp(Op::ModuleImportAllToGlobalNamespace);
 	return Status::Ok;
+}
+
+Compiler::Status Compiler::useSelectiveStmt(const UseSelectiveStmt& stmt)
+{
+	ASSERT_NOT_REACHED();
+	return Status::Error;
 }
 
 Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
@@ -1051,5 +1045,7 @@ Compiler::Status Compiler::errorAt(const Token& token, const char* format, ...)
 void Compiler::mark(Compiler* compiler, Allocator& allocator)
 {
 	if (compiler->m_module != nullptr)
+	{
 		allocator.addObj(compiler->m_module);
+	}
 }

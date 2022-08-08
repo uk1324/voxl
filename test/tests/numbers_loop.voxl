@@ -3,6 +3,6 @@ loop {
 	if x == 10 {
 		break;
 	}
-	print(x);
+	put(x);
 	x = x + 1;
 }

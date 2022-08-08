@@ -35,7 +35,6 @@ public:
 private:
 	std::unique_ptr<Stmt> stmt();
 	std::unique_ptr<Stmt> exprStmt();
-	std::unique_ptr<Stmt> printStmt();
 	std::unique_ptr<Stmt> blockStmt();
 	std::unique_ptr<Stmt> fnStmt();
 	std::unique_ptr<Stmt> retStmt();

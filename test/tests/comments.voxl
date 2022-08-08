@@ -3,5 +3,5 @@
 	comment
 */
 // c o m m e n t
-print("abc" /* abc */);
-/* print("comment") */
+put("abc" /* abc */);
+/* put("comment") */

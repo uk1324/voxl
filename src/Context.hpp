@@ -2,6 +2,8 @@
 
 #include <Allocator.hpp>
 
+// No operator= needed for types becuase the only thing they need to manage is being registred and unregistred from the allocator.
+
 namespace Lang
 {
 
@@ -15,6 +17,7 @@ class LocalObj
 public:
 	T* operator->();
 	LocalObj(T* obj, Context& context);
+	LocalObj(LocalObj& other);
 	~LocalObj();
 
 public:
@@ -29,6 +32,7 @@ public:
 	LocalValue(const Value& value, Context& context);
 	template<typename T>
 	LocalValue(const LocalObj<T>& obj);
+	LocalValue(const LocalValue& other);
 	~LocalValue();
 
 	template<typename T>
@@ -62,9 +66,17 @@ LocalObj<T>::LocalObj(T* obj, Context& context)
 }
 
 template<typename T>
+LocalObj<T>::LocalObj(LocalObj& other)
+	: obj(other.obj)
+	, m_context(other.m_context)
+{
+	m_context.allocator.registerLocal(reinterpret_cast<Obj**>(&this->obj));
+}
+
+template<typename T>
 LocalObj<T>::~LocalObj()
 {
-	m_context.allocator.unregisterLocal(reinterpret_cast<Obj**>(&obj));
+	m_context.allocator.unregisterLocal(reinterpret_cast<Obj**>(&this->obj));
 }
 
 class Vm;
@@ -79,25 +91,34 @@ public:
 	LocalValue intValue(Int value);
 	LocalValue typeErrorMustBe(std::string_view whatItMustBe);
 	template<typename ...Vals>
-	LocalValue call(LocalValue calle, Vals... args);
+	LocalValue call(const LocalValue& calle, Vals&&... args);
 	std::optional<LocalValue> getGlobal(std::string_view name);
 
 public:
 	Allocator& allocator;
 	Vm& vm;
-private:
+//private:
+public:
 	Value* const m_args;
 	const int m_argCount;
 };
 
 template<typename ...Vals>
-LocalValue Context::call(LocalValue calle, Vals... args)
+LocalValue Context::call(const LocalValue& calle, Vals&&... args)
 {
 	if constexpr (sizeof...(args) != 0)
 	{
 		Value values[] = { args.value... };
-		return LocalValue(vm.call(calle.value, values, sizeof...(args)), *this);
-		// Node does the same thing as this but without variadic templates.
+		const auto top = vm.m_stack.topPtr;
+		for (const auto value : values)
+		{
+			ASSERT(vm.m_stack.push(value) == true);
+		}
+		/*return LocalValue(vm.call(calle.value, values, sizeof...(args)), *this);*/
+		const auto result = LocalValue(vm.call(calle.value, top, sizeof...(args)), *this);
+		vm.m_stack.topPtr -= sizeof(values) / sizeof(Value);
+		return result;
+		// Node does the same thing as this but without variadic templates. You just pass an array.
 	}
 	else
 	{

@@ -1,3 +1,4 @@
+#include "Context.hpp"
 #include <Context.hpp>
 #include <Vm/Vm.hpp>
 
@@ -6,6 +7,13 @@ using namespace Lang;
 LocalValue::LocalValue(const Value& value, Context& context)
 	: value(value)
 	, m_context(context)
+{
+	m_context.allocator.registerLocal(&this->value);
+}
+
+LocalValue::LocalValue(const LocalValue& other)
+	: value(other.value)
+	, m_context(other.m_context)
 {
 	m_context.allocator.registerLocal(&this->value);
 }

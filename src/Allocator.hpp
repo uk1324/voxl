@@ -42,10 +42,11 @@ public:
 	void unregisterMarkingFunction(size_t id);
 
 	Obj* allocateObj(size_t size, ObjType type);
+	Obj* allocateObjConstant(size_t size, ObjType type);
 
 	ObjString* allocateString(std::string_view chars);
 	ObjString* allocateString(std::string_view chars, size_t length);
-	ObjFunction* allocateFunction(ObjString* name, int argCount, HashTable* globals);
+	//ObjFunction* allocateFunction(ObjString* name, int argCount, HashTable* globals);
 	ObjClosure* allocateClosure(ObjFunction* function);
 	ObjUpvalue* allocateUpvalue(Value* localVariable);
 	ObjNativeFunction* allocateForeignFunction(ObjString* name, NativeFunction function, int argCount, HashTable* globals);
@@ -113,7 +114,7 @@ private:
 		bool operator()(const ObjString* a, const ObjString* b) const
 		{
 			// TODO: Benchmark this -> Could also compare lengths but it probably wouldn't make it faster becuase that is a rare case.
-			return (a->size == b->size) && memcmp(a->chars, b->chars, a->size);
+			return (a->size == b->size) && (memcmp(a->chars, b->chars, a->size) == 0);
 		}
 	};
 

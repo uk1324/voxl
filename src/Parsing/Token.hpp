@@ -54,7 +54,6 @@ enum class TokenType
 	ThinArrow,
 
 	// Keywords
-	Print,
 	Class,
 	Fn,
 	Ret,

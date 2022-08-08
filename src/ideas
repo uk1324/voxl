@@ -1,0 +1,44 @@
+Iteration of strings requires a new string allocation for each character. To mitigate the problem commonly used characters (ASCII) could be always preallocated. A better solution would be to make a UTF-32 character type be stored insie value so no allocation is needed. A similar issue happens for bigger strings, created for example when splitting a string on a character. To solve this a a new type could be created, which would hold a reference to a ObjString and store a reference to a range of characters inside the strings that the object represents. Not sure if these objects should be transparent to the user or made explicit. One issue with making them transparent is that the FFI wouldn't have the guarantee that strings are always null terminated.
+
+It would be possible to make LocalValue incur zero runtime cost and be safe if used inside an FFI function. This would require a defer statement that gets executed at the end of scope. Each FFI function has a context object with the allocator so it would look something like this.
+#define LOCAL(name, value) \
+	LocalValue name(value);
+	c.allocator.registerLocal(&name);
+	defer c.allocator.unregisterLocal(&name);
+It is possible to implement this in C++ using a zero size template type taking a lambda as an argument and calling it in the destructor. Using this would require the context name to always be the same in all FFI functions. Creating temporaries would also not be possible and the compile time cost will be significant.
+
+https://github.com/ko1/pretty_backtrace
+
+Should enums be boxed or compile time constants?
+
+To make default and other things simpler compile time constants could be added
+<variable name> :: <value>;
+
+Runtime constants wouldn't make much sense becuase functions would need to specify if arguments are const or not which doesn't really fit a dynamically typed language.
+
+Extending functions.
+impl Int {
+	extend fn $add(b) {
+		match b {
+			Complex => ret {}
+			Int => ret $old($, b);
+		}
+	}
+}
+This would require creating a new Obj that would store the pointer to the old function. $old is an implicit argument.
+
+Statement expression are just normal statments prefixed by some token. To return from a inside statment use a special operator. By default returns null. The implementation would probably just don't pop the values that are returned. Maybe don't allow if statments without an else.
+x : @{
+	@ret 5;
+};
+
+x = @if rand() > 0.5 {
+	@ret 1;
+} else {
+	@ret 0;
+};
+	
+With the current syntax
+<variable> : <value>
+it isn't possible to create explicitly uninitialized variables. If there is a special constructo for this purpose the compiler could check if there is a situation in which the value is accesssed without being initialized.
+<variable> : --;

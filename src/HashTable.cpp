@@ -1,6 +1,3 @@
-#include "HashTable.hpp"
-#include "HashTable.hpp"
-#include "HashTable.hpp"
 #include <HashTable.hpp>
 #include <Obj.hpp>
 #include <iostream>
@@ -202,6 +199,7 @@ bool HashTable::compareKeys(const ObjString* a, const ObjString* b)
 
 size_t HashTable::hashKey(const ObjString* key)
 {
+	// Don't need to hash the whole thing if the string is long.
 	return std::hash<std::string_view>()(std::string_view(key->chars, key->size));
 }
 

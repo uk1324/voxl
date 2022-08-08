@@ -137,7 +137,6 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::JumpIfFalseAndPop: return jump("JumpIfFalseAndPop", byteCode, offset, 1);
 		case Op::Jump: return jump("jump", byteCode, offset, 1);
 		case Op::JumpBack: return jump("jumpBack", byteCode, offset, -1);
-		case Op::Print: return justOp("print");
 		case Op::LoadNull: return justOp("loadNull");
 		case Op::LoadTrue: return justOp("loadTrue");
 		case Op::LoadFalse: return justOp("loadFalse");

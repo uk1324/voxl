@@ -12,7 +12,7 @@ while i < n {
 	}
 	
 	if is_prime {
-		print(i ++ " ");
+		put(i ++ " ");
 	}
 	i += 1;
 }

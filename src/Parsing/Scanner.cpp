@@ -222,7 +222,6 @@ Token Scanner::number()
 Token Scanner::keywordOrIdentifier()
 {
 	static const std::unordered_map<std::string_view, TokenType> keywords = {
-		{ "print", TokenType::Print },
 		{ "fn", TokenType::Fn },
 		{ "ret", TokenType::Ret },
 		{ "true", TokenType::True },

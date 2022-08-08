@@ -3,9 +3,9 @@ fn a() {
 }
 
 // Call language function.
-print(invoke(a));
+put(invoke(a));
 // Call native function.
-print(invoke(get_5));
+put(invoke(get_5));
 
 fn b() {
 	throw 3;
@@ -15,14 +15,14 @@ fn b() {
 try {
 	invoke(b);
 } catch Int => value {
-	print(value);
+	put(value);
 }
 
 // Catch native exception.
 try {
 	invoke(throw_3);
 } catch Int => value {
-	print(value);
+	put(value);
 }
 
 // Multiple levels.
@@ -30,7 +30,7 @@ fn c() {
 	ret invoke(a);
 }
 
-print(invoke(c));
+put(invoke(c));
 
 fn d() {
 	ret invoke(b);
@@ -39,5 +39,5 @@ fn d() {
 try {
 	invoke(d);
 } catch Int => value {
-	print(value);
+	put(value);
 }

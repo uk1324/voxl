@@ -1,6 +1,46 @@
-use "test2";
+/*
+class Range {
+	$init(n) {
+		$.current = 0;
+		$.max = n;
+		ret $;
+	}
 
-x : test2.y;
+	$iter() {
+		ret $;
+	}
 
-y : 1.2;
+	$next() {
+		if $.current == $.max {
+			throw StopIteration();
+		}
+		result : $.current;
+		$.current += 1;
+		ret result;
+	}
+}
+*/
 
+//put();
+i : 0;
+i ++ "," ++ ")";
+
+//{
+//	i : 0;
+//	while i < 1 {
+//		put(i ++ "," ++ ")");
+//		i += 1;
+//	}
+//
+//}
+
+/*
+for i in Range(3) {
+	put(i ++ "," ++ ")");
+/*
+	for j in Range(3) {
+		put("(" ++ i ++ "," ++ j ++ ")");
+	}
+*/
+}
+*/
