@@ -52,7 +52,7 @@ int main()
 	std::stringstream output;
 	std::cout.set_rdbuf(output.rdbuf());
 
-#if LOOP_TESTS
+#ifdef LOOP_TESTS
 	for (;;)
 	{
 #endif
@@ -108,7 +108,7 @@ int main()
 
 		std::cerr << "[PASSED] " << name << '\n';
 	}
-#if LOOP_TESTS
+#ifdef LOOP_TESTS
 	}
 #endif
 }

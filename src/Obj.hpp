@@ -89,6 +89,7 @@ struct ObjNativeFunction : public Obj
 	int argCount;
 	NativeFunction function;
 	HashTable* globals;
+	void* context;
 };
 
 struct ObjClass : public Obj

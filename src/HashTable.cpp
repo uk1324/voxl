@@ -64,7 +64,35 @@ bool HashTable::remove(const ObjString* key)
 	return true;
 }
 
+bool HashTable::remove(std::string_view key)
+{
+	if (m_size == 0)
+		return false;
+
+	auto& bucket = findBucket(key);
+	if (isKeyTombstone(bucket.key) || isKeyNull(bucket.key))
+	{
+		return false;
+	}
+	setKeyTombstone(bucket.key);
+	m_size--;
+	return true;
+}
+
 std::optional<Value&> HashTable::get(const ObjString* key)
+{
+	if (m_size == 0)
+		return std::nullopt;
+
+	auto& bucket = findBucket(key);
+	if (isKeyNull(bucket.key) || isKeyTombstone(bucket.key))
+	{
+		return std::nullopt;
+	}
+	return bucket.value;
+}
+
+std::optional<Value&> HashTable::get(std::string_view key)
 {
 	if (m_size == 0)
 		return std::nullopt;
@@ -114,6 +142,36 @@ HashTable::Bucket& HashTable::findBucket(const ObjString* key)
 
 		// TODO: Find a better probing method
 		// Robing hood probing and siwsstables implementation are apparently good.
+		index = (index + 1) % capacity();
+	}
+}
+
+HashTable::Bucket& HashTable::findBucket(std::string_view key)
+{
+	auto index = hashKey(key) % m_capacity;
+
+	Bucket* tombstone = nullptr;
+
+	for (;;)
+	{
+		auto& bucket = data()[index];
+
+		if (isKeyNull(bucket.key))
+		{
+			return (tombstone == nullptr) ? bucket : *tombstone;
+		}
+		else if (isKeyTombstone(bucket.key))
+		{
+			if (tombstone == nullptr)
+			{
+				tombstone = &bucket;
+			}
+		}
+		else if (compareKeys(key, bucket.key))
+		{
+			return bucket;
+		}
+
 		index = (index + 1) % capacity();
 	}
 }
@@ -197,10 +255,20 @@ bool HashTable::compareKeys(const ObjString* a, const ObjString* b)
 	return (a->size == b->size) && (memcmp(a->chars, b->chars, a->size) == 0);
 }
 
+bool HashTable::compareKeys(std::string_view a, const ObjString* b)
+{
+	return (a.size() == b->size) && (memcmp(a.data(), b->chars, a.size()) == 0);
+}
+
 size_t HashTable::hashKey(const ObjString* key)
 {
 	// Don't need to hash the whole thing if the string is long.
 	return std::hash<std::string_view>()(std::string_view(key->chars, key->size));
+}
+
+size_t HashTable::hashKey(std::string_view key)
+{
+	return std::hash<std::string_view>()(key);
 }
 
 void HashTable::setKeyNull(ObjString*& key)

@@ -35,6 +35,10 @@ public:
 	LocalValue(const LocalValue& other);
 	~LocalValue();
 
+	static LocalValue intNum(Int value, Context& context);
+	static LocalValue floatNum(Float value, Context& context);
+	static LocalValue null(Context& context);
+
 	template<typename T>
 	LocalObj<T> asObj();
 
@@ -87,12 +91,12 @@ public:
 	Context(Value* args, int argCount, Allocator& allocator, Vm& vm);
 
 	LocalValue args(size_t index);
-	LocalValue nullValue();
-	LocalValue intValue(Int value);
 	LocalValue typeErrorMustBe(std::string_view whatItMustBe);
 	template<typename ...Vals>
 	LocalValue call(const LocalValue& calle, Vals&&... args);
 	std::optional<LocalValue> getGlobal(std::string_view name);
+	void setGlobal(std::string_view name, const LocalValue& value);
+	void createFunction(std::string_view name, NativeFunction function, int argCount, void* context = nullptr);
 
 public:
 	Allocator& allocator;

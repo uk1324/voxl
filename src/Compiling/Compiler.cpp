@@ -455,10 +455,7 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 
 Compiler::Status Compiler::loadModule(std::string_view filePath)
 {
-	auto path = std::filesystem::path(filePath);
-	if (path.has_extension() == false)
-		path.replace_extension("voxl");
-	const auto filenameConstant = m_allocator.allocateStringConstant(path.string()).constant;
+	const auto filenameConstant = m_allocator.allocateStringConstant(filePath).constant;
 	TRY(loadConstant(filenameConstant));
 	emitOp(Op::Import);
 	// Pop the return value of the module main function. This can't be done inside Op::Import becuase to execute a non native main

@@ -22,13 +22,13 @@ using namespace Lang;
 static LocalValue put(Context& c)
 {
 	std::cout << c.args(0).value;
-	return c.nullValue();
+	return LocalValue::null(c);
 }
 
 static LocalValue putln(Context& c)
 {
 	std::cout << c.args(0).value << '\n';
-	return c.nullValue();
+	return LocalValue::null(c);
 }
 
 static LocalValue floor(Context& c)
@@ -40,9 +40,9 @@ static LocalValue floor(Context& c)
 	}
 	if (arg.isFloat())
 	{
-		return c.intValue(static_cast<Int>(::floor(arg.asFloat())));
+		return LocalValue::intNum(static_cast<Int>(::floor(arg.asFloat())), c);
 	}
-	throw NativeException(c.intValue(0));
+	throw NativeException(LocalValue::intNum(0, c));
 	//throw NativeException(c.typeErrorMustBe("a real number"));
 }
 
@@ -53,12 +53,12 @@ static LocalValue invoke(Context& c)
 
 static LocalValue get_5(Context& c)
 {
-	return c.intValue(5);
+	return LocalValue::intNum(5, c);
 }
 
 static LocalValue throw_3(Context& c)
 {
-	throw NativeException(c.intValue(3));
+	throw NativeException(LocalValue::intNum(3, c));
 }
 
 #define TRY(somethingThatReturnsResult) \
@@ -121,7 +121,7 @@ Vm::Vm(Allocator& allocator)
 	auto addFn = [this](ObjClass* type, std::string_view name, NativeFunction function, int argCount)
 	{
 		auto nameObj = m_allocator->allocateStringConstant(name).value;
-		auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount, &m_builtins);
+		auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount, &m_builtins, nullptr);
 		type->fields.set(nameObj, Value(functionObj));
 	};
 	addFn(m_listType, "$init", List::init, 1);
@@ -131,7 +131,7 @@ Vm::Vm(Allocator& allocator)
 	addFn(m_listType, "$get_index", List::get_index, 2);
 	addFn(m_listType, "$set_index", List::set_index, 3);
 
-	auto listIteratorString = m_allocator->allocateStringConstant("ListIterator").value;
+	auto listIteratorString = m_allocator->allocateStringConstant("_ListIterator").value;
 	m_listIteratorType = m_allocator->allocateClass(listIteratorString, sizeof(ListIterator), reinterpret_cast<MarkingFunction>(ListIterator::mark));
 	addFn(m_listIteratorType, "$init", ListIterator::init, 2);
 	addFn(m_listIteratorType, "$next", ListIterator::next, 1);
@@ -208,6 +208,7 @@ void Vm::reset()
 	m_builtins.set(m_intType->name, Value(m_intType));
 	m_builtins.set(m_stringType->name, Value(m_stringType));
 	m_builtins.set(m_stopIterationType->name, Value(m_stopIterationType));
+	m_builtins.set(m_listIteratorType->name, Value(m_listIteratorType));
 	defineNativeFunction("floor", floor, 1);
 	defineNativeFunction("invoke", invoke, 1);
 	defineNativeFunction("get_5", get_5, 0);
@@ -908,14 +909,14 @@ Vm::Result Vm::run()
 
 		case Op::TryBegin:
 		{
-			const auto jump = readUint32();
-			TRY_PUSH_EXCEPTION_HANDLER();
-			auto& handler = m_exceptionHandlers.top();
-			auto& frame = m_callStack.top();
-			handler.callFrame = &frame;
-			handler.handlerCodeLocation = frame.instructionPointer + jump;
-			handler.stackTopPtrBeforeTry = m_stack.topPtr;
-			break;
+		const auto jump = readUint32();
+		TRY_PUSH_EXCEPTION_HANDLER();
+		auto& handler = m_exceptionHandlers.top();
+		auto& frame = m_callStack.top();
+		handler.callFrame = &frame;
+		handler.handlerCodeLocation = frame.instructionPointer + jump;
+		handler.stackTopPtrBeforeTry = m_stack.topPtr;
+		break;
 		}
 
 		case Op::TryEnd:
@@ -1005,8 +1006,20 @@ Vm::Result Vm::run()
 				TRY_PUSH(Value::null());
 				break;
 			}
+			if (const auto module = m_nativeModulesMains.find(std::string_view(filename->chars, filename->size));
+				module != m_nativeModulesMains.end())
+			{
+				const auto moduleObj = m_allocator->allocateModule();
+				m_modules.set(filename, Value(moduleObj));
+				const auto main = m_allocator->allocateForeignFunction(filename, module->second, 0, &moduleObj->globals, nullptr);
+				TRY_PUSH(Value(moduleObj));
+				TRY(callValue(Value(main), 0, 0));
+				break;
+			}
 			auto path = std::filesystem::absolute(
 				m_errorPrinter->sourceInfo().directory / std::filesystem::path(std::string_view(filename->chars, filename->size)));
+			if (path.has_extension() == false)
+				path.replace_extension("voxl");
 			auto pathString = m_allocator->allocateStringConstant(path.string()).value;
 			if (auto module = m_modules.get(pathString); module.has_value())
 			{
@@ -1071,8 +1084,13 @@ Vm::Result Vm::run()
 void Vm::defineNativeFunction(std::string_view name, NativeFunction function, int argCount)
 {
 	auto nameObj = m_allocator->allocateStringConstant(name).value;
-	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount, &m_builtins);
+	auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount, &m_builtins, nullptr);
 	m_builtins.set(nameObj, Value(functionObj));
+}
+
+void Vm::createModule(std::string_view name, NativeFunction moduleMain)
+{
+	m_nativeModulesMains[name] = moduleMain;
 }
 
 Value Vm::call(const Value& calle, Value* values, int argCount)

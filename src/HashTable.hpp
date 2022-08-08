@@ -54,8 +54,11 @@ public:
 	HashTable();
 	bool set(ObjString* key, const Value& value);
 	bool remove(const ObjString* key);
+	bool remove(std::string_view key);
 	std::optional<Value&> get(const ObjString* key);
+	std::optional<Value&> get(std::string_view key);
 	Bucket& findBucket(const ObjString* key);
+	Bucket& findBucket(std::string_view key);
 
 	static bool isBucketEmpty(const Bucket& bucket);
 	void print();
@@ -73,7 +76,9 @@ public:
 private:
 	void setAllKeysToNull();
 	static bool compareKeys(const ObjString* a, const ObjString* b);
+	static bool compareKeys(std::string_view a, const ObjString* b);
 	static size_t hashKey(const ObjString* key);
+	static size_t hashKey(std::string_view key);
 	static void setKeyNull(ObjString*& key);
 	static void setKeyTombstone(ObjString*& key);
 	static bool isKeyNull(const ObjString* key);

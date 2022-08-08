@@ -49,7 +49,7 @@ public:
 	//ObjFunction* allocateFunction(ObjString* name, int argCount, HashTable* globals);
 	ObjClosure* allocateClosure(ObjFunction* function);
 	ObjUpvalue* allocateUpvalue(Value* localVariable);
-	ObjNativeFunction* allocateForeignFunction(ObjString* name, NativeFunction function, int argCount, HashTable* globals);
+	ObjNativeFunction* allocateForeignFunction(ObjString* name, NativeFunction function, int argCount, HashTable* globals, void* context);
 	ObjClass* allocateClass(ObjString* name, size_t instanceSize, MarkingFunction mark);
 	ObjInstance* allocateInstance(ObjClass* class_);
 	ObjNativeInstance* allocateNativeInstance(ObjClass* class_);

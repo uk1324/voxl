@@ -17,8 +17,7 @@ LocalValue List::init(Context& c)
 
 LocalValue List::iter(Context& c)
 {
-	// Could use __PRETTY_FUNC__ for getting the types lol.
-	auto iteratorType = c.getGlobal("ListIterator");
+	auto iteratorType = c.getGlobal("_ListIterator");
 	ASSERT(iteratorType.has_value());
 	return c.call(*iteratorType, c.args(0));
 }
@@ -43,13 +42,13 @@ LocalValue List::push(Context& c)
 	// x.push(value = <expr>;
 	// ---
 	// value : x.push(<expr>);
-	return c.nullValue();
+	return LocalValue::null(c);
 }
 
 LocalValue List::get_size(Context& c)
 {
 	auto list = c.args(0).asObj<List>();
-	return c.intValue(static_cast<Int>(list->size));
+	return LocalValue::intNum(list->size, c);
 }
 
 LocalValue List::get_index(Context& c)

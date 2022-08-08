@@ -192,7 +192,7 @@ Allocator::FunctionConstant Allocator::allocateFunctionConstant(ObjString* name,
 	return { createConstant(Value(obj)), obj };
 }
 
-ObjNativeFunction* Allocator::allocateForeignFunction(ObjString* name, NativeFunction function, int argCount, HashTable* globals)
+ObjNativeFunction* Allocator::allocateForeignFunction(ObjString* name, NativeFunction function, int argCount, HashTable* globals, void* context)
 {
 	auto obj = allocateObjConstant(sizeof(ObjNativeFunction), ObjType::NativeFunction)->asNativeFunction();
 	obj->type = ObjType::NativeFunction;
@@ -200,6 +200,7 @@ ObjNativeFunction* Allocator::allocateForeignFunction(ObjString* name, NativeFun
 	obj->function = function;
 	obj->argCount = argCount;
 	obj->globals = globals;
+	obj->context = context;
 	return obj;
 }
 

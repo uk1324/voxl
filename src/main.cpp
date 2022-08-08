@@ -121,6 +121,8 @@ Maybe set some timeout outside of the language.
 // x, y = (x, y);
 // [x, y] = [x, y];
 
+#include <TestModule.hpp>
+
 int main()
 {
 	//return runRepl();
@@ -153,6 +155,7 @@ int main()
 	if (compilerResult.hadError == false)
 	{
 		auto vm = std::make_unique<Vm>(allocator);
+		vm->createModule("native", testModuleMain);
 		auto result = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, errorPrinter);
 	}
 }

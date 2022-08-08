@@ -83,6 +83,7 @@ public:
 	void reset();
 
 	void defineNativeFunction(std::string_view name, NativeFunction function, int argCount);
+	void createModule(std::string_view name, NativeFunction moduleMain);
 
 	//Value add(Value lhs, Value rhs);
 	Value call(const Value& calle, Value* values, int argCount);
@@ -106,6 +107,8 @@ private:
 	static void mark(Vm* vm, Allocator& allocator);
 
 public:
+	std::unordered_map<std::string_view, NativeFunction> m_nativeModulesMains;
+
 	HashTable m_modules;
 
 	HashTable m_builtins;
