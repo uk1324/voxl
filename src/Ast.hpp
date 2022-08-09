@@ -83,6 +83,7 @@ enum class PtrnType
 {
 	Class,
 	Expr,
+	AlwaysTrue,
 };
 
 struct Ptrn
@@ -328,7 +329,7 @@ struct MatchStmt final : public Stmt
 	struct Pair
 	{
 		std::unique_ptr<Ptrn> pattern;
-		StmtList block;
+		std::unique_ptr<Stmt> stmt;
 	};
 
 	MatchStmt(std::unique_ptr<Expr> expr, std::vector<Pair> cases, size_t start, size_t end);
@@ -388,6 +389,11 @@ struct ExprPtrn final : public Ptrn
 	ExprPtrn(std::unique_ptr<Expr> expr, size_t start, size_t end);
 
 	std::unique_ptr<Expr> expr;
+};
+
+struct AlwaysTruePtrn final : public Ptrn
+{
+	AlwaysTruePtrn(size_t start, size_t end);
 };
 
 }

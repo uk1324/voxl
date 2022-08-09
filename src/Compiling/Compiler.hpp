@@ -119,6 +119,7 @@ private:
 	Status compile(const std::unique_ptr<Ptrn>& ptrn);
 	Status classPtrn(const ClassPtrn& ptrn);
 	Status exprPtrn(const ExprPtrn& ptrn);
+	Status alwaysTruePtrn(const AlwaysTruePtrn& ptrn);
 
 	// Expects the variable initializer to be on top of the stack.
 	// [initializer] -> []

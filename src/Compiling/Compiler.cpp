@@ -1,4 +1,3 @@
-#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -433,6 +432,7 @@ Compiler::Status Compiler::implStmt(const ImplStmt& stmt)
 
 Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 {
+	// TODO: Check if there are multiple AlwaysTrue patterns or patterns after AlwaysTrue. Report only warning.
 	TRY(compile(stmt.expr));
 	
 	std::vector<size_t> jumpsToEnd;
@@ -440,7 +440,34 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 	{
 		TRY(compile(case_.pattern));
 		const auto jumpToNextCase = emitJump(Op::JumpIfFalseAndPop);
-		TRY(compile(case_.block));
+		auto isStmtAllowedInMatchExpr = [](const std::unique_ptr<Stmt>& stmt) {
+			// TODO: Maybe give better error messages.
+			// Using a switch to get warnings if this is not exhaustive.
+			switch (stmt->type)
+			{
+			case StmtType::Expr: return false;
+			case StmtType::VariableDeclaration: return false;
+			case StmtType::Block: return true;
+			case StmtType::Fn: return false;
+			case StmtType::Ret: return true;
+			case StmtType::If: return true;
+			case StmtType::Loop: return true;
+			case StmtType::Break: return true;
+			case StmtType::Class: return false;
+			case StmtType::Impl: return false;
+			case StmtType::Try: return true;
+			case StmtType::Throw: return true;
+			case StmtType::Match: return true;
+			case StmtType::Use: return false;
+			case StmtType::UseAll: return false;
+			case StmtType::UseSelective: return true;
+			}
+			return false;
+		};
+		if (isStmtAllowedInMatchExpr(case_.stmt) == false)
+			return errorAt(stmt, "statement not allowed in match expression");
+
+		TRY(compile(case_.stmt));
 		jumpsToEnd.push_back(emitJump(Op::Jump));
 		setJumpToHere(jumpToNextCase);
 	}
@@ -729,9 +756,17 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Ptrn>& ptrn)
 	{
 		CASE_PTRN_TYPE(Class, classPtrn)
 		CASE_PTRN_TYPE(Expr, exprPtrn)
+		CASE_PTRN_TYPE(AlwaysTrue, alwaysTruePtrn)
 	}
 #undef CASE_PTRN_TYPE
 
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::alwaysTruePtrn(const AlwaysTruePtrn& ptrn)
+{
+	// TODO: This could be optmizied by removing the check inside matchStmt when the PtrnType is AlwaysTrue.
+	emitOp(Op::LoadTrue);
 	return Status::Ok;
 }
 

@@ -42,3 +42,11 @@ With the current syntax
 <variable> : <value>
 it isn't possible to create explicitly uninitialized variables. If there is a special constructo for this purpose the compiler could check if there is a situation in which the value is accesssed without being initialized.
 <variable> : --;
+
+Match could just be a expression.
+if match <ptrn> {
+
+} else if match <ptrn> {
+
+}
+or maybe use some shorter syntax.

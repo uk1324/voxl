@@ -9,15 +9,9 @@ class None {}
 
 fn match_node(n) {
 	match n {
-		Node(lhs = None, rhs = None) => {
-			ret 0;
-		}
-		Node(lhs = Node(lhs = None, rhs = None), rhs = None) => {
-			ret 1;
-		}
-		None => {
-			ret 2;
-		}
+		Node(lhs = None, rhs = None) => ret 0;
+		Node(lhs = Node(lhs = None, rhs = None), rhs = None) => ret 1;
+		None => ret 2;
 	}
 	ret 3;
 }

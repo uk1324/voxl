@@ -240,3 +240,7 @@ ExprPtrn::ExprPtrn(std::unique_ptr<Expr> expr, size_t start, size_t end)
 	: Ptrn(start, end, PtrnType::Expr)
 	, expr(std::move(expr))
 {}
+
+AlwaysTruePtrn::AlwaysTruePtrn(size_t start, size_t end)
+	: Ptrn(start, end, PtrnType::AlwaysTrue)
+{}

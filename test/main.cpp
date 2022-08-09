@@ -35,6 +35,7 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "import_all", "123456123456" },
 	{ "match_nested", "1302" },
 	{ "match_expr", "321-1" },
+	{ "match_always", "always" },
 };
 
 void testFailed(std::string_view name)

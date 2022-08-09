@@ -398,8 +398,8 @@ std::unique_ptr<Stmt> Parser::matchStmt()
 	{
 		auto pattern = ptrn();
 		expect(TokenType::Arrow, "expected '=>'");
-		auto stmts = block();
-		cases.push_back({ std::move(pattern), std::move(stmts) });
+		auto statement = stmt();
+		cases.push_back({ std::move(pattern), std::move(statement) });
 	}
 	expect(TokenType::RightBrace, "expected '}'");
 	
@@ -737,6 +737,10 @@ std::unique_ptr<Ptrn> Parser::ptrn()
 		auto expression = expr();
 		expect(TokenType::RightBrace, "expected '}'");
 		return std::make_unique<ExprPtrn>(std::move(expression), start, peekPrevious().end);
+	}
+	else if (match(TokenType::Star))
+	{
+		return std::make_unique<AlwaysTruePtrn>(peekPrevious().start, peekPrevious().end);
 	}
 
 	throw errorAt(peek(), "expected pattern");
