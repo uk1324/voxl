@@ -81,7 +81,8 @@ using StmtList = std::vector<std::unique_ptr<Stmt>>;
 
 enum class PtrnType
 {
-	Class
+	Class,
+	Expr,
 };
 
 struct Ptrn
@@ -370,9 +371,23 @@ struct UseSelectiveStmt final : public Stmt
 
 struct ClassPtrn final : public Ptrn
 {
+	struct FieldPtrn
+	{
+		std::string_view name;
+		std::unique_ptr<Ptrn> ptrn;
+	};
 	ClassPtrn(std::string_view className, size_t start, size_t end);
+	ClassPtrn(std::string_view className, std::vector<FieldPtrn>, size_t start, size_t end);
 
 	std::string_view className;
+	std::vector<FieldPtrn> fieldPtrns;
+};
+
+struct ExprPtrn final : public Ptrn
+{
+	ExprPtrn(std::unique_ptr<Expr> expr, size_t start, size_t end);
+
+	std::unique_ptr<Expr> expr;
 };
 
 }

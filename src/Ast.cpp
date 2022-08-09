@@ -229,3 +229,14 @@ ClassPtrn::ClassPtrn(std::string_view className, size_t start, size_t end)
 	: Ptrn(start, end, PtrnType::Class)
 	, className(className)
 {}
+
+ClassPtrn::ClassPtrn(std::string_view className, std::vector<FieldPtrn> fieldPtrns, size_t start, size_t end)
+	: Ptrn(start, end, PtrnType::Class)
+	, className(className)
+	, fieldPtrns(std::move(fieldPtrns))
+{}
+
+ExprPtrn::ExprPtrn(std::unique_ptr<Expr> expr, size_t start, size_t end)
+	: Ptrn(start, end, PtrnType::Expr)
+	, expr(std::move(expr))
+{}

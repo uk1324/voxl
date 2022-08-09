@@ -1065,6 +1065,12 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::CloneTop:
+		{
+			TRY_PUSH(m_stack.peek(0));
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 			return Result::fatal();

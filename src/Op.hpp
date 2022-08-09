@@ -24,6 +24,7 @@ namespace Voxl
 		NotEquals,
 		// }
 
+
 		// [value] -> [result]
 		// {
 		Negate,
@@ -76,5 +77,6 @@ namespace Voxl
 		Import, // [filename] -> [module]
 		ModuleSetLoaded, // [module] -> [module]
 		ModuleImportAllToGlobalNamespace, // [module] -> []
+		CloneTop, // [value] -> [value value]
 	};
 }

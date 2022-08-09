@@ -441,7 +441,6 @@ std::unique_ptr<Stmt> Parser::useStmt()
 			expect(TokenType::Identifier, "expected import alias name");
 			const auto alias = peekPrevious().identifier;
 			imports.push_back({ original, alias });
-			// TODO in compiler make an error if the original name is the same as the alias.
 		}
 		else
 		{
@@ -732,6 +731,13 @@ std::unique_ptr<Ptrn> Parser::ptrn()
 	{
 		return classPtrn();
 	}
+	else if (match(TokenType::LeftBrace))
+	{
+		const auto start = peekPrevious().start;
+		auto expression = expr();
+		expect(TokenType::RightBrace, "expected '}'");
+		return std::make_unique<ExprPtrn>(std::move(expression), start, peekPrevious().end);
+	}
 
 	throw errorAt(peek(), "expected pattern");
 }
@@ -739,7 +745,22 @@ std::unique_ptr<Ptrn> Parser::ptrn()
 std::unique_ptr<Ptrn> Parser::classPtrn()
 {
 	const auto& previous = peekPrevious();
-	return std::make_unique<ClassPtrn>(previous.identifier, previous.start, previous.end);
+	const auto className = previous.identifier;
+	const auto start = previous.start;
+	if (match(TokenType::LeftParen) == false)
+		return std::make_unique<ClassPtrn>(className, start, previous.end);
+
+	decltype (ClassPtrn::fieldPtrns) fieldPtrns;
+	do
+	{
+		expect(TokenType::Identifier, "expected field name");
+		const auto fieldName = peekPrevious().identifier;
+		expect(TokenType::Equals, "expected '='");
+		auto pattern = ptrn();
+		fieldPtrns.push_back({ fieldName, std::move(pattern) });
+	} while ((isAtEnd() == false) && match(TokenType::Comma));
+	expect(TokenType::RightParen, "expected ')'");
+	return std::make_unique<ClassPtrn>(className, std::move(fieldPtrns), start, peekPrevious().end);
 }
 
 const Token& Parser::peek() const

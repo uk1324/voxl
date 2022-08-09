@@ -134,7 +134,7 @@ size_t Voxl::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::CreateGlobal: return justOp("createGlobal");
 		case Op::JumpIfFalse: return jump("jumpIfFalse", byteCode, offset, 1);
 		case Op::JumpIfTrue: return jump("jumpIfTrue", byteCode, offset, 1);
-		case Op::JumpIfFalseAndPop: return jump("JumpIfFalseAndPop", byteCode, offset, 1);
+		case Op::JumpIfFalseAndPop: return jump("jumpIfFalseAndPop", byteCode, offset, 1);
 		case Op::Jump: return jump("jump", byteCode, offset, 1);
 		case Op::JumpBack: return jump("jumpBack", byteCode, offset, -1);
 		case Op::LoadNull: return justOp("loadNull");
@@ -153,6 +153,9 @@ size_t Voxl::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::MatchClass: return justOp("matchClass");
 		case Op::Rethrow: return justOp("rethrow");
 		case Op::Import: return justOp("import");
+		case Op::CloneTop: return justOp("cloneTop");
+		case Op::ModuleImportAllToGlobalNamespace: return justOp("moduleImportAllToGlobalNamespace");
+		case Op::ModuleSetLoaded: return justOp("moduleSetLoaded");
 
 		default:
 			std::cout << "invalid op";

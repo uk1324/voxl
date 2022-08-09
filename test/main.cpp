@@ -33,6 +33,8 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "nested_iterators", "(0,0)(0,1)(0,2)(1,0)(1,1)(1,2)(2,0)(2,1)(2,2)" },
 	{ "import", "123456123456" },
 	{ "import_all", "123456123456" },
+	{ "match_nested", "1302" },
+	{ "match_expr", "321-1" },
 };
 
 void testFailed(std::string_view name)

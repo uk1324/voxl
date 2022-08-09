@@ -728,9 +728,18 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Ptrn>& ptrn)
 	switch (ptrn->type)
 	{
 		CASE_PTRN_TYPE(Class, classPtrn)
+		CASE_PTRN_TYPE(Expr, exprPtrn)
 	}
 #undef CASE_PTRN_TYPE
 
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::exprPtrn(const ExprPtrn& ptrn)
+{
+	emitOp(Op::CloneTop);
+	TRY(compile(ptrn.expr));
+	emitOp(Op::Equals);
 	return Status::Ok;
 }
 
@@ -738,6 +747,51 @@ Compiler::Status Compiler::classPtrn(const ClassPtrn& ptrn)
 {
 	TRY(variable(ptrn.className, VariableOp::Get));
 	emitOp(Op::MatchClass);
+
+	if (ptrn.fieldPtrns.size() > 0)
+	{
+		const auto jumpToEndOfPtrn0 = emitJump(Op::JumpIfFalse);
+		emitOp(Op::PopStack); // Pop result of MatchClass.
+		std::vector<size_t> jumpsIfFailed;
+		for (const auto& [name, pattern] : ptrn.fieldPtrns)
+		{
+			emitOp(Op::CloneTop);
+			TRY(getField(name));
+			TRY(compile(pattern));
+			jumpsIfFailed.push_back(emitJump(Op::JumpIfFalseAndPop));
+			emitOp(Op::PopStack);
+		}
+		const auto jumpIfMatched = emitJump(Op::Jump);
+
+		for (const auto jump : jumpsIfFailed)
+		{
+			setJumpToHere(jump);
+		}
+		emitOp(Op::PopStack); // Pop the field
+		emitOp(Op::LoadFalse);
+		const auto jumpToEndOfPtrn1 = emitJump(Op::Jump);
+
+		setJumpToHere(jumpIfMatched);
+		emitOp(Op::LoadTrue);
+
+		setJumpToHere(jumpToEndOfPtrn0);
+		setJumpToHere(jumpToEndOfPtrn1);
+	}
+	/*
+	[value]
+	match
+	[value false]
+	if matchFailed
+		[value false]
+		end
+	else
+	[value field]
+	if match
+	{
+		[value field true]
+		[value true]
+	*/
+	
 	return Status::Ok;
 }
 

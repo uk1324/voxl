@@ -1,0 +1,28 @@
+class Node  {
+	$init(lhs, rhs)	{
+		$.lhs = lhs;
+		$.rhs = rhs;
+	}
+}
+
+class None {}
+
+fn match_node(n) {
+	match n {
+		Node(lhs = None, rhs = None) => {
+			ret 0;
+		}
+		Node(lhs = Node(lhs = None, rhs = None), rhs = None) => {
+			ret 1;
+		}
+		None => {
+			ret 2;
+		}
+	}
+	ret 3;
+}
+
+put(match_node(Node(Node(None(), None()), None())));
+put(match_node(Node(Node(None(), None()), Node(None(), None()))));
+put(match_node(Node(None(), None())));
+put(match_node(None()));
