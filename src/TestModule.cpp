@@ -1,12 +1,12 @@
 #include <TestModule.hpp>
 
-static Lang::LocalValue test(Lang::Context& c)
+static Voxl::LocalValue test(Voxl::Context& c)
 {
 	return c.args(0);
 }
 
-Lang::LocalValue testModuleMain(Lang::Context& c)
+Voxl::LocalValue testModuleMain(Voxl::Context& c)
 {
 	c.createFunction("test", test, 1);
-	return Lang::LocalValue::null(c);
+	return Voxl::LocalValue::null(c);
 }

@@ -8,12 +8,9 @@
 #include <iostream>
 #include <sstream>
 #include <filesystem>
+#include <Debug/Disassembler.hpp>
 
-#ifdef VOXL_DEBUG_PRINT_VM_EXECUTION_TRACE
-	#include <Debug/Disassembler.hpp>
-#endif
-
-using namespace Lang;
+using namespace Voxl;
 
 // TODO: Calling stack.top requires 2 levles of indirection 
 // Using the global variable requires 1 level of indirection but also requires setting and unsetting the pointer on call and return.
@@ -222,13 +219,7 @@ Vm::Result Vm::run()
 	for (;;)
 	{
 	#ifdef VOXL_DEBUG_PRINT_VM_EXECUTION_TRACE
-		std::cout << "[ ";
-		for (const auto& value : m_stack)
-		{
-			debugPrintValue(value);
-			std::cout << ' ';
-		}
-		std::cout << "]\n";
+		debugPrintStack();
 		disassembleInstruction(
 			m_callStack.top().function->byteCode,
 			m_callStack.top().instructionPointer - m_callStack.top().function->byteCode.code.data(), *m_allocator);
@@ -841,8 +832,8 @@ Vm::Result Vm::run()
 			}
 			else
 			{
-				const auto& result = m_stack.peek(0);
 				const auto& frame = m_callStack.top();
+				const auto& result = frame.isInitializer ? *frame.values : m_stack.peek(0);
 				m_stack.topPtr = frame.values - frame.numberOfValuesToPopOffExceptArgs;
 
 				auto isLocal = [this, &frame](ObjUpvalue* upvalue)
@@ -1213,6 +1204,7 @@ Vm::Result Vm::callObjFunction(ObjFunction* function, int argCount, int numberOf
 	frame.callable = function;
 	m_globals = function->globals;
 	frame.numberOfValuesToPopOffExceptArgs = numberOfValuesToPopOffExceptArgs;
+	frame.isInitializer = false;
 	return Result::ok();
 }
 
@@ -1251,6 +1243,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			auto& frame = m_callStack.top();
 			frame.setNativeFunction();
 			frame.callable = function;
+			frame.isInitializer = false;
 			m_globals = function->globals;
 			try
 			{
@@ -1311,6 +1304,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 
 			// TODO: Handle special classes like Int.
 			m_stack.topPtr[-argCount - 1] = Value(instance); // Replace the class with the instance.
+			const auto frameBeforeCall = &m_callStack.top();
 			if (const auto initializer = class_->fields.get(m_initString); initializer.has_value())
 			{
 				TRY(callValue(*initializer, argCount + 1, 0));
@@ -1325,6 +1319,11 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			else if (argCount != 0)
 			{
 				return fatalError("expected 0 args but got %d", argCount);
+			}
+			
+			if (bool initializerPushNewFrame = &m_callStack.top() != frameBeforeCall)
+			{
+				m_callStack.top().isInitializer = true;
 			}
 			break;
 		}
@@ -1414,6 +1413,17 @@ std::optional<Value&> Vm::getGlobal(ObjString* name)
 bool Vm::setGlobal(ObjString* name, const Value& value)
 {
 	return m_globals->set(name, value);
+}
+
+void Vm::debugPrintStack()
+{
+	std::cout << "[ ";
+	for (const auto& value : m_stack)
+	{
+		debugPrintValue(value);
+		std::cout << ' ';
+	}
+	std::cout << "]\n";
 }
 
 void Vm::mark(Vm* vm, Allocator& allocator)

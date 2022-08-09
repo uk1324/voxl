@@ -5,7 +5,7 @@
 #include <iostream>
 #include <stdarg.h>
 
-using namespace Lang;
+using namespace Voxl;
 
 Scanner::Scanner()
 	: m_currentCharIndex(0)

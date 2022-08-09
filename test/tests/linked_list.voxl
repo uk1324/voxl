@@ -2,14 +2,12 @@ class Node {
 	$init(value) {
 		$.value = value;
 		$.next = null;
-		ret $;
 	}
 }
 
 class LinkedList {
 	$init() {
 		$.data = null;
-		ret $;
 	}
 
 	push(value) {

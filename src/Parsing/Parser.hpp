@@ -7,7 +7,7 @@
 
 #include <vector>
 
-namespace Lang
+namespace Voxl
 {
 
 class Parser

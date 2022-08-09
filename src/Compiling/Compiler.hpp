@@ -14,7 +14,7 @@
 // TODO: Make a function compile block that would take a StmtList and beginScopel compile and endScope.
 // Remember too add the line numbers.
 
-namespace Lang
+namespace Voxl
 {
 
 class Compiler
@@ -120,6 +120,7 @@ private:
 	Status classPtrn(const ClassPtrn& ptrn);
 
 	// Expects the variable initializer to be on top of the stack.
+	// [initializer] -> []
 	Status createVariable(std::string_view name, size_t start, size_t end);
 	// Could make a RAII class
 	void beginScope();
@@ -130,6 +131,8 @@ private:
 	// index or a string.
 	enum class VariableOp { Get, Set };
 	Status variable(std::string_view name, VariableOp op);
+	// [value] -> [field]
+	Status getField(std::string_view fieldName);
 	Status loadConstant(size_t index);
 	ByteCode& currentByteCode();
 	void emitOp(Op op);

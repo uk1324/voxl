@@ -1,9 +1,3 @@
-class X
-{}
-
-x : X();
-
-put(x.a);
-x.a = 4;
-put(x.a);
-put(x.b);
+fn test() {
+	ret 5;
+}

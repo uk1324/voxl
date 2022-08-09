@@ -1,6 +1,6 @@
 #include <Ast.hpp>
 
-using namespace Lang;
+using namespace Voxl;
 
 Expr::Expr(size_t start, size_t end, ExprType type)
 	: start(start)

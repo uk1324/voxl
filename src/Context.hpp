@@ -1,10 +1,11 @@
 #pragma once
 
 #include <Allocator.hpp>
+#include <iostream>
 
 // No operator= needed for types becuase the only thing they need to manage is being registred and unregistred from the allocator.
 
-namespace Lang
+namespace Voxl
 {
 
 class Context;
@@ -116,7 +117,8 @@ LocalValue Context::call(const LocalValue& calle, Vals&&... args)
 		const auto top = vm.m_stack.topPtr;
 		for (const auto value : values)
 		{
-			ASSERT(vm.m_stack.push(value) == true);
+			const auto wasPushed = vm.m_stack.push(value);
+			ASSERT(wasPushed == true);
 		}
 		/*return LocalValue(vm.call(calle.value, values, sizeof...(args)), *this);*/
 		const auto result = LocalValue(vm.call(calle.value, top, sizeof...(args)), *this);

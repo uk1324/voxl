@@ -5,7 +5,7 @@
 #include <iostream>
 #include <iomanip>
 
-using namespace Lang;
+using namespace Voxl;
 
 static size_t justOp(std::string_view name)
 {
@@ -79,7 +79,7 @@ static size_t closeUpvalueOp(std::string name, const ByteCode& byteCode, size_t 
 	return 2;
 }
 
-void Lang::debugPrintValue(const Value& value)
+void Voxl::debugPrintValue(const Value& value)
 {
 	if ((value.type == ValueType::Obj) && (value.as.obj->type == ObjType::String))
 	{
@@ -91,7 +91,7 @@ void Lang::debugPrintValue(const Value& value)
 	}
 }
 
-size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, const Allocator& allocator)
+size_t Voxl::disassembleInstruction(const ByteCode& byteCode, size_t offset, const Allocator& allocator)
 {
 	std::cout << std::left << std::setw(5) << offset;
 	if ((offset > 0) && (byteCode.lineNumberAtOffset[offset] == byteCode.lineNumberAtOffset[offset - 1]))
@@ -160,7 +160,7 @@ size_t Lang::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 	}
 }
 
-void Lang::disassembleByteCode(const ByteCode& byteCode, const Allocator& allocator)
+void Voxl::disassembleByteCode(const ByteCode& byteCode, const Allocator& allocator)
 {
 	size_t offset = 0;
 	while (offset < byteCode.code.size())

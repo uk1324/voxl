@@ -1,6 +1,6 @@
 #include <Parsing/Token.hpp>
 
-using namespace Lang;
+using namespace Voxl;
 
 Token::Token(TokenType type, size_t start, size_t end)
 	: type(type)

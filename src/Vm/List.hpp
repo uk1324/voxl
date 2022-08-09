@@ -1,7 +1,7 @@
 #include <Value.hpp>
 #include <Allocator.hpp>
 
-namespace Lang
+namespace Voxl
 {
 
 struct List : public ObjNativeInstance

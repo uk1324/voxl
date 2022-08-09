@@ -3,7 +3,7 @@
 #include <Context.hpp>
 #include <Asserts.hpp>
 
-using namespace Lang;
+using namespace Voxl;
 
 Value::Value(Int value)
 	: type(ValueType::Int)
@@ -43,7 +43,7 @@ Value Value::integer(Int value)
 
 std::ostream& operator<<(std::ostream& os, const Value value)
 {
-	using namespace Lang;
+	using namespace Voxl;
 
 	switch (value.type)
 	{
@@ -74,7 +74,7 @@ std::ostream& operator<<(std::ostream& os, const Value value)
 	return os;
 }
 
-std::ostream& operator<< (std::ostream& os, Lang::Obj* obj)
+std::ostream& operator<< (std::ostream& os, Voxl::Obj* obj)
 {
 	switch (obj->type)
 	{

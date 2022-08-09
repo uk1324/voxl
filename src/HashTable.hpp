@@ -4,7 +4,7 @@
 #include <Optional.hpp>
 #include <Value.hpp>
 
-namespace Lang
+namespace Voxl
 {
 
 struct ObjString;

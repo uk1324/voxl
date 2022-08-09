@@ -1,6 +1,6 @@
 #pragma once
 
-namespace Lang
+namespace Voxl
 {
 
 namespace Utf8

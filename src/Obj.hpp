@@ -3,7 +3,7 @@
 #include <HashTable.hpp>
 #include <ByteCode.hpp>
 
-namespace Lang
+namespace Voxl
 {
 
 #define OBJ_TYPE_LIST(macro) \

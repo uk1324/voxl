@@ -6,7 +6,7 @@
 
 #include <stdarg.h>
 
-namespace Lang
+namespace Voxl
 {
 	// This can't be const because the function modify m_out.
 	class ErrorPrinter

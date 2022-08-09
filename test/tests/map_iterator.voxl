@@ -9,7 +9,6 @@ class Map {
 	$init(function, iterable) {
 		$.function = function;
 		$.iterator = iterable.$iter();
-		ret $;
 	}
 
 	$iter() {

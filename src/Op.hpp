@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-namespace Lang
+namespace Voxl
 {
 	// Could store a constant inside the code for load and set global because they never use any runtime values.
 	// This would reduce code size.
@@ -40,7 +40,7 @@ namespace Lang
 		SetGlobal, // [rhs, name]
 		GetUpvalue, // index
 		SetUpvalue, // index [rhs]
-		GetField, // instance name
+		GetField, // [value name] -> [field]
 		SetField, // [rhs instance name]
 		StoreMethod, // [class function name]
 		GetIndex, // [value, index]

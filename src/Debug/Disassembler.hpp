@@ -7,7 +7,7 @@
 // for it to make sense. I would need to make extend arg a special case in the vm.
 // Check if is extend arg if yes then count all the extends after it or if not extend arg execute any other instruction and print it .
 
-namespace Lang
+namespace Voxl
 {
 
 void debugPrintValue(const Value& value);

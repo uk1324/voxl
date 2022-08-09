@@ -3,7 +3,7 @@
 #include <string_view>
 #include <Value.hpp>
 
-namespace Lang
+namespace Voxl
 {
 
 enum class TokenType

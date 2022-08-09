@@ -5,9 +5,9 @@
 #include <Vm/Vm.hpp>
 #include <iostream>
 
-using namespace Lang;
+using namespace Voxl;
 
-int Lang::runRepl()
+int Voxl::runRepl()
 {
 	SourceInfo sourceInfo;
 	sourceInfo.displayedFilename = "<repl>";

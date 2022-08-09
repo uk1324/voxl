@@ -11,7 +11,7 @@
 #define TERM_COL_WHITE   "\x1B[37m"
 #define TERM_COL_RESET   "\x1B[0m"
 
-using namespace Lang;
+using namespace Voxl;
 
 ErrorPrinter::ErrorPrinter(std::ostream& out, const SourceInfo& sourceInfo)
 	: m_sourceInfo(sourceInfo)
@@ -70,7 +70,7 @@ void ErrorPrinter::printErrorStart(size_t line, size_t charInLine, const char* f
 	char message[1000];
 	const auto bytesWritten = vsnprintf(message, sizeof(message), format, args);
 	// Not "<=" because of the terminating null.
-	assert(bytesWritten < sizeof(message));
+	ASSERT(bytesWritten < sizeof(message));
 
 	m_out << m_sourceInfo.displayedFilename
 		<< ':' << line + 1

@@ -1,6 +1,20 @@
 #pragma once
 
-#include <assert.h>
+#include <Debug/DebugOptions.hpp>
 
-#define ASSERT assert
-#define ASSERT_NOT_REACHED() assert(false)
+#ifdef VOXL_EXECUTE_ASSERTS_IN_RELEASE
+	#include <iostream>
+	#define NOMINMAX
+	#include <windows.h>
+	#define ASSERT(condition) \
+		if ((condition) == false) \
+		{ \
+			std::cout << "assertion failed\n"; \
+			DebugBreak(); \
+		}
+	#define ASSERT_NOT_REACHED() DebugBreak();
+#else
+	#include <assert.h>
+	#define ASSERT assert
+	#define ASSERT_NOT_REACHED() assert(false)
+#endif

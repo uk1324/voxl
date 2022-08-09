@@ -4,7 +4,7 @@
 #include <Utf8.hpp>
 #include <stdlib.h>
 
-using namespace Lang;
+using namespace Voxl;
 
 Allocator::Allocator()
 	: m_head(nullptr)
@@ -203,6 +203,8 @@ ObjNativeFunction* Allocator::allocateForeignFunction(ObjString* name, NativeFun
 	obj->context = context;
 	return obj;
 }
+
+#include <iostream>
 
 ObjClass* Allocator::allocateClass(ObjString* name, size_t instanceSize, MarkingFunction mark)
 {
@@ -483,22 +485,26 @@ const Value& Allocator::getConstant(size_t id) const
 
 void Allocator::registerLocal(Obj** obj)
 {
-	ASSERT(m_localObjs.insert(obj).second == true);
+	const auto isNewItem = m_localObjs.insert(obj).second == true;
+	ASSERT(isNewItem);
 }
 
 void Allocator::unregisterLocal(Obj** obj)
 {
-	ASSERT(m_localObjs.erase(obj) == 1);
+	const auto wasDeleted = m_localObjs.erase(obj) == 1;
+	ASSERT(wasDeleted);
 }
 
 void Allocator::registerLocal(Value* value)
 {
-	ASSERT(m_localValues.insert(value).second == true);
+	const auto isNewItem = m_localValues.insert(value).second == true;
+	ASSERT(isNewItem);
 }
 
 void Allocator::unregisterLocal(Value* value)
 {
-	ASSERT(m_localValues.erase(value) == 1);
+	const auto wasDeleted = m_localValues.erase(value) == 1;
+	ASSERT(wasDeleted);
 }
 
 Allocator::MarkingFunctionHandle::~MarkingFunctionHandle()

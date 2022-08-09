@@ -2,7 +2,6 @@ class Vec2 {
 	$init(x, y) {
 		$.x = x;
 		$.y = y;
-		ret $;
 	}
 
 	$add(rhs) {

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace Lang
+namespace Voxl
 {
 
 int runRepl();

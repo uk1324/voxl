@@ -1,3 +1,4 @@
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -16,7 +17,7 @@
 		} \
 	} while (false)
 
-using namespace Lang;
+using namespace Voxl;
 
 Compiler::Compiler(Allocator& allocator)
 	: m_hadError(false)
@@ -489,8 +490,16 @@ Compiler::Status Compiler::useAllStmt(const UseAllStmt& stmt)
 
 Compiler::Status Compiler::useSelectiveStmt(const UseSelectiveStmt& stmt)
 {
-	ASSERT_NOT_REACHED();
-	return Status::Error;
+	TRY(loadModule(stmt.path));
+	for (const auto& [originalName, newName] : stmt.variablesToImport)
+	{
+		if (newName.has_value() && originalName == newName)
+			return errorAt(stmt, "imported variable ('%.*s') name is the same as it's alias name", newName->length(), newName->data());
+
+		TRY(getField(originalName));
+		TRY(createVariable(newName.has_value() ? *newName : originalName, stmt.start, stmt.end()));
+	}
+	return Status::Ok;
 }
 
 Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
@@ -746,9 +755,7 @@ Compiler::Status Compiler::lambdaExpr(const LambdaExpr& expr)
 Compiler::Status Compiler::getFieldExpr(const GetFieldExpr& expr)
 {
 	TRY(compile(expr.lhs));
-	auto fieldNameConstant = m_allocator.allocateStringConstant(expr.fieldName).constant;
-	TRY(loadConstant(fieldNameConstant));
-	emitOp(Op::GetField);
+	TRY(getField(expr.fieldName));
 	return Status::Ok;
 }
 
@@ -870,6 +877,14 @@ Compiler::Status Compiler::variable(std::string_view name, VariableOp op)
 	{
 		emitOp(Op::GetGlobal);
 	}
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::getField(std::string_view fieldName)
+{
+	const auto fieldNameConstant = m_allocator.allocateStringConstant(fieldName).constant;
+	TRY(loadConstant(fieldNameConstant));
+	emitOp(Op::GetField);
 	return Status::Ok;
 }
 

@@ -8,7 +8,7 @@
 #include <fstream>
 #include <sstream>
 
-using namespace Lang;
+using namespace Voxl;
 
 std::pair<std::string_view, std::string_view> tests[] = {
 	{ "variable_scoping", "0010" },

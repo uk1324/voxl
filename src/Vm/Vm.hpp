@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <array>
 
-namespace Lang
+namespace Voxl
 {
 
 enum class VmResult
@@ -34,6 +34,7 @@ private:
 		Obj* callable;
 		Value* caughtValue;
 		int numberOfValuesToPopOffExceptArgs;
+		bool isInitializer;
 		// TODO: Try catch doesn't pop the block off the stack when an exception happens.
 		// To fix this I could store the stack value before try on Op::TryBegin otherwise it would be set to nullptr
 		// indicating that try isn't set.
@@ -102,6 +103,7 @@ private:
 	Value typeErrorExpected(ObjClass* type);
 	std::optional<Value&> getGlobal(ObjString* name);
 	bool setGlobal(ObjString* name, const Value& value);
+	void debugPrintStack();
 
 private:
 	static void mark(Vm* vm, Allocator& allocator);

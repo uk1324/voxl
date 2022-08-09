@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <vector>
 
-namespace Lang
+namespace Voxl
 {
 
 	class Value;

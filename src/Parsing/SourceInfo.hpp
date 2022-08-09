@@ -5,7 +5,7 @@
 #include <vector>
 #include <filesystem>
 
-namespace Lang
+namespace Voxl
 {
 	// Lines numbers start from 0
 	struct SourceInfo

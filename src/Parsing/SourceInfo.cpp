@@ -1,7 +1,7 @@
 #include <Parsing/SourceInfo.hpp>
 #include <Asserts.hpp>
 
-using namespace Lang;
+using namespace Voxl;
 
 std::string_view SourceInfo::getLineText(size_t line) const
 {

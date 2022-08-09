@@ -10,7 +10,7 @@
 // no operator+ for types (not applicable to a dynamically typed language).
 // (invalid use of) / (redefinition of) <variable name> previously defined <location>.
 
-namespace Lang
+namespace Voxl
 {
 
 enum class ExprType

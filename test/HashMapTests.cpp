@@ -3,7 +3,7 @@
 
 // TODO: Add tests that check the return value of insert and remove.
 
-using namespace Lang;
+using namespace Voxl;
 
 #define INIT() \
 	Allocator _a; \
@@ -90,7 +90,7 @@ static void iteratorTest()
 
 	// TODO: Instead of this generate random pairs and insert them into a vector then insert them into the hash table
 	const auto ITEMS_COUNT = 10;
-	for (auto i = 0; i < ITEMS_COUNT; i++)
+	for (char i = 0; i < ITEMS_COUNT; i++)
 	{
 		char key[] = { 'a' + i, '\0' };
 		PUT(key, Value::integer(i));

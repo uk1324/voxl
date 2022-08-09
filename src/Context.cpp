@@ -1,7 +1,7 @@
 #include <Context.hpp>
 #include <Vm/Vm.hpp>
 
-using namespace Lang;
+using namespace Voxl;
 
 LocalValue::LocalValue(const Value& value, Context& context)
 	: value(value)

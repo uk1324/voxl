@@ -1,0 +1,12 @@
+class Vec3 {
+	$init(x, y, z) {
+		$.x = x;
+		$.y = y;
+		$.z = z;
+	}
+
+	$add(rhs) {
+	
+	}
+}
+

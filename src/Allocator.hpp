@@ -5,7 +5,7 @@
 #include <unordered_set>
 #include <string_view>
 
-namespace Lang
+namespace Voxl
 {
 
 class Allocator
@@ -124,7 +124,7 @@ private:
 }
 
 template<typename T>
-Lang::Allocator::MarkingFunctionHandle Lang::Allocator::registerMarkingFunction(T* data, void(*function)(T*, Allocator&))
+Voxl::Allocator::MarkingFunctionHandle Voxl::Allocator::registerMarkingFunction(T* data, void(*function)(T*, Allocator&))
 {
 	size_t id = m_markingFunctions.empty()
 		? 0

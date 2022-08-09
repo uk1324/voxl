@@ -8,7 +8,7 @@
 #include <Vm/Vm.hpp>
 #include <iostream>
 
-using namespace Lang;
+using namespace Voxl;
 
 // If I wanted to I could implement things like scopes and lineNumberStack as a linked list on the call stack though I don't see what
 // would be the point.

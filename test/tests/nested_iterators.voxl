@@ -2,7 +2,6 @@ class Range {
 	$init(n) {
 		$.current = 0;
 		$.max = n;
-		ret $;
 	}
 
 	$iter() {

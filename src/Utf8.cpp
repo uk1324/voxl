@@ -1,7 +1,7 @@
 #include <Utf8.hpp>
 #include <Asserts.hpp>
 
-size_t Lang::Utf8::strlen(const char* str, size_t size)
+size_t Voxl::Utf8::strlen(const char* str, size_t size)
 {
 	size_t length = 0;
 	for (size_t i = 0; i < size;)
@@ -32,7 +32,7 @@ size_t Lang::Utf8::strlen(const char* str, size_t size)
 	return length;
 }
 
-int Lang::Utf8::strcmp(const char* a, size_t aSize, const char* b, size_t bSize)
+int Voxl::Utf8::strcmp(const char* a, size_t aSize, const char* b, size_t bSize)
 {
 	if (aSize < bSize)
 		return -1;

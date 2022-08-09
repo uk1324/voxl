@@ -3,7 +3,7 @@
 #include <Asserts.hpp>
 #include <ostream>
 
-namespace Lang
+namespace Voxl
 {
 
 using Int = int64_t;
@@ -83,8 +83,8 @@ public:
 
 }
 
-std::ostream& operator<< (std::ostream& os, Lang::Value value);
-std::ostream& operator<< (std::ostream& os, Lang::Obj* obj);
-bool operator== (const Lang::Value& lhs, const Lang::Value& rhs);
+std::ostream& operator<< (std::ostream& os, Voxl::Value value);
+std::ostream& operator<< (std::ostream& os, Voxl::Obj* obj);
+bool operator== (const Voxl::Value& lhs, const Voxl::Value& rhs);
 
 #undef VALUE_TYPE_LIST

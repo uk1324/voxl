@@ -4,7 +4,7 @@
 #include <Parsing/SourceInfo.hpp>
 #include <ErrorPrinter.hpp>
 
-namespace Lang
+namespace Voxl
 {
 
 // TODO:

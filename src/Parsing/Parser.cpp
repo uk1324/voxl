@@ -1,6 +1,6 @@
 #include <Parsing/Parser.hpp>
 
-using namespace Lang;
+using namespace Voxl;
 
 Parser::Parser()
 	: Parser(false)
@@ -426,6 +426,7 @@ std::unique_ptr<Stmt> Parser::useStmt()
 	}
 	else if (match(TokenType::Star))
 	{
+		expect(TokenType::Semicolon, "expected ';'");
 		return std::make_unique<UseAllStmt>(path, start, peekPrevious().end);
 	}
 
@@ -447,6 +448,7 @@ std::unique_ptr<Stmt> Parser::useStmt()
 			imports.push_back({ original, std::nullopt });
 		}
 	}
+	expect(TokenType::Semicolon, "expected ';'");
 	return std::make_unique<UseSelectiveStmt>(path, std::move(imports), start, peekPrevious().end);
 }
 

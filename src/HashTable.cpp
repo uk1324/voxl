@@ -2,7 +2,7 @@
 #include <Obj.hpp>
 #include <iostream>
 
-using namespace Lang;
+using namespace Voxl;
 
 HashTable::HashTable()
 {

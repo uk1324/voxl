@@ -3,7 +3,7 @@
 #include <Allocator.hpp>
 #include <Context.hpp>
 
-using namespace Lang;
+using namespace Voxl;
 
 LocalValue List::init(Context& c)
 {
