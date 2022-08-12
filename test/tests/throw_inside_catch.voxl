@@ -1,0 +1,14 @@
+try {
+	try {
+		put("try");
+		throw null;
+	} catch * {
+		put("catch");
+		throw null;
+	} finally {
+		put("finally");
+	}
+}
+catch * {
+
+}

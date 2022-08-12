@@ -8,10 +8,6 @@ namespace Voxl
 
 enum class TokenType
 {
-	// Numbers
-	IntNumber,
-	FloatNumber,
-
 	// Operators
 	Plus,
 	Minus,
@@ -52,6 +48,7 @@ enum class TokenType
 	RightBracket,
 	Arrow,
 	ThinArrow,
+	At,
 
 	// Keywords
 	Class,
@@ -75,6 +72,10 @@ enum class TokenType
 	Match,
 	In,
 	Use,
+
+	// Numbers
+	IntNumber,
+	FloatNumber,
 
 	// Other
 	Identifier,

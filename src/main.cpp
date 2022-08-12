@@ -2,6 +2,7 @@
 #include <Parsing/Parser.hpp>
 #include <ErrorPrinter.hpp>
 #include <Compiling/Compiler.hpp>
+#include <TestModule.hpp>
 #include <Context.hpp>
 #include <ReadFile.hpp>
 #include <Repl.hpp>
@@ -121,7 +122,17 @@ Maybe set some timeout outside of the language.
 // x, y = (x, y);
 // [x, y] = [x, y];
 
-#include <TestModule.hpp>
+static LocalValue put(Context& c)
+{
+	std::cout << c.args(0).value;
+	return LocalValue::null(c);
+}
+
+static LocalValue putln(Context& c)
+{
+	std::cout << c.args(0).value << '\n';
+	return LocalValue::null(c);
+}
 
 int main()
 {
@@ -156,6 +167,8 @@ int main()
 	{
 		auto vm = std::make_unique<Vm>(allocator);
 		vm->createModule("native", testModuleMain);
+		vm->defineNativeFunction("put", put, 1);
+		vm->defineNativeFunction("putln", putln, 1);
 		auto result = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, errorPrinter);
 	}
 }

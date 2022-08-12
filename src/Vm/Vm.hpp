@@ -32,7 +32,6 @@ private:
 		ObjUpvalue** upvalues;
 		ObjFunction* function;
 		Obj* callable;
-		Value* caughtValue;
 		int numberOfValuesToPopOffExceptArgs;
 		bool isInitializer;
 		// TODO: Try catch doesn't pop the block off the stack when an exception happens.
@@ -96,8 +95,8 @@ private:
 	uint8_t readUint8();
 
 	Result fatalError(const char* format, ...);
-	Result callObjFunction(ObjFunction* function, int argCount, int numberOfValuesToPopOffExceptArgs);
-	Result callValue(Value value, int argCount, int numberOfValuesToPopOffExceptArgs);
+	Result callObjFunction(ObjFunction* function, int argCount, int numberOfValuesToPopOffExceptArgs, bool isInitializer);
+	Result callValue(Value value, int argCount, int numberOfValuesToPopOffExceptArgs, bool isInitializer = false);
 	Result throwValue(const Value& value);
 	ObjClass* getClassOrNullptr(const Value& value);
 	Value typeErrorExpected(ObjClass* type);
@@ -120,7 +119,7 @@ public:
 	StaticStack<Value, 1024> m_stack;
 	StaticStack<CallFrame, 128> m_callStack;
 	StaticStack<ExceptionHandler, 128> m_exceptionHandlers;
-
+	size_t m_finallyBlockDepth;
 	Scanner* m_scanner;
 	Parser* m_parser;
 	Compiler* m_compiler;

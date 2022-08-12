@@ -28,6 +28,7 @@ enum class ExprType
 	GetField,
 	Array,
 	Lambda,
+	Stmt,
 };
 
 struct Expr
@@ -197,6 +198,13 @@ struct LambdaExpr final : public Expr
 	StmtList stmts;
 };
 
+struct StmtExpr final : public Expr
+{
+	StmtExpr(std::unique_ptr<Stmt> stmt, size_t start, size_t end);
+
+	std::unique_ptr<Stmt> stmt;
+};
+
 struct ExprStmt final : public Stmt
 {
 public:
@@ -226,6 +234,12 @@ public:
 
 struct FnStmt final : public Stmt
 {
+	/*struct Argument
+	{
+		std::string_view name;
+		std::unique_ptr<Expr> constantExpr;
+	};*/
+
 	FnStmt(
 		std::string_view name,
 		std::vector<std::string_view> arguments,

@@ -1,3 +1,5 @@
+use "test" -> (invoke, get_5, throw_3);
+
 fn a() {
 	ret 5;
 }

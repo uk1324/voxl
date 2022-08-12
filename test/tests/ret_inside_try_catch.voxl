@@ -1,0 +1,23 @@
+fn x() {
+	try {
+		put("try");
+		throw null;
+	} catch * {
+		put("catch");
+		ret;
+	} finally {
+		put("finally");
+	}
+}
+
+fn y() {
+	try {
+		put("try");
+		ret;
+	} finally {
+		put("finally");
+	}
+}
+
+x();
+y();

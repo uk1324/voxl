@@ -122,6 +122,7 @@ Token Scanner::token()
 		case ':': return makeToken(TokenType::Colon);
 		case ',': return makeToken(TokenType::Comma);
 		case '.': return makeToken(TokenType::Dot);
+		case '@': return makeToken(TokenType::At);
 		case '"': return string();
 
 		default:

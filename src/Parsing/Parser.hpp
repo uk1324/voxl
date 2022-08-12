@@ -29,9 +29,9 @@ public:
 	Parser();
 	Parser(bool ignoreEofErrors);
 
-	// Could use move here on return.
 	Result parse(const std::vector<Token>& tokens, const SourceInfo& sourceInfo, ErrorPrinter& errorPrinter);
 
+	// Remember to check isAtEnd() when using loops!
 private:
 	std::unique_ptr<Stmt> stmt();
 	std::unique_ptr<Stmt> exprStmt();
@@ -55,6 +55,7 @@ private:
 	std::vector<std::unique_ptr<Stmt>> block();
 
 	std::unique_ptr<Expr> expr();
+	std::unique_ptr<Expr> stmtExpr();
 	std::unique_ptr<Expr> assignment();
 	std::unique_ptr<Expr> and();
 	std::unique_ptr<Expr> or();

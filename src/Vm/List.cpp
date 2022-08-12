@@ -11,8 +11,7 @@ LocalValue List::init(Context& c)
 	list->capacity = 0;
 	list->size = 0;
 	list->data = nullptr;
-	// TODO return null from constructors.
-	return LocalValue(list);
+	return LocalValue::null(c);
 }
 
 LocalValue List::iter(Context& c)
@@ -54,7 +53,6 @@ LocalValue List::get_size(Context& c)
 LocalValue List::get_index(Context& c)
 {
 	auto list = c.args(0).asObj<List>();
-	// TODO: LocalValue(<value>, c) vs c.localValue(<value>);
 	return LocalValue(list->data[c.args(1).asInt()], c);
 }
 

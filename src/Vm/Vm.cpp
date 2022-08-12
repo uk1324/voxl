@@ -16,48 +16,6 @@ using namespace Voxl;
 // Using the global variable requires 1 level of indirection but also requires setting and unsetting the pointer on call and return.
 // The former is simpler.
 
-static LocalValue put(Context& c)
-{
-	std::cout << c.args(0).value;
-	return LocalValue::null(c);
-}
-
-static LocalValue putln(Context& c)
-{
-	std::cout << c.args(0).value << '\n';
-	return LocalValue::null(c);
-}
-
-static LocalValue floor(Context& c)
-{
-	const auto arg = c.args(0);
-	if (arg.isInt())
-	{
-		return arg;
-	}
-	if (arg.isFloat())
-	{
-		return LocalValue::intNum(static_cast<Int>(::floor(arg.asFloat())), c);
-	}
-	throw NativeException(LocalValue::intNum(0, c));
-	//throw NativeException(c.typeErrorMustBe("a real number"));
-}
-
-static LocalValue invoke(Context& c)
-{
-	return c.call(c.args(0));
-}
-
-static LocalValue get_5(Context& c)
-{
-	return LocalValue::intNum(5, c);
-}
-
-static LocalValue throw_3(Context& c)
-{
-	throw NativeException(LocalValue::intNum(3, c));
-}
-
 #define TRY(somethingThatReturnsResult) \
 	{ \
 		const auto expressionResult = somethingThatReturnsResult; \
@@ -111,6 +69,7 @@ Vm::Vm(Allocator& allocator)
 	, m_stopIterationType(nullptr)
 	, m_stringType(nullptr)
 	, m_typeErrorType(nullptr)
+	, m_finallyBlockDepth(0)
 {
 	auto listString = m_allocator->allocateStringConstant("List").value;
 	m_listType = m_allocator->allocateClass(listString, sizeof(List), reinterpret_cast<MarkingFunction>(List::mark));	
@@ -188,7 +147,7 @@ VmResult Vm::execute(
 		if (result.type == ResultType::Ok)
 		{
 			// The program should always finish without anything on both the excecution and call stack.
-			ASSERT(m_callStack.isEmpty() && m_stack.isEmpty());
+			ASSERT(m_callStack.isEmpty() && m_stack.isEmpty() && m_finallyBlockDepth == 0);
 			return VmResult::Success;
 		}
 	}
@@ -206,12 +165,6 @@ void Vm::reset()
 	m_builtins.set(m_stringType->name, Value(m_stringType));
 	m_builtins.set(m_stopIterationType->name, Value(m_stopIterationType));
 	m_builtins.set(m_listIteratorType->name, Value(m_listIteratorType));
-	defineNativeFunction("floor", floor, 1);
-	defineNativeFunction("invoke", invoke, 1);
-	defineNativeFunction("get_5", get_5, 0);
-	defineNativeFunction("throw_3", throw_3, 0);
-	defineNativeFunction("putln", putln, 1);
-	defineNativeFunction("put", put, 1);
 }
 
 Vm::Result Vm::run()
@@ -979,12 +932,6 @@ Vm::Result Vm::run()
 			break;
 		}
 
-		case Op::Rethrow:
-		{
-			throwValue(*m_callStack.top().caughtValue);
-			break;
-		}
-
 		case Op::Import:
 		{
 			auto filename = m_stack.peek(0).asObj()->asString();
@@ -1037,7 +984,7 @@ Vm::Result Vm::run()
 			}
 			TRY_PUSH(Value(compilerResult.module));
 			m_modules.set(pathString, Value(compilerResult.module));
-			TRY(callObjFunction(compilerResult.program, 0, 0));
+			TRY(callObjFunction(compilerResult.program, 0, 0, false));
 			break;
 		}
 
@@ -1070,6 +1017,15 @@ Vm::Result Vm::run()
 			TRY_PUSH(m_stack.peek(0));
 			break;
 		}
+
+		case Op::FinallyBegin:
+			m_finallyBlockDepth++;
+			break;
+
+		case Op::FinallyEnd:
+			ASSERT(m_finallyBlockDepth != 0);
+			m_finallyBlockDepth--;
+			break;
 
 		default:
 			ASSERT_NOT_REACHED();
@@ -1195,7 +1151,7 @@ Vm::Result Vm::fatalError(const char* format, ...)
 	return Result::fatal();
 }
 
-Vm::Result Vm::callObjFunction(ObjFunction* function, int argCount, int numberOfValuesToPopOffExceptArgs)
+Vm::Result Vm::callObjFunction(ObjFunction* function, int argCount, int numberOfValuesToPopOffExceptArgs, bool isInitializer)
 {
 	if (argCount != function->argCount)
 	{
@@ -1210,11 +1166,11 @@ Vm::Result Vm::callObjFunction(ObjFunction* function, int argCount, int numberOf
 	frame.callable = function;
 	m_globals = function->globals;
 	frame.numberOfValuesToPopOffExceptArgs = numberOfValuesToPopOffExceptArgs;
-	frame.isInitializer = false;
+	frame.isInitializer = isInitializer;
 	return Result::ok();
 }
 
-Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffExceptArgs)
+Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffExceptArgs, bool isInitializer)
 {
 	if (value.isObj() == false)
 	{
@@ -1226,14 +1182,14 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 		case ObjType::Function:
 		{
 			// callObjFunction is only used in this function so I could implement it as a goto or a lambda.
-			TRY(callObjFunction(obj->asFunction(), argCount, numberOfValuesToPopOffExceptArgs));
+			TRY(callObjFunction(obj->asFunction(), argCount, numberOfValuesToPopOffExceptArgs, isInitializer));
 			break;
 		}
 
 		case ObjType::Closure:
 		{
 			auto closure = obj->asClosure();
-			TRY(callObjFunction(closure->function, argCount, numberOfValuesToPopOffExceptArgs));
+			TRY(callObjFunction(closure->function, argCount, numberOfValuesToPopOffExceptArgs, isInitializer));
 			m_callStack.top().upvalues = closure->upvalues;
 			break;
 		}
@@ -1249,14 +1205,15 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			auto& frame = m_callStack.top();
 			frame.setNativeFunction();
 			frame.callable = function;
-			frame.isInitializer = false;
+			frame.isInitializer = isInitializer;
 			m_globals = function->globals;
 			try
 			{
-				Context context(m_stack.topPtr - argCount, argCount, *m_allocator, *this);
+				const auto args = m_stack.topPtr - argCount;
+				Context context(args, argCount, *m_allocator, *this);
 				const auto result = function->function(context);
 				m_stack.topPtr -= numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount);
-				TRY_PUSH(result.value);
+				TRY_PUSH(isInitializer ? args[0] : result.value);
 				m_callStack.pop();
 				auto callable = m_callStack.top().callable;
 				switch (callable->type)
@@ -1310,10 +1267,9 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 
 			// TODO: Handle special classes like Int.
 			m_stack.topPtr[-argCount - 1] = Value(instance); // Replace the class with the instance.
-			const auto frameBeforeCall = &m_callStack.top();
 			if (const auto initializer = class_->fields.get(m_initString); initializer.has_value())
 			{
-				TRY(callValue(*initializer, argCount + 1, 0));
+				TRY(callValue(*initializer, argCount + 1, 0, true));
 				// Could check if the function returns null like python,
 				// or I could just ignore the return value like javascript and it with the instance.
 				// Another option would be to check if it return value is the instance or maybe the same type as class.
@@ -1325,11 +1281,6 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			else if (argCount != 0)
 			{
 				return fatalError("expected 0 args but got %d", argCount);
-			}
-			
-			if (bool initializerPushNewFrame = &m_callStack.top() != frameBeforeCall)
-			{
-				m_callStack.top().isInitializer = true;
 			}
 			break;
 		}
@@ -1363,6 +1314,11 @@ Vm::Result Vm::throwValue(const Value& value)
 		return fatalError("uncaught exception");
 	}
 
+	if (m_finallyBlockDepth > 0)
+	{
+		return fatalError("cannot throw exception from finally");
+	}
+
 	const auto& handler = m_exceptionHandlers.top();
 	auto& catchFrame = *handler.callFrame;
 
@@ -1378,7 +1334,6 @@ Vm::Result Vm::throwValue(const Value& value)
 	m_stack.topPtr = handler.stackTopPtrBeforeTry;
 	catchFrame.instructionPointer = handler.handlerCodeLocation;
 	TRY_PUSH(value);
-	catchFrame.caughtValue = &m_stack.top();
 
 	m_exceptionHandlers.pop();
 

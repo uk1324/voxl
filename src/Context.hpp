@@ -3,7 +3,7 @@
 #include <Allocator.hpp>
 #include <iostream>
 
-// No operator= needed for types becuase the only thing they need to manage is being registred and unregistred from the allocator.
+// No operator= needed for types becuase the only thing they need to manage is is their pointer registred and unregistred from the allocator.
 
 namespace Voxl
 {

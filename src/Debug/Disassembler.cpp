@@ -151,11 +151,12 @@ size_t Voxl::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::SetUpvalue: return opNumber("setUpvalue", byteCode, offset);
 		case Op::CloseUpvalue: return closeUpvalueOp("closeUpvalue", byteCode, offset);
 		case Op::MatchClass: return justOp("matchClass");
-		case Op::Rethrow: return justOp("rethrow");
 		case Op::Import: return justOp("import");
 		case Op::CloneTop: return justOp("cloneTop");
 		case Op::ModuleImportAllToGlobalNamespace: return justOp("moduleImportAllToGlobalNamespace");
 		case Op::ModuleSetLoaded: return justOp("moduleSetLoaded");
+		case Op::FinallyBegin: return justOp("finallyBegin");
+		case Op::FinallyEnd: return justOp("finallyEnd");
 
 		default:
 			std::cout << "invalid op";

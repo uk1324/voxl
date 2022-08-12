@@ -1,11 +1,9 @@
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
-#include <iostream>
-
-#ifdef VOXL_DEBUG_PRINT_COMPILED_FUNCTIONS
 #include <Debug/Disassembler.hpp>
-#endif
+#include <iostream>
 
 #define TRY(somethingThatReturnsStatus) \
 	do \
@@ -78,7 +76,7 @@ Compiler::Status Compiler::compileFunction(
 	m_functions.push_back(Function{});
 
 	beginScope();
-	m_scopes.back().functionDepth++;
+	currentScope().functionDepth++;
 
 	for (const auto& argumentName : arguments)
 	{
@@ -209,6 +207,23 @@ Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 
 Compiler::Status Compiler::retStmt(const RetStmt& stmt)
 {
+	// Not using backwards iterators because cleanUpBeforeJumpingOutOfScope can change m_scopes invalidating iterators.
+	for (auto i = m_scopes.size() - 1; (i != 0) && (m_scopes[i].functionDepth == currentScope().functionDepth);)
+	{
+		const auto& scope = m_scopes[i];
+		if (scope.type == ScopeType::Finally)
+		{
+			return errorAt(stmt, "ret not allowed inside finally block");
+		}
+		else
+		{
+			TRY(cleanUpBeforeJumpingOutOfScope(scope));
+		}
+
+		if (i == 0)
+			break;
+		i--;
+	}
 	if (stmt.returnValue == std::nullopt)
 	{
 		emitOp(Op::LoadNull);
@@ -298,31 +313,72 @@ Compiler::Status Compiler::loopStmt(const LoopStmt& stmt)
 
 Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
 {
-	if (m_loops.empty())
+	if (m_loops.empty() || (m_scopes[m_loops.back().scopeDepth].functionDepth != currentFunctionDepth()))
 	{
 		return errorAt(stmt, "cannot use break outside of a loop");
 	}
-	auto& loop = m_loops.back();
-	for (auto scope = m_scopes.begin() + loop.scopeDepth; scope != m_scopes.end(); scope++)
+	auto& currentLoop = m_loops.back();
+
+	// Not using iterators because cleanUpBeforeJumpingOutOfScope can change m_scopes invalidating iterators.
+	for (auto i = currentLoop.scopeDepth; i < m_scopes.size(); i++)
 	{
-		popOffLocals(*scope);
+		const auto scope = m_scopes[i];
+
+		if ((scope.functionDepth == currentScope().functionDepth) && (scope.type == ScopeType::Finally))
+			return errorAt(stmt, "break not allowed inside finally block");
+
+		scopeCleanUp(scope);
+		TRY(cleanUpBeforeJumpingOutOfScope(scope));
 	}
 	const auto jump = emitJump(Op::Jump);
-	loop.breakJumpLocations.push_back(jump);
+	currentLoop.breakJumpLocations.push_back(jump);
 	return Status::Ok;
 }
 
 Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 {
-	ASSERT((stmt.catchBlocks.empty() == false) || stmt.finallyBlock.has_value());
-	// TODO: Currently this isn't handled properly.
-	ASSERT((stmt.finallyBlock.has_value() && stmt.catchBlocks.empty()) == false);
+	/*
+	Code generated
+	try { There is no scope created for the first try just TryBegin emmited.
+		try {
+			<actual try>
+		} catch {
+			<actual catch>
+			<rethrow if not handled>
+		}
+	} catch thrown_inside_catch_or_not_caught {
+		<finally>
+		<rethrow thrown_inside_catch_or_not_caught> 
+	}
+	<finally>
+
+	TODO:
+	Currently the same code is generated even if a try finally is used. There is no <actual catch> code so it always gets to <rethrow if not handled>
+	which jumps to the finally and just rethrows it again. This could be improved, but if should be implemented in a seperate block or function
+	even if the code is duplicated because otherwise it makes a mess.
+	*/
+
+	// TODO: could remove this if there is no finally.
+	const auto jumpToFinallyWithRethrow = emitJump(Op::TryBegin);
 
 	const auto jumpToCatchBlocks = emitJump(Op::TryBegin);
-	beginScope();
+
+	ByteCode finallyBlockByteCode;
+	if (stmt.finallyBlock.has_value())
+	{
+		m_functionByteCodeStack.push_back(&finallyBlockByteCode);
+		beginScope(ScopeType::Finally);
+		emitOp(Op::FinallyBegin);
+		TRY(compile(*stmt.finallyBlock));
+		endScope();
+		m_functionByteCodeStack.pop_back();
+	}
+	
+
+	beginScope(ScopeType::Try);
+	currentScope().try_.finallyBlockByteCode = &finallyBlockByteCode;
 	TRY(compile(stmt.tryBlock));
 	endScope();
-	emitOp(Op::TryEnd);
 	const auto jumpToEndOfCatchBlocks = emitJump(Op::Jump);
 
 	setJumpToHere(jumpToCatchBlocks);
@@ -335,20 +391,21 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 		beginScope();
 
 		// Declare a variable even if unused so the VM catch doesn't have to handle it as a special case.
+		// This also registers it inside the compiler so break and continue statements know to pop it off.
 		const auto name = catchBlock.caughtValueName.has_value() ? *catchBlock.caughtValueName : "";
 		TRY(createVariable(name, stmt.start, stmt.end()));
-
-		beginScope();
+		beginScope(ScopeType::Catch);
+		currentScope().catch_.finallyBlockByteCode = &finallyBlockByteCode;
 		TRY(compile(catchBlock.block));
-		endScope();
-		jumpsToCatchEpilogue.push_back(emitJump(Op::Jump));
 
+		endScope();
+
+		jumpsToCatchEpilogue.push_back(emitJump(Op::Jump));
 		// Not calling endScope() so the caught value remains on the stack through multiple handlers.
 		m_scopes.pop_back();
 		setJumpToHere(jumpToNextHandler);
 	}
-
-	emitOp(Op::Rethrow);
+	emitOp(Op::Throw);
 
 	for (const auto& jump : jumpsToCatchEpilogue)
 	{
@@ -356,12 +413,28 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 	}
 	// Pop the caught value.
 	emitOp(Op::PopStack);
+	emitOp(Op::TryEnd); // jumpToFinallyRethrow end
 
 	setJumpToHere(jumpToEndOfCatchBlocks);
 
 	if (stmt.finallyBlock.has_value())
 	{
-		TRY(compile(*stmt.finallyBlock));
+		currentByteCode().append(finallyBlockByteCode);
+		const auto jumpPastFinallyRethrow = emitJump(Op::Jump);
+
+		setJumpToHere(jumpToFinallyWithRethrow);
+		beginScope();
+		// Register caught value to the compiler so it is popped of when needed.
+		TRY(createVariable("", stmt.start, stmt.end()));
+		currentByteCode().append(finallyBlockByteCode);
+		endScope();
+		emitOp(Op::Throw);
+
+		setJumpToHere(jumpPastFinallyRethrow);
+	}
+	else
+	{
+		setJumpToHere(jumpToFinallyWithRethrow);
 	}
 
 	return Status::Ok;
@@ -460,7 +533,7 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 			case StmtType::Match: return true;
 			case StmtType::Use: return false;
 			case StmtType::UseAll: return false;
-			case StmtType::UseSelective: return true;
+			case StmtType::UseSelective: return false;
 			}
 			return false;
 		};
@@ -523,9 +596,11 @@ Compiler::Status Compiler::useSelectiveStmt(const UseSelectiveStmt& stmt)
 		if (newName.has_value() && originalName == newName)
 			return errorAt(stmt, "imported variable ('%.*s') name is the same as it's alias name", newName->length(), newName->data());
 
+		emitOp(Op::CloneTop); // getField consumes the value so the TOS has to be cloned.
 		TRY(getField(originalName));
 		TRY(createVariable(newName.has_value() ? *newName : originalName, stmt.start, stmt.end()));
 	}
+	emitOp(Op::PopStack); // Pop the module.
 	return Status::Ok;
 }
 
@@ -550,6 +625,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 		CASE_EXPR_TYPE(Array, arrayExpr)
 		CASE_EXPR_TYPE(GetField, getFieldExpr)
 		CASE_EXPR_TYPE(Lambda, lambdaExpr)
+		CASE_EXPR_TYPE(Stmt, stmtExpr)
 	}
 #undef CASE_EXPR_TYPE
 	m_lineNumberStack.pop_back();
@@ -745,6 +821,84 @@ Compiler::Status Compiler::arrayExpr(const ArrayExpr&)
 	return Status::Error;
 }
 
+Compiler::Status Compiler::lambdaExpr(const LambdaExpr& expr)
+{
+	static constexpr std::string_view ANONYMOUS_FUNCTION_NAME = "";
+	const auto [nameConstant, name] = m_allocator.allocateStringConstant(ANONYMOUS_FUNCTION_NAME);
+	const auto [functionConstant, function] =
+		m_allocator.allocateFunctionConstant(name, static_cast<int>(expr.arguments.size()), &m_module->globals);
+	TRY(compileFunction(function, expr.arguments, expr.stmts, expr.start, expr.end()));
+	TRY(loadConstant(functionConstant));
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::getFieldExpr(const GetFieldExpr& expr)
+{
+	TRY(compile(expr.lhs));
+	TRY(getField(expr.fieldName));
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::stmtExpr(const StmtExpr& /*expr*/)
+{
+	ASSERT_NOT_REACHED();
+	return Status::Error;
+	//if (expr.stmt->type == StmtType::Ret)
+	//{
+	//	const auto& stmt = *static_cast<RetStmt*>(expr.stmt.get());
+	//	if ((m_statementExpressions.size() == 0) || (m_statementExpressions.back().functionDepth != currentFunctionDepth()))
+	//		return errorAt(expr, "@ret can only be used inside statement expressions");
+	//	if (stmt.returnValue.has_value() == false)
+	//		return errorAt(expr, "must return a value");
+	//	TRY(compile(*stmt.returnValue));
+	//	emitOp(Op::ExpressionStatementReturn);
+	//	return Status::Ok;
+	//}
+
+	//auto isStmtAllowedInStmtExpr = [](const std::unique_ptr<Stmt>& stmt) {
+	//	// TODO: Maybe give better error messages.
+	//	// Using a switch to get warnings if this is not exhaustive.
+	//	switch (stmt->type)
+	//	{
+	//	case StmtType::Expr: return false;
+	//	case StmtType::VariableDeclaration: return false;
+	//	case StmtType::Block: return true;
+	//	case StmtType::Fn: return false;
+	//	case StmtType::Ret: ASSERT_NOT_REACHED(); return false;
+	//	case StmtType::If: return true;
+	//	case StmtType::Loop: return true;
+	//	case StmtType::Break: return false;
+	//	case StmtType::Class: return false;
+	//	case StmtType::Impl: return false;
+	//	case StmtType::Try: return true;
+	//	case StmtType::Throw: return false;
+	//	case StmtType::Match: return true;
+	//	case StmtType::Use: return false;
+	//	case StmtType::UseAll: return false;
+	//	case StmtType::UseSelective: return false;
+	//	}
+	//	return false;
+	//};
+
+	//if (isStmtAllowedInStmtExpr(expr.stmt) == false)
+	//	return errorAt(*expr.stmt.get(), "statement not allowed in statment expression");
+
+	//// This could be implemented by during runtime storing the stack state at the beginning of the expr and the restoring that
+	//// stack top on return. 
+	//// This could also be implmented by tracking the stack state inside the compiler and having an instruction that takes TOS and
+	//// pops n elements then pushes the previous TOS back on top again. A similiar optmization could be applied to returns so the stack
+	// before the call wouldn't need to be saved on inside the stack frame.
+	//// Another way to make it efficient is to make only the last expression always returned like rust does. This be easy to implement
+	//// becuase it would only need to not pop the expression from the expression statement and also it would be easier to check if the
+	//// expression always returns a value.
+	//// The syntax could also be changed maybe from '@ret <expr>' to just '@<expr>' 
+	//m_statementExpressions.push_back(StatementExpression{ currentFunctionDepth() });
+	//emitOp(Op::ExpressionStatementBegin);
+	//TRY(compile(expr.stmt));
+	//m_statementExpressions.pop_back();
+	//return Status::Ok;
+}
+
 // The expression being matches must be TOS.
 Compiler::Status Compiler::compile(const std::unique_ptr<Ptrn>& ptrn)
 {
@@ -763,7 +917,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Ptrn>& ptrn)
 	return Status::Ok;
 }
 
-Compiler::Status Compiler::alwaysTruePtrn(const AlwaysTruePtrn& ptrn)
+Compiler::Status Compiler::alwaysTruePtrn(const AlwaysTruePtrn& /*ptrn*/)
 {
 	// TODO: This could be optmizied by removing the check inside matchStmt when the PtrnType is AlwaysTrue.
 	emitOp(Op::LoadTrue);
@@ -811,40 +965,7 @@ Compiler::Status Compiler::classPtrn(const ClassPtrn& ptrn)
 
 		setJumpToHere(jumpToEndOfPtrn0);
 		setJumpToHere(jumpToEndOfPtrn1);
-	}
-	/*
-	[value]
-	match
-	[value false]
-	if matchFailed
-		[value false]
-		end
-	else
-	[value field]
-	if match
-	{
-		[value field true]
-		[value true]
-	*/
-	
-	return Status::Ok;
-}
-
-Compiler::Status Compiler::lambdaExpr(const LambdaExpr& expr)
-{
-	static constexpr std::string_view ANONYMOUS_FUNCTION_NAME = "";
-	const auto [nameConstant, name] = m_allocator.allocateStringConstant(ANONYMOUS_FUNCTION_NAME);
-	const auto [functionConstant, function] = 
-		m_allocator.allocateFunctionConstant(name, static_cast<int>(expr.arguments.size()), &m_module->globals);
-	TRY(compileFunction(function, expr.arguments, expr.stmts, expr.start, expr.end()));
-	TRY(loadConstant(functionConstant));
-	return Status::Ok;
-}
-
-Compiler::Status Compiler::getFieldExpr(const GetFieldExpr& expr)
-{
-	TRY(compile(expr.lhs));
-	TRY(getField(expr.fieldName));
+	}	
 	return Status::Ok;
 }
 
@@ -857,7 +978,7 @@ Compiler::Status Compiler::createVariable(std::string_view name, size_t start, s
 		return Status::Ok;
 	}
 
-	auto& locals = m_scopes.back().localVariables;
+	auto& locals = currentScope().localVariables;
 	const auto variable = locals.find(name);
 	if (variable != locals.end())
 	{
@@ -865,7 +986,7 @@ Compiler::Status Compiler::createVariable(std::string_view name, size_t start, s
 	}
 	// TODO: Make this better maybe change scopes to store the count or maybe store it with a local.
 	size_t localsCount = 0;
-	const auto functionDepth = m_scopes.back().functionDepth;
+	const auto functionDepth = currentScope().functionDepth;
 	for (auto scope = m_scopes.crbegin(); scope != m_scopes.crend(); scope++)
 	{
 		if (scope->functionDepth != functionDepth)
@@ -886,7 +1007,7 @@ Compiler::Status Compiler::variable(std::string_view name, VariableOp op)
 		if (local != scope.localVariables.end())
 		{
 			auto& variable = local->second;
-			if (scope.functionDepth != m_scopes.back().functionDepth)
+			if (scope.functionDepth != currentFunctionDepth())
 			{
 				variable.isCaptured = true;
 
@@ -1064,15 +1185,20 @@ size_t Compiler::currentLocation()
 	return currentByteCode().code.size();
 }
 
-void Compiler::beginScope()
+int Compiler::currentFunctionDepth()
+{
+	return currentScope().functionDepth;
+}
+
+void Compiler::beginScope(ScopeType scopeType)
 {
 	if (m_scopes.size() == 0)
 	{
-		m_scopes.push_back(Scope{ {}, 0 });
+		m_scopes.push_back(Scope{ {}, 0, scopeType, {} });
 	}
 	else
 	{
-		m_scopes.push_back(Scope{ {}, m_scopes.back().functionDepth });
+		m_scopes.push_back(Scope{ {}, currentFunctionDepth(), scopeType, {} });
 	}
 }
 
@@ -1080,18 +1206,26 @@ void Compiler::endScope()
 {
 	ASSERT(m_scopes.size() > 0);
 
+	if ((currentScope().functionDepth == 0)
 	// No need to pop the values if the function return pops them.
-	if ((m_scopes.back().functionDepth == 0)
-		|| ((m_scopes.size() > 1) && (m_scopes.back().functionDepth == (&m_scopes.back())[-1].functionDepth)))
+		|| ((m_scopes.size() > 1) && (currentScope().functionDepth == (&currentScope())[-1].functionDepth)))
 	{
-		popOffLocals(m_scopes.back());
+		scopeCleanUp(currentScope());
 	}
 
 	m_scopes.pop_back();
 }
 
-void Compiler::popOffLocals(const Scope& scope)
+Compiler::Scope& Compiler::currentScope()
 {
+	return m_scopes.back();
+}
+
+void Compiler::scopeCleanUp(const Scope& scope)
+{
+	// Could also execute this code on return so it doesn't need to be done at runtime.
+	// Not sure if there are any cases when it would not work.
+
 	for (const auto& [_, local] : scope.localVariables)
 	{
 		emitOp(Op::PopStack);
@@ -1101,6 +1235,27 @@ void Compiler::popOffLocals(const Scope& scope)
 			emitUint8(static_cast<uint8_t>(local.index));
 		}
 	}
+	if (scope.type == ScopeType::Try)
+	{
+		emitOp(Op::TryEnd);
+	}
+	else if (scope.type == ScopeType::Finally)
+	{
+		emitOp(Op::FinallyEnd);
+	}
+}
+
+Compiler::Status Compiler::cleanUpBeforeJumpingOutOfScope(const Scope& scope)
+{
+	if ((scope.type == ScopeType::Try))
+	{
+		currentByteCode().append(*scope.try_.finallyBlockByteCode);
+	}
+	else if ((scope.type == ScopeType::Catch))
+	{
+		currentByteCode().append(*scope.catch_.finallyBlockByteCode);
+	}
+	return Status::Ok;
 }
 
 Compiler::Status Compiler::errorAt(size_t start, size_t end, const char* format, ...)

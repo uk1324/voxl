@@ -69,6 +69,8 @@ namespace Voxl
 		Return,
 		TryBegin, // absolute jump to catch stmt.
 		TryEnd,
+		FinallyBegin,
+		FinallyEnd,
 		Throw, // [value]
 		Rethrow,
 		CloseUpvalue, // index
@@ -78,5 +80,7 @@ namespace Voxl
 		ModuleSetLoaded, // [module] -> [module]
 		ModuleImportAllToGlobalNamespace, // [module] -> []
 		CloneTop, // [value] -> [value value]
+		ExpressionStatementBegin, // [] -> []
+		ExpressionStatementReturn,
 	};
 }

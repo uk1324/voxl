@@ -1,10 +1,12 @@
 ﻿#include <../test/tests.hpp>
+#include <../test/TestModule.hpp>
 #include <Parsing/Scanner.hpp>
 #include <Parsing/Parser.hpp>
 #include <Compiling/Compiler.hpp>
 #include <Vm/Vm.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <ReadFile.hpp>
+
 #include <fstream>
 #include <sstream>
 
@@ -36,6 +38,9 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "match_nested", "1302" },
 	{ "match_expr", "321-1" },
 	{ "match_always", "always" },
+	{ "throw_inside_catch", "trycatchfinally" },
+	{ "break_inside_try_catch", "trycatchfinallytryfinally" },
+	{ "ret_inside_try_catch", "trycatchfinallytryfinally" },
 };
 
 void testFailed(std::string_view name)
@@ -48,13 +53,24 @@ void testFailed(std::string_view name, std::string_view got, std::string_view ex
 	std::cerr << "[FAILED] " << name << " | expected \"" << expected << "\" got \"" << got << "\"\n";
 }
 
-//#define LOOP_TESTS
+static LocalValue put(Context& c)
+{
+	std::cout << c.args(0).value;
+	return LocalValue::null(c);
+}
+
+static LocalValue putln(Context& c)
+{
+	std::cout << c.args(0).value << '\n';
+	return LocalValue::null(c);
+}
 
 int main()
 {
 	std::stringstream output;
 	std::cout.set_rdbuf(output.rdbuf());
 
+//#define LOOP_TESTS
 #ifdef LOOP_TESTS
 	for (;;)
 	{
@@ -69,6 +85,7 @@ int main()
 	Allocator allocator;
 	Compiler compiler(allocator);
 	auto vm = std::make_unique<Vm>(allocator);
+	vm->createModule("test", testModuleMain);
 
 	for (const auto& [name, expectedResult] : tests)
 	{
@@ -95,6 +112,8 @@ int main()
 
 		output.str(std::string());
 		vm->reset();
+		vm->defineNativeFunction("put", put, 1);
+		vm->defineNativeFunction("putln", putln, 1);
 		auto vmResult = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, errorPrinter);
 		if (vmResult == VmResult::RuntimeError)
 		{

@@ -1,0 +1,26 @@
+/*
+fn test() {
+	x : 0;
+	try {
+		throw 1;
+	} catch * => x {
+		ret;
+	} finally {
+		put(x);
+	}
+}
+
+test();*/
+
+{
+	x : 0;
+	while true {
+		try {
+			throw 1;
+		} catch * => x {
+			break;
+		} finally {
+			put(x);
+		}
+	}
+}

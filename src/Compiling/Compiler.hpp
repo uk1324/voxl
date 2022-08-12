@@ -11,11 +11,14 @@
 
 // Could synchronize on global statements because even if an error happend It can try to compile further because globals are executed at runtime.
 
-// TODO: Make a function compile block that would take a StmtList and beginScopel compile and endScope.
+// TODO: Make a function compile block that would take a StmtList and beginScope compile and endScope.
 // Remember too add the line numbers.
 
 namespace Voxl
 {
+
+// If there are multiple nested scopes create it may be to allow variables with the same names as the previous scope to be
+// redeclared.
 
 class Compiler
 {
@@ -35,15 +38,60 @@ private:
 		bool isCaptured;
 	};
 
+	enum class ScopeType
+	{
+		Default,
+		Try,
+		Catch,
+		Finally
+	};
+
 	struct Scope
 	{
 		std::unordered_map<std::string_view, Local> localVariables;
 		int functionDepth;
+		// Not sure if the scope type should be used in endScope to do things 
+		ScopeType type;
+		union
+		{
+			/*
+			Recompiling the finally after a jump out of a block doesn't work because to generate the correct code the compiler 
+			would need to always be in the same state when the code is compiled. If this is not done the code may be able 
+			to access variables with the same names in different scopes. For example
+			x : 0;
+			try {
+				throw 1;
+			} catch * => x {
+				break;
+			} finally {
+				put(x);
+			}
+			The finally will be compiled inside the catch so it will use the caught x instead of the outside x it should.
+			Even in this simple example when the break is only inside the catch scope
+			I haven't though much about it but I don't think there is an issue with anything else than variables so it may be possible 
+			to use it in a language without scopes like python.
+			Another implementation could be to compile finally as a closure and call it when needed.
+			A better option would be to compile once and copy the code. With the current implementation this is easy because all jump
+			are relative so no changes need to be made to the code.
+			This could be further improved by only creating one copy of the code per type (break, return, etc.). To do this 
+			jumps to the shared code blocks would need to be emmited at the statements.
+			*/
+
+			struct  
+			{
+				ByteCode* finallyBlockByteCode;
+			} try_;
+			struct
+			{
+				ByteCode* finallyBlockByteCode;
+			} catch_;
+		};
 	};
 
 	struct Loop
 	{
 		size_t loopStartLocation;
+		// Scope index
 		size_t scopeDepth;
 		std::vector<size_t> breakJumpLocations;
 		std::vector<size_t> continueJumpLocations;
@@ -58,6 +106,11 @@ private:
 	struct Function
 	{
 		std::vector<Upvalue> upvalues;
+	};
+
+	struct StatementExpression
+	{
+		int functionDepth;
 	};
 
 	enum class [[nodiscard]] Status
@@ -115,6 +168,7 @@ private:
 	Status arrayExpr(const ArrayExpr& expr);
 	Status getFieldExpr(const GetFieldExpr& expr);
 	Status lambdaExpr(const LambdaExpr& expr);
+	Status stmtExpr(const StmtExpr& expr);
 
 	Status compile(const std::unique_ptr<Ptrn>& ptrn);
 	Status classPtrn(const ClassPtrn& ptrn);
@@ -125,9 +179,11 @@ private:
 	// [initializer] -> []
 	Status createVariable(std::string_view name, size_t start, size_t end);
 	// Could make a RAII class
-	void beginScope();
+	void beginScope(ScopeType scopeType = ScopeType::Default);
 	void endScope();
-	void popOffLocals(const Scope& scope);
+	Scope& currentScope();
+	void scopeCleanUp(const Scope& scope);
+	Status cleanUpBeforeJumpingOutOfScope(const Scope& scope);
 	// TODO: Just make function for get and set that will call variable() or making a function resolveVariable
 	// would be more complicated and require a new type that could be either global, local, orUpvalue and have an
 	// index or a string.
@@ -141,12 +197,15 @@ private:
 	Status emitOpArg(Op op, size_t arg, size_t start, size_t end);
 	void emitUint8(uint8_t value);
 	void emitUint32(uint32_t value);
+	// Could make a class RAII class that reports an error if the jump was not set at the end of the scope.
 	size_t emitJump(Op op);
 	void emitJump(Op op, size_t location);
 	void setJumpToHere(size_t placeToPatch);
 	void patch(size_t placeToPatch, uint32_t value);
 	size_t currentLocation();
+	int currentFunctionDepth();
 
+	// TODO: It might be better to have a function location that would return a struct contaning the start end.
 	Status errorAt(size_t start, size_t end, const char* format, ...);
 	Status errorAt(const Stmt& stmt, const char* format, ...);
 	Status errorAt(const Expr& expr, const char* format, ...);
@@ -163,12 +222,14 @@ public:
 	std::vector<Scope> m_scopes;
 	std::vector<Loop> m_loops;
 	std::vector<Function> m_functions;
+	std::vector<StatementExpression> m_statementExpressions;
 
 	// Stores the line numbers of the currently compiled things. Because expressions might be on a different lines
 	// the the statements they are in a stack has to be used. 
 	std::vector<size_t> m_lineNumberStack;
 
 	std::vector<ByteCode*> m_functionByteCodeStack;
+
 
 	ObjModule* m_module;
 	Allocator::MarkingFunctionHandle m_rootMarkingFunctionHandle;

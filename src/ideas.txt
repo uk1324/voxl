@@ -50,3 +50,5 @@ if match <ptrn> {
 
 }
 or maybe use some shorter syntax.
+
+Better testing if new features work with other features. For example you can't jump out of a finally block. The only way to check this would be to decode the bytecode and check if inside the code generated for the block are any jumps outsdie of it. This could be done during compliation. Then the boundries of the code would be known. Another way could be to add an array of labels with offsets into the code that would be used to check the boundries. Making code that just has the code for this feature would work in some cases but not with finally statements. The test cases could just be made by generating random code. 

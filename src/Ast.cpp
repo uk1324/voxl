@@ -108,6 +108,11 @@ LambdaExpr::LambdaExpr(std::vector<std::string_view> arguments, StmtList stmts, 
 	, stmts(std::move(stmts))
 {}
 
+StmtExpr::StmtExpr(std::unique_ptr<Stmt> stmt, size_t start, size_t end)
+	: Expr(start, end, ExprType::Stmt)
+	, stmt(std::move(stmt))
+{}
+
 ExprStmt::ExprStmt(std::unique_ptr<Expr> expr, size_t start, size_t end)
 	: Stmt(start, end, StmtType::Expr)
 	, expr(std::move(expr))

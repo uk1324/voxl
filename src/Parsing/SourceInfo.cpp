@@ -5,7 +5,7 @@ using namespace Voxl;
 
 std::string_view SourceInfo::getLineText(size_t line) const
 {
-	assert(line < lineStartOffsets.size());
+	ASSERT(line < lineStartOffsets.size());
 
 	size_t lineStart = lineStartOffsets[line];
 

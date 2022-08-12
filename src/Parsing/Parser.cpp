@@ -432,7 +432,7 @@ std::unique_ptr<Stmt> Parser::useStmt()
 
 	expect(TokenType::LeftParen, "expected '('");
 	decltype(UseSelectiveStmt::variablesToImport) imports;
-	while (match(TokenType::RightParen) == false)
+	do
 	{
 		expect(TokenType::Identifier, "expected name of variable to import");
 		const auto original= peekPrevious().identifier;
@@ -446,7 +446,8 @@ std::unique_ptr<Stmt> Parser::useStmt()
 		{
 			imports.push_back({ original, std::nullopt });
 		}
-	}
+	} while ((isAtEnd() == false) && match(TokenType::Comma));
+	expect(TokenType::RightParen, "expected");
 	expect(TokenType::Semicolon, "expected ';'");
 	return std::make_unique<UseSelectiveStmt>(path, std::move(imports), start, peekPrevious().end);
 }
@@ -497,12 +498,23 @@ std::vector<std::unique_ptr<Stmt>> Parser::block()
 std::unique_ptr<Expr> Parser::expr()
 {
 	// TODO: Maybe do checking for recursion depth here to avoid stack overflow.
+	return stmtExpr();
+}
+
+std::unique_ptr<Expr> Parser::stmtExpr()
+{
+	//if (match(TokenType::At))
+	//{
+	//	const auto start = peekPrevious().start;
+	//	auto statement = stmt();
+	//	return std::make_unique<StmtExpr>(std::move(statement), start, peekPrevious().end);
+	//}
 	return assignment();
 }
 
 std::unique_ptr<Expr> Parser::assignment()
 {
-	size_t start = peek().start;
+	const auto start = peek().start;
 	auto lhs = and();
 
 #define COMPOUND_OP(opTokenType) \
@@ -529,13 +541,13 @@ std::unique_ptr<Expr> Parser::assignment()
 }
 
 #define PARSE_LEFT_RECURSIVE_BINARY_EXPR(matches, lowerPrecedenceFunction) \
-	size_t start = peek().start; \
+	const auto start = peek().start; \
 	auto expr = lowerPrecedenceFunction(); \
 	while ((matches) && (isAtEnd() == false)) \
 	{ \
 		TokenType op = peekPrevious().type; \
 		auto rhs = lowerPrecedenceFunction(); \
-		size_t end = peekPrevious().end; \
+		const auto end = peekPrevious().end; \
 		expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(rhs), start, end); \
 	} \
 	return expr;
