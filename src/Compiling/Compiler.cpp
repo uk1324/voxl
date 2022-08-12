@@ -217,7 +217,7 @@ Compiler::Status Compiler::retStmt(const RetStmt& stmt)
 		}
 		else
 		{
-			TRY(cleanUpBeforeJumpingOutOfScope(scope));
+			TRY(cleanUpBeforeJumpingOutOfScope(scope, false));
 		}
 
 		if (i == 0)
@@ -327,11 +327,12 @@ Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
 		if ((scope.functionDepth == currentScope().functionDepth) && (scope.type == ScopeType::Finally))
 			return errorAt(stmt, "break not allowed inside finally block");
 
-		scopeCleanUp(scope);
-		TRY(cleanUpBeforeJumpingOutOfScope(scope));
+		TRY(cleanUpBeforeJumpingOutOfScope(scope, true));
 	}
 	const auto jump = emitJump(Op::Jump);
 	currentLoop.breakJumpLocations.push_back(jump);
+	std::cout << "break\n";
+	disassembleByteCode(currentByteCode(), m_allocator);
 	return Status::Ok;
 }
 
@@ -358,11 +359,6 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 	even if the code is duplicated because otherwise it makes a mess.
 	*/
 
-	// TODO: could remove this if there is no finally.
-	const auto jumpToFinallyWithRethrow = emitJump(Op::TryBegin);
-
-	const auto jumpToCatchBlocks = emitJump(Op::TryBegin);
-
 	ByteCode finallyBlockByteCode;
 	if (stmt.finallyBlock.has_value())
 	{
@@ -374,7 +370,14 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 		m_functionByteCodeStack.pop_back();
 	}
 	
+	// TODO Could just store one copy of this or maybe just store a std::optinal<Bytecode&>.
+	ByteCode emptyByteCode;
+	// TODO: could remove this if there is no finally.
+	const auto jumpToFinallyWithRethrow = emitJump(Op::TryBegin);
+	beginScope(ScopeType::Try);
+	currentScope().try_.finallyBlockByteCode = &emptyByteCode;
 
+	const auto jumpToCatchBlocks = emitJump(Op::TryBegin);
 	beginScope(ScopeType::Try);
 	currentScope().try_.finallyBlockByteCode = &finallyBlockByteCode;
 	TRY(compile(stmt.tryBlock));
@@ -401,21 +404,25 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 		endScope();
 
 		jumpsToCatchEpilogue.push_back(emitJump(Op::Jump));
-		// Not calling endScope() so the caught value remains on the stack through multiple handlers.
-		m_scopes.pop_back();
+		// Remove caught value variable so it remains on the stack throughout multiple handlers.
+		const auto variablesRemoved = m_scopes.back().localVariables.erase(name);
+		ASSERT(variablesRemoved == 1);
+		endScope();
 		setJumpToHere(jumpToNextHandler);
 	}
+	// Rethrow value if it didn't match any catch block.
 	emitOp(Op::Throw);
 
 	for (const auto& jump : jumpsToCatchEpilogue)
 	{
 		setJumpToHere(jump);
 	}
-	// Pop the caught value.
-	emitOp(Op::PopStack);
-	emitOp(Op::TryEnd); // jumpToFinallyRethrow end
+	emitOp(Op::PopStack); // Pop the caught value.
 
 	setJumpToHere(jumpToEndOfCatchBlocks);
+
+	endScope(); // jumpToFinallyWithRethrow end
+
 
 	if (stmt.finallyBlock.has_value())
 	{
@@ -507,6 +514,7 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 {
 	// TODO: Check if there are multiple AlwaysTrue patterns or patterns after AlwaysTrue. Report only warning.
 	TRY(compile(stmt.expr));
+	TRY(createVariable(".matchedValue", stmt.start, stmt.end()));
 	
 	std::vector<size_t> jumpsToEnd;
 	for (const auto& case_ : stmt.cases)
@@ -550,7 +558,6 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 		setJumpToHere(jump);
 	}
 
-	emitOp(Op::PopStack);
 	return Status::Ok;
 }
 
@@ -1221,11 +1228,10 @@ Compiler::Scope& Compiler::currentScope()
 	return m_scopes.back();
 }
 
-void Compiler::scopeCleanUp(const Scope& scope)
+void Compiler::popOffLocals(const Scope& scope)
 {
 	// Could also execute this code on return so it doesn't need to be done at runtime.
 	// Not sure if there are any cases when it would not work.
-
 	for (const auto& [_, local] : scope.localVariables)
 	{
 		emitOp(Op::PopStack);
@@ -1235,6 +1241,11 @@ void Compiler::scopeCleanUp(const Scope& scope)
 			emitUint8(static_cast<uint8_t>(local.index));
 		}
 	}
+}
+
+void Compiler::scopeCleanUp(const Scope& scope)
+{
+	popOffLocals(scope);
 	if (scope.type == ScopeType::Try)
 	{
 		emitOp(Op::TryEnd);
@@ -1245,10 +1256,16 @@ void Compiler::scopeCleanUp(const Scope& scope)
 	}
 }
 
-Compiler::Status Compiler::cleanUpBeforeJumpingOutOfScope(const Scope& scope)
+Compiler::Status Compiler::cleanUpBeforeJumpingOutOfScope(const Scope& scope, bool popOffLocals)
 {
+	if (popOffLocals)
+	{
+		Compiler::popOffLocals(scope);
+	}
+
 	if ((scope.type == ScopeType::Try))
 	{
+		emitOp(Op::TryEnd);
 		currentByteCode().append(*scope.try_.finallyBlockByteCode);
 	}
 	else if ((scope.type == ScopeType::Catch))

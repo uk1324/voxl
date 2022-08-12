@@ -37,11 +37,10 @@ using namespace Voxl;
 		return fatalError("call stack overflow"); \
 	}
 
-// TODO: Maybe make a better message.
 #define TRY_PUSH_EXCEPTION_HANDLER() \
 	if (m_exceptionHandlers.push() == false) \
 	{ \
-		return fatalError("call stack overflow"); \
+		return fatalError("exception handler stack overflow"); \
 	}
 
 Vm::Vm(Allocator& allocator)
@@ -147,7 +146,10 @@ VmResult Vm::execute(
 		if (result.type == ResultType::Ok)
 		{
 			// The program should always finish without anything on both the excecution and call stack.
-			ASSERT(m_callStack.isEmpty() && m_stack.isEmpty() && m_finallyBlockDepth == 0);
+			ASSERT(m_stack.isEmpty());
+			ASSERT(m_callStack.isEmpty());
+			ASSERT(m_exceptionHandlers.isEmpty());
+			ASSERT(m_finallyBlockDepth == 0);
 			return VmResult::Success;
 		}
 	}
@@ -853,14 +855,14 @@ Vm::Result Vm::run()
 
 		case Op::TryBegin:
 		{
-		const auto jump = readUint32();
-		TRY_PUSH_EXCEPTION_HANDLER();
-		auto& handler = m_exceptionHandlers.top();
-		auto& frame = m_callStack.top();
-		handler.callFrame = &frame;
-		handler.handlerCodeLocation = frame.instructionPointer + jump;
-		handler.stackTopPtrBeforeTry = m_stack.topPtr;
-		break;
+			const auto jump = readUint32();
+			TRY_PUSH_EXCEPTION_HANDLER();
+			auto& handler = m_exceptionHandlers.top();
+			auto& frame = m_callStack.top();
+			handler.callFrame = &frame;
+			handler.handlerCodeLocation = frame.instructionPointer + jump;
+			handler.stackTopPtrBeforeTry = m_stack.topPtr;
+			break;
 		}
 
 		case Op::TryEnd:

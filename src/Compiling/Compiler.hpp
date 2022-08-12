@@ -182,8 +182,9 @@ private:
 	void beginScope(ScopeType scopeType = ScopeType::Default);
 	void endScope();
 	Scope& currentScope();
+	void popOffLocals(const Scope& scope);
 	void scopeCleanUp(const Scope& scope);
-	Status cleanUpBeforeJumpingOutOfScope(const Scope& scope);
+	Status cleanUpBeforeJumpingOutOfScope(const Scope& scope, bool popOffLocals);
 	// TODO: Just make function for get and set that will call variable() or making a function resolveVariable
 	// would be more complicated and require a new type that could be either global, local, orUpvalue and have an
 	// index or a string.

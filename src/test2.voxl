@@ -1,26 +1,140 @@
-/*
-fn test() {
-	x : 0;
-	try {
-		throw 1;
-	} catch * => x {
-		ret;
-	} finally {
-		put(x);
+/*class Range {
+	$init(start, max, step) {
+		$.current = 0;
+		$.max = max;
+		$.step = step;
+	}
+
+	$iter() {
+		ret $;
+	}
+
+	$next() {
+		if $.current == $.max {
+			throw StopIteration();
+		}
+		result : $.current;
+		$.current += $.step;
+		ret result;
 	}
 }
 
-test();*/
+class RuntimeError {
+	$init(msg) {
+		$.msg = msg;
+	}
+}
 
-{
-	x : 0;
-	while true {
-		try {
-			throw 1;
-		} catch * => x {
-			break;
-		} finally {
-			put(x);
+class Number {
+	$init(value) {
+		$.value = value;
+	}
+}
+
+class NaryExpr {
+	$init(op, args) {
+		$.op = op;
+		$.args = args;
+	}
+}
+
+NaryExpr.addOp = 0;
+NaryExpr.mulOp = 1;
+
+fn op_str(op) {
+	match op {
+		{NaryExpr.addOp} => ret "+";
+		{NaryExpr.mulOp} => ret "*";
+		* => throw RuntimeError("invalid operator");
+	}
+}
+
+args : List();
+args.push(Number(5));
+args.push(Number(2));
+
+expr : NaryExpr(NaryExpr.addOp, args);
+
+fn expr_put(expr) {
+	match expr {
+		Number => {
+			put(expr.value);
 		}
+		NaryExpr => {
+			put("(");
+			for i in Range(0, expr.args.size(), 1) {
+				expr_put(expr.args[i]);
+				if i != (expr.args.size() - 1) {
+					put(op_str(expr.op));
+				}
+			}
+			put(")");
+		}
+	}
+}
+
+class SimplificationFailed {}
+
+fn expr_add(lhs, rhs) {
+	match lhs {
+		Number => {
+			match rhs {
+				Number => {
+					ret Number(lhs.value, rhs.value);
+				}
+			}
+		}
+	}
+	throw SimplificationFailed();
+}
+
+fn expr_simplify(expr) {
+	put("expr ");
+	/*match expr {
+		NaryExpr(op = {NaryExpr.addOp}) => {
+			sum : 0;
+			rest : List();
+			for arg in expr.args {
+				put(expr.args.size());
+				match arg {
+					Number => { sum += arg.value; }
+					* => { rest.push(arg); }
+				}
+			}
+			if rest.size() == 0 {
+				ret Number(sum);
+			}
+			if sum != 0 {
+				rest.push(sum);
+			} else if rest.size() == 1 {
+				ret rest[0];
+			}
+			ret NaryExpr(expr.op, rest);
+		}
+		* => { throw SimplificationFailed(); }
+	}*/
+}
+
+loop {
+	try {
+		expr_simplify(expr);
+	} catch SimplificationFailed {
+		break;
+	}
+}
+
+expr_put(expr);
+*/
+// put(op_str(0));
+
+loop {
+	try {
+		put("try");
+		break;
+	} catch * {
+		put("catch");
+		//break;
+	} finally {
+		put("finally");
 	}
 }
