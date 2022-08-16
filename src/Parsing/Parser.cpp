@@ -685,21 +685,21 @@ std::unique_ptr<Expr> Parser::primary()
 		if (match(TokenType::RightBracket))
 		{
 			// decltype because templates cannot deduce from "{}".
-			return std::make_unique<ArrayExpr>(decltype(ArrayExpr::values)(), start, peekPrevious().end);
+			return std::make_unique<ListExpr>(decltype(ListExpr::values)(), start, peekPrevious().end);
 		}
 		std::vector<std::unique_ptr<Expr>> values;
 		
-		for (;;)
+		while (isAtEnd() == false)
 		{
 			values.push_back(expr());
-			if (match(TokenType::RightBrace))
+			if (match(TokenType::RightBracket))
 			{
-				return std::make_unique<ArrayExpr>(std::move(values), start, peekPrevious().end);
+				return std::make_unique<ListExpr>(std::move(values), start, peekPrevious().end);
 			}
 			expect(TokenType::Comma, "expected ','");
-			if (match(TokenType::RightBrace))
+			if (match(TokenType::RightBracket))
 			{
-				return std::make_unique<ArrayExpr>(std::move(values), start, peekPrevious().end);
+				return std::make_unique<ListExpr>(std::move(values), start, peekPrevious().end);
 			}
 		}
 	}

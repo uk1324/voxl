@@ -26,7 +26,7 @@ enum class ExprType
 	Call,
 	Assignment,
 	GetField,
-	Array,
+	List,
 	Lambda,
 	Stmt,
 };
@@ -188,9 +188,9 @@ public:
 	std::string_view fieldName;
 };
 
-struct ArrayExpr final : public Expr
+struct ListExpr final : public Expr
 {
-	ArrayExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size_t end);
+	ListExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size_t end);
 
 	std::vector<std::unique_ptr<Expr>> values;
 };

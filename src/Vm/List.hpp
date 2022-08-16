@@ -13,6 +13,9 @@ struct List : public ObjNativeInstance
 	static LocalValue get_index(Context& c);
 	static LocalValue set_index(Context& c);
 
+	void init();
+	void push(const Value& value);
+
 	static void free(List* list);
 	static void mark(List* list, Allocator& allocator);
 

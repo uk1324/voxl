@@ -47,10 +47,14 @@ namespace Voxl
 		GetIndex, // [value, index]
 		SetIndex, // [value, index, rhs]
 
-		// -> [constant]
+		// [] -> [constant]
 		LoadNull,
 		LoadTrue,
 		LoadFalse,
+
+		CreateList, // [] -> [list]
+		// Python has an instruction LIST_APPEND that also takes the offset from TOS and uses it for list comprehensions.
+		ListPush, // [list, element] -> [list]
 
 		CreateClass, // [name] -> [class]
 		Closure, // localsCount (localsCount * { indexU8, isLocalU8 }) [function] -> [closure]

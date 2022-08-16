@@ -1,5 +1,5 @@
 x : ["this", true, "is", null, "a", 4, "test"];
 
-for i in x {
-	put(i);
+for e in x {
+	put(e);
 }

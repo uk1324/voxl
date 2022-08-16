@@ -113,8 +113,8 @@ GetFieldExpr::GetFieldExpr(std::unique_ptr<Expr> lhs, std::string_view fieldName
 	, fieldName(fieldName)
 {}
 
-ArrayExpr::ArrayExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size_t end)
-	: Expr(start, end, ExprType::Array)
+ListExpr::ListExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size_t end)
+	: Expr(start, end, ExprType::List)
 	, values(std::move(values))
 {}
 

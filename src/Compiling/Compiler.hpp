@@ -164,7 +164,7 @@ private:
 	Status identifierExpr(const IdentifierExpr& expr);
 	Status callExpr(const CallExpr& expr);
 	Status assignmentExpr(const AssignmentExpr& expr);
-	Status arrayExpr(const ArrayExpr& expr);
+	Status listExpr(const ListExpr& expr);
 	Status getFieldExpr(const GetFieldExpr& expr);
 	Status lambdaExpr(const LambdaExpr& expr);
 	Status stmtExpr(const StmtExpr& expr);
@@ -176,7 +176,9 @@ private:
 
 	// Expects the variable initializer to be on top of the stack.
 	// [initializer] -> []
+	Status createVariableImplementation(std::string_view name, const SourceLocation& location);
 	Status createVariable(std::string_view name, const SourceLocation& location);
+	Status createSpecialVariable(std::string_view name, const SourceLocation& location);
 	// Could make a RAII class
 	void beginScope(ScopeType scopeType = ScopeType::Default);
 	void endScope();
@@ -184,12 +186,10 @@ private:
 	void popOffLocals(const Scope& scope);
 	void scopeCleanUp(const Scope& scope);
 	Status cleanUpBeforeJumpingOutOfScope(const Scope& scope, bool popOffLocals);
-	// TODO: Just make function for get and set that will call variable() or making a function resolveVariable
-	// would be more complicated and require a new type that could be either global, local, orUpvalue and have an
-	// index or a string.
+	static bool canVariableBeCreatedAndAssigned(std::string_view name);
 	Status variable(std::string_view name, bool trueIfLoadFalseIfSet);
 	Status loadVariable(std::string_view name);
-	Status setVariable(std::string_view name);
+	Status setVariable(std::string_view name, const SourceLocation& location);
 	// [value] -> [field]
 	Status getField(std::string_view fieldName);
 	Status loadConstant(size_t index);

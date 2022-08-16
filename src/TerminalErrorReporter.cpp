@@ -106,6 +106,7 @@ void TerminalErrorReporter::onVmError(const Vm& vm, std::string_view message)
 
 void TerminalErrorReporter::onUncaughtException(const Vm& vm, const Value& value, std::string_view message)
 {
+	ASSERT_NOT_REACHED();
 }
 
 void TerminalErrorReporter::errorAt(const SourceLocation& location, std::string_view message)

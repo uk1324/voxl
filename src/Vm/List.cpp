@@ -8,9 +8,7 @@ using namespace Voxl;
 LocalValue List::init(Context& c)
 {
 	auto list = c.args(0).asObj<List>();
-	list->capacity = 0;
-	list->size = 0;
-	list->data = nullptr;
+	list->init();
 	return LocalValue::null(c);
 }
 
@@ -24,17 +22,7 @@ LocalValue List::iter(Context& c)
 LocalValue List::push(Context& c)
 {
 	auto list = c.args(0).asObj<List>();
-
-	if (list->size + 1 > list->capacity)
-	{
-		auto oldData = list->data;
-		list->capacity = (list->capacity == 0) ? 8 : list->capacity * 2;
-		list->data = reinterpret_cast<Value*>(::operator new(sizeof(Value) * list->capacity));
-		memcpy(list->data, oldData, sizeof(Value) * list->size);
-	}
-
-	list->data[list->size] = c.args(1).value;
-	list->size++;
+	list->push(c.args(1).value);
 	// TODO: Maybe return the array back to allow chaining though in most languages
 	// methods with side effects don't allow chaining. Could also return the inserted element.
 	// value : null;
@@ -60,6 +48,27 @@ LocalValue List::set_index(Context& c)
 {
 	// TODO: Change the order of arguments.
 	return LocalValue(c.args(1).asObj<List>()->data[c.args(2).asInt()] = c.args(0).value, c);
+}
+
+void List::init()
+{
+	capacity = 0;
+	size = 0;
+	data = nullptr;
+}
+
+void List::push(const Value& value)
+{
+	if (size + 1 > capacity)
+	{
+		auto oldData = data;
+		capacity = (capacity == 0) ? 8 : capacity * 2;
+		data = reinterpret_cast<Value*>(::operator new(sizeof(Value) * capacity));
+		memcpy(data, oldData, sizeof(Value) * size);
+	}
+
+	data[size] = value;
+	size++;
 }
 
 void List::free(List* list)

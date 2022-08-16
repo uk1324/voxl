@@ -43,6 +43,7 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "break_inside_try_catch", "trycatchfinallytryfinally" },
 	{ "ret_inside_try_catch", "trycatchfinallytryfinally" },
 	{ "inheritance", "xy" },
+	{ "list_literals", "thistrueisnulla4test" },
 };
 
 void testFailed(std::string_view name)
@@ -67,6 +68,9 @@ static LocalValue putln(Context& c)
 	return LocalValue::null(c);
 }
 
+// TODO: Make a test that checks if "$" can be set or redeclared.
+
+// TODO: Maybe test multidimensional arrays.
 int main()
 {
 	std::stringstream output;

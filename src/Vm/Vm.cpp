@@ -1001,6 +1001,30 @@ Vm::Result Vm::run()
 			break;
 		}
 
+		case Op::CreateList:
+		{
+			auto list = m_allocator->allocateNativeInstance(m_listType);
+			static_cast<List*>(list)->init();
+			TRY_PUSH(Value(list));
+			break;
+		}
+
+		case Op::ListPush:
+		{
+			auto& listValue = m_stack.peek(1);
+			const auto& newElement = m_stack.peek(0);
+			ASSERT(listValue.isObj());
+			auto listObj = listValue.asObj();
+			ASSERT(listObj->isNativeInstance());
+			auto listInstance = listObj->asNativeInstance();
+			// TODO: Make this check a function.
+			ASSERT(listInstance->class_->mark == reinterpret_cast<MarkingFunction>(List::mark));
+			const auto list = static_cast<List*>(listInstance);
+			m_stack.pop();
+			list->push(newElement);
+			break;
+		}
+
 		default:
 			ASSERT_NOT_REACHED();
 			return Result::fatal();

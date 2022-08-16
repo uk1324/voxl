@@ -157,11 +157,15 @@ size_t Voxl::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::ModuleSetLoaded: return justOp("moduleSetLoaded");
 		case Op::FinallyBegin: return justOp("finallyBegin");
 		case Op::FinallyEnd: return justOp("finallyEnd");
-
-		default:
-			std::cout << "invalid op";
-			return 1;
+		case Op::CreateList: return justOp("createList");
+		case Op::ListPush: return justOp("listPush");
+		case Op::Rethrow: return justOp("rethrow");
+		case Op::Inherit: return justOp("opInherit");
+		case Op::ExpressionStatementBegin: return justOp("expressionStatementBegin");
+		case Op::ExpressionStatementReturn: return justOp("expresionStatementReturn");
 	}
+	std::cout << "invalid op";
+	return 1;
 }
 
 void Voxl::disassembleByteCode(const ByteCode& byteCode, const Allocator& allocator)

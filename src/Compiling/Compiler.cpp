@@ -1,5 +1,3 @@
-#include "Compiler.hpp"
-#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -80,11 +78,20 @@ Compiler::Status Compiler::compileFunction(
 
 	beginScope();
 	currentScope().functionDepth++;
-
-	for (const auto& argumentName : arguments)
+	for (size_t i = 0; i < arguments.size(); i++)
 	{
-		// Could store the token for better error messages about redeclaration.
-		TRY(createVariable(argumentName, location));
+		const auto& argumentName = arguments[i];
+		// This allows for any function to have it's first argument be called '$'. Might want to change it later. Could pass an argument that says
+		// if this is a function or method.
+		if ((i == 0) && (argumentName == "$"))
+		{
+			TRY(createSpecialVariable(argumentName, location));
+		}
+		else
+		{
+			// Could store the token for better error messages about redeclaration.
+			TRY(createVariable(argumentName, location));
+		}
 	}
 
 	TRY(compile(stmts));
@@ -636,7 +643,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 		CASE_EXPR_TYPE(Identifier, identifierExpr)
 		CASE_EXPR_TYPE(Call, callExpr)
 		CASE_EXPR_TYPE(Assignment, assignmentExpr)
-		CASE_EXPR_TYPE(Array, arrayExpr)
+		CASE_EXPR_TYPE(List, listExpr)
 		CASE_EXPR_TYPE(GetField, getFieldExpr)
 		CASE_EXPR_TYPE(Lambda, lambdaExpr)
 		CASE_EXPR_TYPE(Stmt, stmtExpr)
@@ -782,7 +789,7 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 	if (expr.lhs->type == ExprType::Identifier)
 	{
 		const auto lhs = static_cast<IdentifierExpr&>(*expr.lhs.get()).identifier;
-		TRY(setVariable(lhs));
+		TRY(setVariable(lhs, expr.location()));
 		return Status::Ok;
 	}
 	else if (expr.lhs->type == ExprType::GetField)
@@ -824,15 +831,18 @@ Compiler::Status Compiler::callExpr(const CallExpr& expr)
 	return Status::Ok;
 }
 
-Compiler::Status Compiler::arrayExpr(const ArrayExpr&)
+Compiler::Status Compiler::listExpr(const ListExpr& expr)
 {
-	ASSERT_NOT_REACHED();
-	/*for (const auto& value : expr.values)
+	// Could allocate with capacity to fit all the values.
+	// Python optimizes by evaluating all elements frist and using an instruction that takes the size of the list if there are less than or exacly 30
+	// elements else it just creates array of size 0 and uses append.
+	emitOp(Op::CreateList);
+	for (const auto& value : expr.values)
 	{
 		TRY(compile(value));
+		emitOp(Op::ListPush);
 	}
-	TRY(emitOpArg(Op::CreateArray, expr.values.size(), expr.start, expr.end()));*/
-	return Status::Error;
+	return Status::Ok;
 }
 
 Compiler::Status Compiler::lambdaExpr(const LambdaExpr& expr)
@@ -983,7 +993,7 @@ Compiler::Status Compiler::classPtrn(const ClassPtrn& ptrn)
 	return Status::Ok;
 }
 
-Compiler::Status Compiler::createVariable(std::string_view name, const SourceLocation& location)
+Compiler::Status Compiler::createVariableImplementation(std::string_view name, const SourceLocation& location)
 {
 	if (m_scopes.size() == 0)
 	{
@@ -1098,8 +1108,10 @@ Compiler::Status Compiler::loadVariable(std::string_view name)
 	return variable(name, true);
 }
 
-Compiler::Status Compiler::setVariable(std::string_view name)
+Compiler::Status Compiler::setVariable(std::string_view name, const SourceLocation& location)
 {
+	if (canVariableBeCreatedAndAssigned(name) == false)
+		return errorAt(location, "cannot assign to special variables");
 	return variable(name, false);
 }
 
@@ -1203,6 +1215,18 @@ int Compiler::currentFunctionDepth()
 	return currentScope().functionDepth;
 }
 
+Compiler::Status Compiler::createVariable(std::string_view name, const SourceLocation& location)
+{
+	if (canVariableBeCreatedAndAssigned(name) == false)
+		return errorAt(location, "user defined variables cannot start with '$'");
+	return createVariableImplementation(name, location);
+}
+
+Compiler::Status Compiler::createSpecialVariable(std::string_view name, const SourceLocation& location)
+{
+	return createVariableImplementation(name, location);
+}
+
 void Compiler::beginScope(ScopeType scopeType)
 {
 	if (m_scopes.size() == 0)
@@ -1279,6 +1303,11 @@ Compiler::Status Compiler::cleanUpBeforeJumpingOutOfScope(const Scope& scope, bo
 		currentByteCode().append(*scope.catch_.finallyBlockByteCode);
 	}
 	return Status::Ok;
+}
+
+bool Compiler::canVariableBeCreatedAndAssigned(std::string_view name)
+{
+	return (name != "$");
 }
 
 Compiler::Status Compiler::errorAt(const SourceLocation& location, const char* format, ...)
