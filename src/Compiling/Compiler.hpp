@@ -3,7 +3,7 @@
 #include <Ast.hpp>
 #include <Allocator.hpp>
 #include <ByteCode.hpp>
-#include <ErrorPrinter.hpp>
+#include <ErrorReporter.hpp>
 #include <unordered_map>
 
 // To store the line numbers of the compiled code I could when calling compile on an expr or stmt store the line number of the start of it
@@ -122,15 +122,14 @@ private:
 public:
 	Compiler(Allocator& allocator);
 
-	Result compile(const std::vector<std::unique_ptr<Stmt>>& ast, ErrorPrinter& errorPrinter);
+	Result compile(const std::vector<std::unique_ptr<Stmt>>& ast, const SourceInfo& sourceInfo, ErrorReporter& errorReporter);
 
 private:
 	Status compileFunction(
 		ObjFunction* function,
 		const std::vector<std::string_view>& arguments, 
 		const StmtList& stmts, 
-		size_t start, 
-		size_t end);
+		const SourceLocation& location);
 	Status compile(const std::unique_ptr<Stmt>& stmt);
 	Status compile(const std::vector<std::unique_ptr<Stmt>>& stmts);
 	Status exprStmt(const ExprStmt& stmt);
@@ -177,7 +176,7 @@ private:
 
 	// Expects the variable initializer to be on top of the stack.
 	// [initializer] -> []
-	Status createVariable(std::string_view name, size_t start, size_t end);
+	Status createVariable(std::string_view name, const SourceLocation& location);
 	// Could make a RAII class
 	void beginScope(ScopeType scopeType = ScopeType::Default);
 	void endScope();
@@ -188,14 +187,15 @@ private:
 	// TODO: Just make function for get and set that will call variable() or making a function resolveVariable
 	// would be more complicated and require a new type that could be either global, local, orUpvalue and have an
 	// index or a string.
-	enum class VariableOp { Get, Set };
-	Status variable(std::string_view name, VariableOp op);
+	Status variable(std::string_view name, bool trueIfLoadFalseIfSet);
+	Status loadVariable(std::string_view name);
+	Status setVariable(std::string_view name);
 	// [value] -> [field]
 	Status getField(std::string_view fieldName);
 	Status loadConstant(size_t index);
 	ByteCode& currentByteCode();
 	void emitOp(Op op);
-	Status emitOpArg(Op op, size_t arg, size_t start, size_t end);
+	Status emitOpArg(Op op, size_t arg, const SourceLocation& location);
 	void emitUint8(uint8_t value);
 	void emitUint32(uint32_t value);
 	// Could make a class RAII class that reports an error if the jump was not set at the end of the scope.
@@ -207,10 +207,7 @@ private:
 	int currentFunctionDepth();
 
 	// TODO: It might be better to have a function location that would return a struct contaning the start end.
-	Status errorAt(size_t start, size_t end, const char* format, ...);
-	Status errorAt(const Stmt& stmt, const char* format, ...);
-	Status errorAt(const Expr& expr, const char* format, ...);
-	Status errorAt(const Token& token, const char* format, ...);
+	Status errorAt(const SourceLocation& location, const char* format, ...);
 
 	// If only constants are allocated by the compiler the marking function probably isn't needed.
 	static void mark(Compiler* compiler, Allocator& allocator);
@@ -236,7 +233,8 @@ public:
 	Allocator::MarkingFunctionHandle m_rootMarkingFunctionHandle;
 
 	bool m_hadError;
-	ErrorPrinter* m_errorPrinter;
+	ErrorReporter* m_errorReporter;
+	const SourceInfo* m_sourceInfo;
 };
 
 }

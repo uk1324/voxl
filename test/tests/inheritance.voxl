@@ -1,5 +1,4 @@
-class Super
-{
+class Super {
 	x() {
 		put("x");
 	}

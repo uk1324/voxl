@@ -1,8 +1,10 @@
 #include "Compiler.hpp"
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
 #include <Debug/Disassembler.hpp>
+#include <Format.hpp>
 #include <iostream>
 
 #define TRY(somethingThatReturnsStatus) \
@@ -19,15 +21,17 @@ using namespace Voxl;
 Compiler::Compiler(Allocator& allocator)
 	: m_hadError(false)
 	, m_allocator(allocator)
-	, m_errorPrinter(nullptr)
+	, m_errorReporter(nullptr)
+	, m_sourceInfo(nullptr)
 	, m_rootMarkingFunctionHandle(allocator.registerMarkingFunction(this, Compiler::mark))
 	, m_module(nullptr)
 {}
 
-Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast, ErrorPrinter& errorPrinter)
+Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast, const SourceInfo& sourceInfo, ErrorReporter& errorReporter)
 {
 	m_hadError = false;
-	m_errorPrinter = &errorPrinter;
+	m_errorReporter = &errorReporter;
+	m_sourceInfo = &sourceInfo;
 
 	m_module = m_allocator.allocateModule();
 	const auto scriptName = m_allocator.allocateStringConstant("script").value;
@@ -44,7 +48,7 @@ Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast
 	}
 
 	// The return from program is on the last line of the file.
-	m_lineNumberStack.push_back(m_errorPrinter->sourceInfo().lineStartOffsets.size());
+	m_lineNumberStack.push_back(m_sourceInfo->lineStartOffsets.size());
 	// Have to load null becuase module functions have to return just like normal functions.
 	// If nothing was on the stack it might return a value from an empty stack.
 	emitOp(Op::LoadNull);
@@ -69,8 +73,7 @@ Compiler::Status Compiler::compileFunction(
 	ObjFunction* function,
 	const std::vector<std::string_view>& arguments, 
 	const StmtList& stmts, 
-	size_t start, 
-	size_t end)
+	const SourceLocation& location)
 {
 	m_functionByteCodeStack.push_back(&function->byteCode);
 	m_functions.push_back(Function{});
@@ -81,7 +84,7 @@ Compiler::Status Compiler::compileFunction(
 	for (const auto& argumentName : arguments)
 	{
 		// Could store the token for better error messages about redeclaration.
-		TRY(createVariable(argumentName, start, end));
+		TRY(createVariable(argumentName, location));
 	}
 
 	TRY(compile(stmts));
@@ -124,7 +127,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Stmt>& stmt)
 #define CASE_STMT_TYPE(stmtType, stmtFunction) \
 	case StmtType::stmtType: TRY(stmtFunction(*static_cast<stmtType##Stmt*>(stmt.get()))); break;
 
-	m_lineNumberStack.push_back(m_errorPrinter->sourceInfo().getLine(stmt->start));
+	m_lineNumberStack.push_back(m_sourceInfo->getLine(stmt->start));
 	switch (stmt.get()->type)
 	{
 		CASE_STMT_TYPE(Expr, exprStmt)
@@ -180,7 +183,7 @@ Compiler::Status Compiler::variableDeclarationStmt(const VariableDeclarationStmt
 		}
 
 		// The initializer is evaluated before declaring the variable so a variable from an outer scope with the same name can be used.
-		TRY(createVariable(name, stmt.start, stmt.end()));
+		TRY(createVariable(name, stmt.location()));
 
 	}
 	return Status::Ok;
@@ -201,8 +204,8 @@ Compiler::Status Compiler::fnStmt(const FnStmt& stmt)
 	const auto [functionConstant, function] =
 		m_allocator.allocateFunctionConstant(name, static_cast<int>(stmt.arguments.size()), &m_module->globals);
 	TRY(loadConstant(functionConstant));
-	TRY(createVariable(stmt.name, stmt.start, stmt.end()));
-	return compileFunction(function, stmt.arguments, stmt.stmts, stmt.start, stmt.end());
+	TRY(createVariable(stmt.name, stmt.location()));
+	return compileFunction(function, stmt.arguments, stmt.stmts, stmt.location());
 }
 
 Compiler::Status Compiler::retStmt(const RetStmt& stmt)
@@ -213,7 +216,7 @@ Compiler::Status Compiler::retStmt(const RetStmt& stmt)
 		const auto& scope = m_scopes[i];
 		if (scope.type == ScopeType::Finally)
 		{
-			return errorAt(stmt, "ret not allowed inside finally block");
+			return errorAt(stmt.location(), "ret not allowed inside finally block");
 		}
 		else
 		{
@@ -315,7 +318,7 @@ Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
 {
 	if (m_loops.empty() || (m_scopes[m_loops.back().scopeDepth].functionDepth != currentFunctionDepth()))
 	{
-		return errorAt(stmt, "cannot use break outside of a loop");
+		return errorAt(stmt.location(), "cannot use break outside of a loop");
 	}
 	auto& currentLoop = m_loops.back();
 
@@ -325,14 +328,12 @@ Compiler::Status Compiler::breakStmt(const BreakStmt& stmt)
 		const auto scope = m_scopes[i];
 
 		if ((scope.functionDepth == currentScope().functionDepth) && (scope.type == ScopeType::Finally))
-			return errorAt(stmt, "break not allowed inside finally block");
+			return errorAt(stmt.location(), "break not allowed inside finally block");
 
 		TRY(cleanUpBeforeJumpingOutOfScope(scope, true));
 	}
 	const auto jump = emitJump(Op::Jump);
 	currentLoop.breakJumpLocations.push_back(jump);
-	std::cout << "break\n";
-	disassembleByteCode(currentByteCode(), m_allocator);
 	return Status::Ok;
 }
 
@@ -396,7 +397,7 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 		// Declare a variable even if unused so the VM catch doesn't have to handle it as a special case.
 		// This also registers it inside the compiler so break and continue statements know to pop it off.
 		const auto name = catchBlock.caughtValueName.has_value() ? *catchBlock.caughtValueName : "";
-		TRY(createVariable(name, stmt.start, stmt.end()));
+		TRY(createVariable(name, stmt.location()));
 		beginScope(ScopeType::Catch);
 		currentScope().catch_.finallyBlockByteCode = &finallyBlockByteCode;
 		TRY(compile(catchBlock.block));
@@ -432,7 +433,7 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 		setJumpToHere(jumpToFinallyWithRethrow);
 		beginScope();
 		// Register caught value to the compiler so it is popped of when needed.
-		TRY(createVariable("", stmt.start, stmt.end()));
+		TRY(createVariable("", stmt.location()));
 		currentByteCode().append(finallyBlockByteCode);
 		endScope();
 		emitOp(Op::Throw);
@@ -466,7 +467,7 @@ Compiler::Status Compiler::compileMethods(std::string_view className, const std:
 		const auto [functionConstant, function] =
 			m_allocator.allocateFunctionConstant(name, static_cast<int>(arguments.size()), &m_module->globals);
 
-		TRY(compileFunction(function, arguments, method->stmts, method->start, method->end()));
+		TRY(compileFunction(function, arguments, method->stmts, method->location()));
 
 		const auto methodNameConstant = m_allocator.allocateStringConstant(method->name).constant;
 		TRY(loadConstant(functionConstant));
@@ -482,7 +483,7 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 	// If classes outside the global scope were allowed they would need to be created each time the scope is executed.
 	// Creating the class at compile time would require registering it to the GC so it doesn't get deleted.
 	if (m_scopes.size() > 0)
-		return errorAt(stmt, "classes can only be created at global scope");
+		return errorAt(stmt.location(), "classes can only be created at global scope");
 
 	const auto [classNameConstant, className] = m_allocator.allocateStringConstant(stmt.name);
 
@@ -490,11 +491,17 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 	TRY(loadConstant(classNameConstant));
 	emitOp(Op::CreateClass);
 
+	if (stmt.superclassName.has_value())
+	{
+		TRY(loadVariable(*stmt.superclassName));
+		emitOp(Op::Inherit);
+	}
+
 	TRY(compileMethods(stmt.name, stmt.methods));
 
 	// If I allow classes to be created in local scope then this code needs to change becuase else the class wouldn't
 	// be able to access itself.
-	TRY(createVariable(stmt.name, stmt.start, stmt.end()));
+	TRY(createVariable(stmt.name, stmt.location()));
 
 	return Status::Ok;
 }
@@ -502,9 +509,9 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 Compiler::Status Compiler::implStmt(const ImplStmt& stmt)
 {
 	if (m_scopes.size() > 0)
-		return errorAt(stmt, "impl statements can only appear at global scope");
+		return errorAt(stmt.location(), "impl statements can only appear at global scope");
 	// TODO: Add type checking if the type is a class either here or in Op::StoreMethod.
-	TRY(variable(stmt.typeName, VariableOp::Get));
+	TRY(loadVariable(stmt.typeName));
 	TRY(compileMethods(stmt.typeName, stmt.methods));
 	emitOp(Op::PopStack);
 	return Status::Ok;
@@ -514,7 +521,7 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 {
 	// TODO: Check if there are multiple AlwaysTrue patterns or patterns after AlwaysTrue. Report only warning.
 	TRY(compile(stmt.expr));
-	TRY(createVariable(".matchedValue", stmt.start, stmt.end()));
+	TRY(createVariable(".matchedValue", stmt.location()));
 	
 	std::vector<size_t> jumpsToEnd;
 	for (const auto& case_ : stmt.cases)
@@ -546,7 +553,7 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 			return false;
 		};
 		if (isStmtAllowedInMatchExpr(case_.stmt) == false)
-			return errorAt(stmt, "statement not allowed in match expression");
+			return errorAt(stmt.location(), "statement not allowed in match expression");
 
 		TRY(compile(case_.stmt));
 		jumpsToEnd.push_back(emitJump(Op::Jump));
@@ -582,14 +589,14 @@ Compiler::Status Compiler::useStmt(const UseStmt& stmt)
 		? *stmt.variableName
 		: std::filesystem::path(stmt.path).stem();
 
-	TRY(createVariable(variableName.u8string(), stmt.start, stmt.end()));
+	TRY(createVariable(variableName.u8string(), stmt.location()));
 	return Status::Ok;
 }
 
 Compiler::Status Compiler::useAllStmt(const UseAllStmt& stmt)
 {
 	if (m_scopes.size() > 0)
-		return errorAt(stmt, "use all can only appear at global scope");
+		return errorAt(stmt.location(), "use all can only appear at global scope");
 	TRY(loadModule(stmt.path));
 	emitOp(Op::ModuleImportAllToGlobalNamespace);
 	return Status::Ok;
@@ -601,11 +608,11 @@ Compiler::Status Compiler::useSelectiveStmt(const UseSelectiveStmt& stmt)
 	for (const auto& [originalName, newName] : stmt.variablesToImport)
 	{
 		if (newName.has_value() && originalName == newName)
-			return errorAt(stmt, "imported variable ('%.*s') name is the same as it's alias name", newName->length(), newName->data());
+			return errorAt(stmt.location(), "imported variable ('%.*s') name is the same as it's alias name", newName->length(), newName->data());
 
 		emitOp(Op::CloneTop); // getField consumes the value so the TOS has to be cloned.
 		TRY(getField(originalName));
-		TRY(createVariable(newName.has_value() ? *newName : originalName, stmt.start, stmt.end()));
+		TRY(createVariable(newName.has_value() ? *newName : originalName, stmt.location()));
 	}
 	emitOp(Op::PopStack); // Pop the module.
 	return Status::Ok;
@@ -616,7 +623,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 #define CASE_EXPR_TYPE(exprType, exprFunction) \
 	case ExprType::exprType: TRY(exprFunction(*static_cast<exprType##Expr*>(expr.get()))); break;
 
-	m_lineNumberStack.push_back(m_errorPrinter->sourceInfo().getLine(expr->start));
+	m_lineNumberStack.push_back(m_sourceInfo->getLine(expr->start));
 	switch (expr.get()->type)
 	{
 		CASE_EXPR_TYPE(IntConstant, intConstantExpr)
@@ -755,7 +762,7 @@ Compiler::Status Compiler::unaryExpr(const UnaryExpr& expr)
 
 Compiler::Status Compiler::identifierExpr(const IdentifierExpr& expr)
 {
-	return variable(expr.identifier, VariableOp::Get);
+	return loadVariable(expr.identifier);
 }
 
 Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
@@ -775,7 +782,7 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 	if (expr.lhs->type == ExprType::Identifier)
 	{
 		const auto lhs = static_cast<IdentifierExpr&>(*expr.lhs.get()).identifier;
-		TRY(variable(lhs, VariableOp::Set));
+		TRY(setVariable(lhs));
 		return Status::Ok;
 	}
 	else if (expr.lhs->type == ExprType::GetField)
@@ -799,7 +806,7 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 		}
 	}
 
-	return errorAt(expr, "invalid left side of assignment");
+	return errorAt(expr.location(), "invalid left side of assignment");
 }
 
 Compiler::Status Compiler::callExpr(const CallExpr& expr)
@@ -834,7 +841,7 @@ Compiler::Status Compiler::lambdaExpr(const LambdaExpr& expr)
 	const auto [nameConstant, name] = m_allocator.allocateStringConstant(ANONYMOUS_FUNCTION_NAME);
 	const auto [functionConstant, function] =
 		m_allocator.allocateFunctionConstant(name, static_cast<int>(expr.arguments.size()), &m_module->globals);
-	TRY(compileFunction(function, expr.arguments, expr.stmts, expr.start, expr.end()));
+	TRY(compileFunction(function, expr.arguments, expr.stmts, expr.location()));
 	TRY(loadConstant(functionConstant));
 	return Status::Ok;
 }
@@ -912,7 +919,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Ptrn>& ptrn)
 #define CASE_PTRN_TYPE(ptrnType, ptrnFunction) \
 	case PtrnType::ptrnType: TRY(ptrnFunction(*static_cast<ptrnType##Ptrn*>(ptrn.get()))); break;	
 
-	m_lineNumberStack.push_back(m_errorPrinter->sourceInfo().getLine(ptrn->start));
+	m_lineNumberStack.push_back(m_sourceInfo->getLine(ptrn->start));
 	switch (ptrn->type)
 	{
 		CASE_PTRN_TYPE(Class, classPtrn)
@@ -941,7 +948,7 @@ Compiler::Status Compiler::exprPtrn(const ExprPtrn& ptrn)
 
 Compiler::Status Compiler::classPtrn(const ClassPtrn& ptrn)
 {
-	TRY(variable(ptrn.className, VariableOp::Get));
+	TRY(loadVariable(ptrn.className));
 	emitOp(Op::MatchClass);
 
 	if (ptrn.fieldPtrns.size() > 0)
@@ -976,7 +983,7 @@ Compiler::Status Compiler::classPtrn(const ClassPtrn& ptrn)
 	return Status::Ok;
 }
 
-Compiler::Status Compiler::createVariable(std::string_view name, size_t start, size_t end)
+Compiler::Status Compiler::createVariable(std::string_view name, const SourceLocation& location)
 {
 	if (m_scopes.size() == 0)
 	{
@@ -989,7 +996,7 @@ Compiler::Status Compiler::createVariable(std::string_view name, size_t start, s
 	const auto variable = locals.find(name);
 	if (variable != locals.end())
 	{
-		return errorAt(start, end, "redeclaration of variable '%.*s'", name.size(), name.data());
+		return errorAt(location, "redeclaration of variable '%.*s'", name.size(), name.data());
 	}
 	// TODO: Make this better maybe change scopes to store the count or maybe store it with a local.
 	size_t localsCount = 0;
@@ -1005,7 +1012,9 @@ Compiler::Status Compiler::createVariable(std::string_view name, size_t start, s
 	return Status::Ok;
 }
 
-Compiler::Status Compiler::variable(std::string_view name, VariableOp op)
+// Could make the function get variable location which would return a sum type with all the possible options 
+// but just using a flag to for load or set is simpler.
+Compiler::Status Compiler::variable(std::string_view name, bool trueIfLoadFalseIfSet)
 {
 	for (auto it = m_scopes.rbegin(); it != m_scopes.rend(); it++)
 	{
@@ -1018,7 +1027,6 @@ Compiler::Status Compiler::variable(std::string_view name, VariableOp op)
 			{
 				variable.isCaptured = true;
 
-				//m_functions[scope.functionDepth].upvalues.push_back(Upvalue{ variable.index, true });
 				auto depth = scope.functionDepth + 1;
 
 				auto& localUpvalues = m_functions[depth].upvalues;
@@ -1057,26 +1065,18 @@ Compiler::Status Compiler::variable(std::string_view name, VariableOp op)
 					lastIndex = newLastIndex;
 				}
 
-				if (op == VariableOp::Set)
-				{
-					emitOp(Op::SetUpvalue);
-				}
-				else if (op == VariableOp::Get)
-				{
+				if (trueIfLoadFalseIfSet)
 					emitOp(Op::GetUpvalue);
-				}
+				else
+					emitOp(Op::SetUpvalue);
 				emitUint32(static_cast<uint32_t>(lastIndex));
 			}
 			else
 			{
-				if (op == VariableOp::Set)
-				{
-					emitOp(Op::SetLocal);
-				}
-				else if (op == VariableOp::Get)
-				{
+				if (trueIfLoadFalseIfSet)
 					emitOp(Op::GetLocal);
-				}
+				else
+					emitOp(Op::SetLocal);
 				emitUint32(static_cast<uint32_t>(local->second.index));
 			}
 			
@@ -1086,15 +1086,21 @@ Compiler::Status Compiler::variable(std::string_view name, VariableOp op)
 
 	const auto constant = m_allocator.allocateStringConstant(name).constant;
 	TRY(loadConstant(constant));
-	if (op == VariableOp::Set)
-	{
-		emitOp(Op::SetGlobal);
-	}
-	else if (op == VariableOp::Get)
-	{
+	if (trueIfLoadFalseIfSet)
 		emitOp(Op::GetGlobal);
-	}
+	else
+		emitOp(Op::SetGlobal);
 	return Status::Ok;
+}
+
+Compiler::Status Compiler::loadVariable(std::string_view name)
+{
+	return variable(name, true);
+}
+
+Compiler::Status Compiler::setVariable(std::string_view name)
+{
+	return variable(name, false);
 }
 
 Compiler::Status Compiler::getField(std::string_view fieldName)
@@ -1125,11 +1131,11 @@ void Compiler::emitOp(Op op)
 	currentByteCode().lineNumberAtOffset.push_back(m_lineNumberStack.back());
 }
 
-Compiler::Status Compiler::emitOpArg(Op op, size_t arg, size_t start, size_t end)
+Compiler::Status Compiler::emitOpArg(Op op, size_t arg, const SourceLocation& location)
 {
 	if (arg > std::numeric_limits<uint32_t>::max())
 	{
-		return errorAt(start, end, "argument size too big");
+		return errorAt(location, "argument size too big");
 	}
 	emitOp(op);
 	emitUint32(static_cast<uint32_t>(arg));
@@ -1275,42 +1281,12 @@ Compiler::Status Compiler::cleanUpBeforeJumpingOutOfScope(const Scope& scope, bo
 	return Status::Ok;
 }
 
-Compiler::Status Compiler::errorAt(size_t start, size_t end, const char* format, ...)
+Compiler::Status Compiler::errorAt(const SourceLocation& location, const char* format, ...)
 {
 	m_hadError = true;
 	va_list args;
 	va_start(args, format);
-	m_errorPrinter->at(start, end, format, args);
-	va_end(args);
-	return Status::Error;
-}
-
-Compiler::Status Compiler::errorAt(const Stmt& stmt, const char* format, ...)
-{
-	m_hadError = true;
-	va_list args;
-	va_start(args, format);
-	m_errorPrinter->at(stmt.start, stmt.end(), format, args);
-	va_end(args);
-	return Status::Error;
-}
-
-Compiler::Status Compiler::errorAt(const Expr& expr, const char* format, ...)
-{
-	m_hadError = true;
-	va_list args;
-	va_start(args, format);
-	m_errorPrinter->at(expr.start, expr.end(), format, args);
-	va_end(args);
-	return Status::Error;
-}
-
-Compiler::Status Compiler::errorAt(const Token& token, const char* format, ...)
-{
-	m_hadError = true;
-	va_list args;
-	va_start(args, format);
-	m_errorPrinter->at(token.start, token.end, format, args);
+	m_errorReporter->onCompilerError(location, formatToTempBuffer(format, args));
 	va_end(args);
 	return Status::Error;
 }

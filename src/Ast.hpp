@@ -36,6 +36,7 @@ struct Expr
 	Expr(size_t start, size_t end, ExprType type);
 	virtual ~Expr() = default;
 
+	SourceLocation location() const;
 	size_t end() const;
 
 	const size_t start;
@@ -71,6 +72,8 @@ struct Stmt
 {
 	Stmt(size_t start, size_t end, StmtType type);
 	virtual ~Stmt() = default;
+
+	SourceLocation location() const;
 	size_t end() const;
 
 	const size_t start;
@@ -91,7 +94,9 @@ struct Ptrn
 {
 	Ptrn(size_t start, size_t end, PtrnType type);
 	virtual ~Ptrn() = default;
+
 	size_t end() const;
+	SourceLocation location() const;
 
 	const size_t start;
 	const size_t length;
@@ -296,9 +301,15 @@ struct BreakStmt final : public Stmt
 
 struct ClassStmt final : public Stmt
 {
-	ClassStmt(std::string_view name, std::vector<std::unique_ptr<FnStmt>> methods, size_t start, size_t end);
+	ClassStmt(
+		std::string_view name, 
+		std::optional<std::string_view> superclassName,
+		std::vector<std::unique_ptr<FnStmt>> methods, 
+		size_t start, 
+		size_t end);
 
 	std::string_view name;
+	std::optional<std::string_view> superclassName;
 	std::vector<std::unique_ptr<FnStmt>> methods;
 };
 

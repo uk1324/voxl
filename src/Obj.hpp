@@ -47,11 +47,33 @@ struct Obj
 	{ \
 		ASSERT(is##objType()); \
 		return reinterpret_cast<Obj##objType*>(this); \
+	} \
+	const Obj##objType* as##objType() const \
+	{ \
+		ASSERT(is##objType()); \
+		return reinterpret_cast<const Obj##objType*>(this); \
 	}
 
 	OBJ_TYPE_LIST(GENERATE_HELPERS)
-
 #undef GENERATE_HELPERS
+
+	bool Obj::canBeBound() const
+	{
+		switch (type)
+		{
+		case ObjType::Function:	return true;
+		case ObjType::NativeFunction: return true;
+		case ObjType::String: return false;
+		case ObjType::Closure: return false;
+		case ObjType::Upvalue: return false;
+		case ObjType::NativeInstance: return false;
+		case ObjType::Class: return false;
+		case ObjType::Instance: return false;
+		case ObjType::BoundFunction: return false;
+		case ObjType::Module: return false;
+		}
+		return false;
+	}
 };
 
 struct ObjString : public Obj
@@ -97,6 +119,7 @@ struct ObjClass : public Obj
 	ObjString* name;
 	HashTable fields;
 	size_t instanceSize;
+	std::optional<ObjClass&> superclass;
 	MarkingFunction mark;
 };
 

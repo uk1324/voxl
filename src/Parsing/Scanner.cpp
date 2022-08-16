@@ -1,4 +1,5 @@
 #include <Parsing/Scanner.hpp>
+#include <Format.hpp>
 
 #include <charconv>
 #include <unordered_map>
@@ -12,12 +13,12 @@ Scanner::Scanner()
 	, m_tokenStartIndex(0)
 	, m_sourceInfo(nullptr)
 	, m_hadError(false)
-	, m_errorPrinter(nullptr)
+	, m_errorReporter(nullptr)
 {}
 
-Scanner::Result Scanner::parse(SourceInfo& sourceInfoToComplete, ErrorPrinter& errorPrinter)
+Scanner::Result Scanner::parse(SourceInfo& sourceInfoToComplete, ErrorReporter& errorReporter)
 {
-	m_errorPrinter = &errorPrinter;
+	m_errorReporter = &errorReporter;
 	m_sourceInfo = &sourceInfoToComplete;
 	m_sourceInfo->lineStartOffsets.push_back(0);
 	m_currentCharIndex = 0;
@@ -493,31 +494,7 @@ Token Scanner::errorTokenAt(size_t start, size_t end, const char* format, ...)
 void Scanner::errorAt(size_t start, size_t end, const char* format, va_list args)
 {
 	m_hadError = true;
-
-	const auto startLine = m_sourceInfo->getLine(start);
-	m_errorPrinter->printErrorStart(startLine, m_currentCharIndex - m_sourceInfo->lineStartOffsets.back(), format, args);
-
-	const auto endLine = m_sourceInfo->getLine(end);
-	auto endLineEnd = m_sourceInfo->lineStartOffsets[endLine];
-	for (; (endLineEnd < m_sourceInfo->source.size()) && (m_sourceInfo->source[endLineEnd] != '\n'); endLineEnd++)
-		;
-
-	const auto startLineStart = m_sourceInfo->lineStartOffsets[startLine];
-	auto current = startLineStart;
-	while (current < endLineEnd)
-	{
-		while ((current < m_sourceInfo->source.size()) && (m_sourceInfo->source[current] != '\n'))
-		{
-			m_errorPrinter->outStream() << m_sourceInfo->source[current];
-			current++;
-		}
-		m_errorPrinter->outStream() << '\n';
-		for (size_t i = 0; i < (start - startLineStart); i++)
-		{
-			m_errorPrinter->outStream() << ' ';
-		}
-		m_errorPrinter->printRedTildes(end - start);
-	}
+	m_errorReporter->onScannerError(SourceLocation(start, end), formatToTempBuffer(format, args));
 }
 
 void Scanner::errorAt(size_t start, size_t end, const char* format, ...)

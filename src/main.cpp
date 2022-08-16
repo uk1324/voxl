@@ -1,7 +1,7 @@
 ﻿#include <Parsing/Scanner.hpp>
 #include <Parsing/Parser.hpp>
-#include <ErrorPrinter.hpp>
 #include <Compiling/Compiler.hpp>
+#include <TerminalErrorReporter.hpp>
 #include <TestModule.hpp>
 #include <Context.hpp>
 #include <ReadFile.hpp>
@@ -134,6 +134,8 @@ static LocalValue putln(Context& c)
 	return LocalValue::null(c);
 }
 
+#include <Span.hpp>
+
 int main()
 {
 	//return runRepl();
@@ -146,13 +148,13 @@ int main()
 	sourceInfo.displayedFilename = filename;
 	sourceInfo.directory = std::filesystem::path(filename).parent_path();
 	
-	ErrorPrinter errorPrinter(std::cerr, sourceInfo);
+	TerminalErrorReporter errorReporter(std::cerr, sourceInfo, 8);
 
 	Scanner scanner;
-	const auto scannerResult = scanner.parse(sourceInfo, errorPrinter);
+	const auto scannerResult = scanner.parse(sourceInfo, errorReporter);
 
 	Parser parser;
-	const auto parserResult = parser.parse(scannerResult.tokens, sourceInfo, errorPrinter);
+	const auto parserResult = parser.parse(scannerResult.tokens, sourceInfo, errorReporter);
 
 	if (scannerResult.hadError || parserResult.hadError)
 	{
@@ -161,7 +163,7 @@ int main()
 
 	Allocator allocator;
 	Compiler compiler(allocator);
-	auto compilerResult = compiler.compile(parserResult.ast, errorPrinter);
+	auto compilerResult = compiler.compile(parserResult.ast, sourceInfo, errorReporter);
 
 	if (compilerResult.hadError == false)
 	{
@@ -169,6 +171,6 @@ int main()
 		vm->createModule("native", testModuleMain);
 		vm->defineNativeFunction("put", put, 1);
 		vm->defineNativeFunction("putln", putln, 1);
-		auto result = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, errorPrinter);
+		auto result = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, sourceInfo, errorReporter);
 	}
 }

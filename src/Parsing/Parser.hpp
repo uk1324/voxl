@@ -3,7 +3,7 @@
 #include <Ast.hpp>
 #include <Parsing/Token.hpp>
 #include <Parsing/SourceInfo.hpp>
-#include <ErrorPrinter.hpp>
+#include <ErrorReporter.hpp>
 
 #include <vector>
 
@@ -29,7 +29,7 @@ public:
 	Parser();
 	Parser(bool ignoreEofErrors);
 
-	Result parse(const std::vector<Token>& tokens, const SourceInfo& sourceInfo, ErrorPrinter& errorPrinter);
+	Result parse(const std::vector<Token>& tokens, const SourceInfo& sourceInfo, ErrorReporter& errorReporter);
 
 	// Remember to check isAtEnd() when using loops!
 private:
@@ -80,9 +80,9 @@ private:
 	void expect(TokenType type, const char* format, ...);
 	void expectSemicolon();
 	void synchronize();
-	ParsingError errorAt(size_t start, size_t end, const char* format, ...);
+	// Returning the value to prevent errors about not all paths returning a value.
 	ParsingError errorAt(const Token& token, const char* format, ...);
-	void errorAtImplementation(size_t start, size_t end, const char* format, va_list args);
+	void errorAtImlementation(const Token& token, const char* format, va_list args);
 
 private:
 	const std::vector<Token>* m_tokens;
@@ -92,7 +92,7 @@ private:
 	bool m_ignoreEofErrors;
 
 	const SourceInfo* m_sourceInfo;
-	ErrorPrinter* m_errorPrinter;
+	ErrorReporter* m_errorReporter;
 };
 
 }

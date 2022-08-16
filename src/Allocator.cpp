@@ -212,6 +212,7 @@ ObjClass* Allocator::allocateClass(ObjString* name, size_t instanceSize, Marking
 	obj->name = name;
 	obj->mark = mark;
 	obj->instanceSize = instanceSize;
+	new (&obj->superclass) std::optional<ObjClass&>();
 	new (&obj->fields) HashTable();
 	return obj;
 }
@@ -247,6 +248,8 @@ void Allocator::markObj(Obj* obj)
 			const auto class_ = obj->asClass();
 			addHashTable(class_->fields);
 			addObj(class_->name);
+			if (class_->superclass.has_value())
+				addObj(&*class_->superclass);
 			return;
 		}
 

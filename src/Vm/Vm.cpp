@@ -5,10 +5,12 @@
 #include <Asserts.hpp>
 #include <Context.hpp>
 #include <ReadFile.hpp>
+#include <Debug/Disassembler.hpp>
+#include <Format.hpp>
 #include <iostream>
 #include <sstream>
 #include <filesystem>
-#include <Debug/Disassembler.hpp>
+#include <stdarg.h>
 
 using namespace Voxl;
 
@@ -45,7 +47,7 @@ using namespace Voxl;
 
 Vm::Vm(Allocator& allocator)
 	: m_allocator(&allocator)
-	, m_errorPrinter(nullptr)
+	, m_errorReporter(nullptr)
 	, m_rootMarkingFunctionHandle(allocator.registerMarkingFunction(this, mark))
 	, m_initString(m_allocator->allocateStringConstant("$init").value)
 	, m_addString(m_allocator->allocateStringConstant("$add").value)
@@ -112,19 +114,21 @@ VmResult Vm::execute(
 	Scanner& scanner,
 	Parser& parser,
 	Compiler& compiler,
-	ErrorPrinter& errorPrinter)
+	const SourceInfo& sourceInfo,
+	ErrorReporter& errorReporter)
 {
-	auto path = std::filesystem::absolute(errorPrinter.sourceInfo().displayedFilename);
+	auto path = std::filesystem::absolute(sourceInfo.displayedFilename);
 	m_modules.set(m_allocator->allocateStringConstant(std::string_view(path.string())).value, Value(module));
 
 	m_scanner = &scanner;
 	m_parser = &parser;
 	m_compiler = &compiler;
+	m_sourceInfo = &sourceInfo;
 	m_compiler->m_module = nullptr;
 
 	m_callStack.clear();
 	m_stack.clear();
-	m_errorPrinter = &errorPrinter;
+	m_errorReporter = &errorReporter;
 
 	if (m_callStack.push() == false)
 	{
@@ -542,75 +546,27 @@ Vm::Result Vm::run()
 			auto fieldName = m_stack.peek(0).as.obj->asString();
 			auto lhs = m_stack.peek(1);
 
-			if (auto class_ = getClassOrNullptr(lhs); class_ != nullptr)
-			{
-				if (auto function = class_->fields.get(fieldName);
-					function.has_value() && function->isObj()
-					&& (function->as.obj->isFunction() || function->as.obj->isNativeFunction()))
-				{
-					auto boundFunction = m_allocator->allocateBoundFunction(function->as.obj, lhs);
-					m_stack.pop();
-					m_stack.pop();
-					TRY_PUSH(Value(boundFunction));
-					break;
-				}
-			}
-
-			if ((lhs.isObj() == false))
-			{
-				return fatalError("type has no field '%s'", fieldName->chars);
-			}
-
-			// TODO: maybe use a switch.
-			auto obj = lhs.as.obj;
+			const auto field = getField(lhs, fieldName);
 			m_stack.pop();
 			m_stack.pop();
-			if (obj->isInstance())
+			if (field.has_value())
 			{
-				if (auto value = obj->asInstance()->fields.get(fieldName); value.has_value())
-				{
-					TRY_PUSH(*value);
-				}
-				else
-				{
-					TRY_PUSH(Value::null());
-				}
-				break;
-			}
-			else if (obj->isClass())
-			{
-				if (auto value = obj->asClass()->fields.get(fieldName); value.has_value())
-				{
-					TRY_PUSH(*value);
-				}
-				else
-				{
-					TRY_PUSH(Value::null());
-				}
-				break;
-			}
-			else if (obj->isModule())
-			{
-				auto module = obj->asModule();
-				if (auto value = module->globals.get(fieldName); value.has_value())
-				{
-					TRY_PUSH(*value);
-				}
-				else
-				{
-					if (module->isLoaded)
-					{
-						TRY_PUSH(Value::null());
-					}
-					else
-					{
-						return fatalError("partially initialized module 'TODO' has no attribute 'TODO' (most likely due to a circular import)");
-					}
-				}
+				TRY_PUSH(*field);
 				break;
 			}
 
-			return fatalError("type has no field '%s'", fieldName->chars);
+			if (lhs.isObj())
+			{
+				const auto lhsObj = lhs.asObj();
+				if (lhsObj->isModule() && (lhsObj->asModule()->isLoaded == false))
+				{
+					return fatalError("partially initialized module 'TODO' has no attribute 'TODO' (most likely due to a circular import)");
+				}
+			}
+
+			TRY_PUSH(Value::null());
+			// Maybe "value of type %t"
+			//return fatalError("value has no field '%s'", fieldName->chars);
 			break;
 		}
 
@@ -660,7 +616,7 @@ Vm::Result Vm::run()
 		case Op::GetIndex:
 		{
 			auto& value = m_stack.peek(1);
-			if (auto class_ = getClassOrNullptr(value); class_ != nullptr)
+			if (auto class_ = getClass(value); class_.has_value())
 			{
 				auto getIndexFunction = class_->fields.get(m_getIndexString);
 				if (getIndexFunction.has_value() == false)
@@ -675,7 +631,7 @@ Vm::Result Vm::run()
 		case Op::SetIndex:
 		{
 			auto& value = m_stack.peek(1);
-			if (auto class_ = getClassOrNullptr(value); class_ != nullptr)
+			if (auto class_ = getClass(value); class_.has_value())
 			{
 				auto setIndexFunction = class_->fields.get(m_setIndexString);
 				if (setIndexFunction.has_value() == false)
@@ -930,7 +886,8 @@ Vm::Result Vm::run()
 		{
 			const auto& class_ = m_stack.peek(0).as.obj->asClass();
 			const auto& value = m_stack.peek(1);
-			m_stack.top() = Value(getClassOrNullptr(value) == class_);
+			const auto valueClass = getClass(value);
+			m_stack.top() = Value(valueClass.has_value() && (&*valueClass == class_));
 			break;
 		}
 
@@ -957,7 +914,7 @@ Vm::Result Vm::run()
 				break;
 			}
 			auto path = std::filesystem::absolute(
-				m_errorPrinter->sourceInfo().directory / std::filesystem::path(std::string_view(filename->chars, filename->size)));
+				m_sourceInfo->directory / std::filesystem::path(std::string_view(filename->chars, filename->size)));
 			if (path.has_extension() == false)
 				path.replace_extension("voxl");
 			auto pathString = m_allocator->allocateStringConstant(path.string()).value;
@@ -973,13 +930,13 @@ Vm::Result Vm::run()
 			sourceInfo.directory = std::move(path.remove_filename());
 			auto source = stringFromFile(pathString->chars);
 			sourceInfo.source = source;
-			auto scannerResult = m_scanner->parse(sourceInfo, *m_errorPrinter);
-			auto parserResult = m_parser->parse(scannerResult.tokens, sourceInfo, *m_errorPrinter);
+			auto scannerResult = m_scanner->parse(sourceInfo, *m_errorReporter);
+			auto parserResult = m_parser->parse(scannerResult.tokens, sourceInfo, *m_errorReporter);
 			if (scannerResult.hadError || parserResult.hadError)
 			{
 				return fatalError("import error");
 			}
-			auto compilerResult = m_compiler->compile(parserResult.ast, *m_errorPrinter);
+			auto compilerResult = m_compiler->compile(parserResult.ast, *m_sourceInfo, *m_errorReporter);
 			if (compilerResult.hadError)
 			{
 				return fatalError("import error");
@@ -1028,6 +985,21 @@ Vm::Result Vm::run()
 			ASSERT(m_finallyBlockDepth != 0);
 			m_finallyBlockDepth--;
 			break;
+
+
+		case Op::Inherit:
+		{
+			const auto& class_ = m_stack.peek(1).asObj()->asClass();
+			auto& superclassValue = m_stack.peek(0);
+			if ((superclassValue.isObj() == false) || (superclassValue.asObj()->isClass() == false))
+			{
+				return fatalError("expected class");
+			}
+			auto superclass = superclassValue.asObj()->asClass();
+			class_->superclass = *superclass;
+			m_stack.pop();
+			break;
+		}
 
 		default:
 			ASSERT_NOT_REACHED();
@@ -1133,23 +1105,11 @@ uint8_t Vm::readUint8()
 // TODO: could make a constructor for NativeFunctionResult that takes the vm and a message which it logs.
 Vm::Result Vm::fatalError(const char* format, ...)
 {
-	char errorBuffer[256];
 	va_list args;
 	va_start(args, format);
-	vsnprintf(errorBuffer, sizeof(errorBuffer), format, args);
+	const auto message = formatToTempBuffer(format, args);
 	va_end(args);
-	m_errorPrinter->outStream() << "fatal runtime error: " << errorBuffer << '\n';
-	for (auto frame = m_callStack.crbegin(); frame != m_callStack.crend(); ++frame)
-	{
-		// TODO: Also print native functions. Currently calling a native function doesn't store it in the call frame.
-		if (frame->isNativeFunction())
-			continue;
-
-		const auto function = frame->function;
-		const auto instructionOffset = frame->instructionPointer - function->byteCode.code.data();
-		const auto lineNumber = function->byteCode.lineNumberAtOffset[instructionOffset] + 1;
-		m_errorPrinter->outStream() << "line " << lineNumber << " in " << function->name->chars << "()\n";
-	}
+	m_errorReporter->onVmError(*this, message);
 	return Result::fatal();
 }
 
@@ -1309,6 +1269,69 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 	return Result::ok();
 }
 
+std::optional<Value> Vm::getField(Value& value, ObjString* fieldName)
+{
+	// TODO: When using type errors just use
+	/*printf("expected %s got %s", a->name, b->name)*/
+	// Dereferencing the results from HashTable::get() because it return a std::optional<Value&> not std::optional<Value>.
+	// Can't use a reference type because bound functions can be allocated.
+
+	if (value.isObj())
+	{
+		const auto obj = value.asObj();
+		if (obj->isInstance())
+		{
+			if (const auto field = obj->asInstance()->fields.get(fieldName); field.has_value())
+				return *field;
+		}
+		else if (obj->isClass())
+		{
+			std::optional<ObjClass&> class_(*obj->asClass());
+			while (class_.has_value())
+			{
+				auto method = class_->fields.get(fieldName);
+				if (method.has_value())
+					return *method;
+
+				class_ = class_->superclass;
+			}
+			return std::nullopt;
+		}
+		else if (obj->isModule())
+		{
+			const auto module = obj->asModule();
+			// TODO: Maybe add check so names that begin with an underscore are private.
+			return *module->globals.get(fieldName);
+		}
+	}
+	
+	auto method = getMethod(value, fieldName);
+	if (method->isObj() == false)
+		return std::nullopt;
+
+	auto methodObj = method->asObj();
+	if (methodObj->canBeBound() == false)
+		return std::nullopt;
+
+	return Value(m_allocator->allocateBoundFunction(methodObj, value));
+}
+
+std::optional<Value> Vm::getMethod(Value& value, ObjString* methodName)
+{
+	// TODO: Maybe have a seperate hash table for method and fields of a class. Method could only be added using Impl.
+	// Could return by reference instead of value.
+	auto class_ = getClass(value);
+	while (class_.has_value())
+	{
+		auto method = class_->fields.get(methodName);
+		if (method.has_value())
+			return *method;
+
+		class_ = class_->superclass;
+	}
+	return std::nullopt;
+}
+
 Vm::Result Vm::throwValue(const Value& value)
 {
 	if (m_exceptionHandlers.isEmpty())
@@ -1342,21 +1365,21 @@ Vm::Result Vm::throwValue(const Value& value)
 	return Result::ok();
 }
 
-ObjClass* Vm::getClassOrNullptr(const Value& value)
+std::optional<ObjClass&> Vm::getClass(const Value& value)
 {
 	if (value.isInt())
-		return m_intType;
+		return *m_intType;
 
 	if (value.isObj())
 	{
 		if (value.as.obj->isString())
-			return m_stringType;
+			return *m_stringType;
 		if (value.as.obj->isInstance())
-			return value.as.obj->asInstance()->class_;
+			return *value.as.obj->asInstance()->class_;
 		if (value.as.obj->isNativeInstance())
-			return value.as.obj->asNativeInstance()->class_;
+			return *value.as.obj->asNativeInstance()->class_;
 	}
-	return nullptr;
+	return std::nullopt;
 }
 
 Value Vm::typeErrorExpected(ObjClass*)
@@ -1396,16 +1419,8 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 		allocator.addValue(value);
 	}
 
-	// Maybe be faster not to add the strings becuase they are constans.
+	// Maybe be faster not to add the strings becuase they are constants.
 	allocator.addHashTable(vm->m_modules);
-	/*for (size_t i = 0; i < vm->m_modules.capacity(); i++)
-	{
-		auto bucket = vm->m_modules.data()[i];
-		if (HashTable::isBucketEmpty(bucket) == false)
-		{
-			allocator.addValue(bucket.value);
-		}
-	}*/
 
 	allocator.addHashTable(vm->m_builtins);
 	if (vm->m_listType != nullptr)

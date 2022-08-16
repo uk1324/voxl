@@ -2,7 +2,6 @@
 
 #include <Allocator.hpp>
 #include <ByteCode.hpp>
-#include <ErrorPrinter.hpp>
 #include <StaticStack.hpp>
 #include <Parsing/Scanner.hpp>
 #include <Parsing/Parser.hpp>
@@ -24,6 +23,7 @@ class Vm
 private:
 	struct FatalException {};
 
+public:
 	// Order members to reduce the size.
 	struct CallFrame
 	{
@@ -79,7 +79,8 @@ public:
 		Scanner& scanner,
 		Parser& parser,
 		Compiler& compiler,
-		ErrorPrinter& errorPrinter);
+		const SourceInfo& sourceInfo,
+		ErrorReporter& errorReporter);
 	void reset();
 
 	void defineNativeFunction(std::string_view name, NativeFunction function, int argCount);
@@ -97,8 +98,12 @@ private:
 	Result fatalError(const char* format, ...);
 	Result callObjFunction(ObjFunction* function, int argCount, int numberOfValuesToPopOffExceptArgs, bool isInitializer);
 	Result callValue(Value value, int argCount, int numberOfValuesToPopOffExceptArgs, bool isInitializer = false);
+	// Not using const Value& becuase then get would need to be const and to do this getField would need to be const
+	// so it would just need to be copy pasted. Or it could reutrn an index.
+	std::optional<Value> getField(Value& value, ObjString* fieldName);
+	std::optional<Value> getMethod(Value& value, ObjString* methodName);
 	Result throwValue(const Value& value);
-	ObjClass* getClassOrNullptr(const Value& value);
+	std::optional<ObjClass&> getClass(const Value& value);
 	Value typeErrorExpected(ObjClass* type);
 	std::optional<Value&> getGlobal(ObjString* name);
 	bool setGlobal(ObjString* name, const Value& value);
@@ -126,7 +131,8 @@ public:
 
 	Allocator* m_allocator;
 
-	ErrorPrinter* m_errorPrinter;
+	ErrorReporter* m_errorReporter;
+	const SourceInfo* m_sourceInfo;
 
 	std::vector<ObjUpvalue*> m_openUpvalues;
 

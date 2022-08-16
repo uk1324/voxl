@@ -154,6 +154,16 @@ bool operator==(const Value& lhs, const Value& rhs)
 		case ValueType::Float: return lhs.as.floatNumber == rhs.as.floatNumber;
 		case ValueType::Null: return true;
 		case ValueType::Bool: return lhs.as.boolean == rhs.as.boolean;
+		case ValueType::Obj:
+		{
+			const auto lhsObj = lhs.asObj();
+			const auto rhsObj = rhs.asObj();
+			if (lhsObj->isString() && rhsObj->isString())
+				return lhsObj->asString()->chars == rhsObj->asString()->chars;
+
+			ASSERT_NOT_REACHED();
+			return false;
+		}
 
 		default:
 			ASSERT_NOT_REACHED();

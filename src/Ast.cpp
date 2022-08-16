@@ -1,4 +1,5 @@
 #include <Ast.hpp>
+#include <Parsing/Parser.hpp>
 
 using namespace Voxl;
 
@@ -7,6 +8,11 @@ Expr::Expr(size_t start, size_t end, ExprType type)
 	, length(end - start)
 	, type(type)
 {}
+
+SourceLocation Expr::location() const
+{
+	return SourceLocation(start, end());
+}
 
 size_t Expr::end() const
 {
@@ -18,6 +24,11 @@ Stmt::Stmt(size_t start, size_t end, StmtType type)
 	, length(end - start)
 	, type(type)
 {}
+
+SourceLocation Stmt::location() const
+{
+	return SourceLocation(start, end());
+}
 
 size_t Stmt::end() const
 {
@@ -33,6 +44,11 @@ Ptrn::Ptrn(size_t start, size_t end, PtrnType type)
 size_t Ptrn::end() const
 {
 	return start + length;
+}
+
+SourceLocation Ptrn::location() const
+{
+	return SourceLocation(start, end());
 }
 
 IntConstantExpr::IntConstantExpr(Int value, size_t start, size_t end)
@@ -178,9 +194,15 @@ BreakStmt::BreakStmt(size_t start, size_t end)
 	: Stmt(start, end, StmtType::Break)
 {}
 
-ClassStmt::ClassStmt(std::string_view name, std::vector<std::unique_ptr<FnStmt>> methods, size_t start, size_t end)
+ClassStmt::ClassStmt(
+	std::string_view name, 
+	std::optional<std::string_view> superclassName, 
+	std::vector<std::unique_ptr<FnStmt>> methods, 
+	size_t start, 
+	size_t end)
 	: Stmt(start, end, StmtType::Class)
 	, name(name)
+	, superclassName(superclassName)
 	, methods(std::move(methods))
 {}
 
@@ -249,3 +271,5 @@ ExprPtrn::ExprPtrn(std::unique_ptr<Expr> expr, size_t start, size_t end)
 AlwaysTruePtrn::AlwaysTruePtrn(size_t start, size_t end)
 	: Ptrn(start, end, PtrnType::AlwaysTrue)
 {}
+
+

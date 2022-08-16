@@ -39,10 +39,10 @@ public:
 	size_t maxSize() const;
 	T* begin();
 	T* end();
-	const T* cbegin();
-	const T* cend();
-	ConstReverseIterator crbegin();
-	ConstReverseIterator crend();
+	const T* cbegin() const;
+	const T* cend() const;
+	ConstReverseIterator crbegin() const;
+	ConstReverseIterator crend() const;
 	void clear();
 
 public:
@@ -169,25 +169,25 @@ T* StaticStack<T, SIZE>::end()
 }
 
 template<typename T, size_t SIZE>
-const T* StaticStack<T, SIZE>::cbegin()
+const T* StaticStack<T, SIZE>::cbegin() const
 {
 	return data();
 }
 
 template<typename T, size_t SIZE>
-const T* StaticStack<T, SIZE>::cend()
+const T* StaticStack<T, SIZE>::cend() const
 {
 	return topPtr;
 }
 
 template<typename T, size_t SIZE>
-typename StaticStack<T, SIZE>::ConstReverseIterator StaticStack<T, SIZE>::crbegin()
+typename StaticStack<T, SIZE>::ConstReverseIterator StaticStack<T, SIZE>::crbegin() const
 {
 	return ConstReverseIterator{ topPtr - 1 };
 }
 
 template<typename T, size_t SIZE>
-typename StaticStack<T, SIZE>::ConstReverseIterator StaticStack<T, SIZE>::crend()
+typename StaticStack<T, SIZE>::ConstReverseIterator StaticStack<T, SIZE>::crend() const
 {
 	return ConstReverseIterator{ data() - 1 };
 }

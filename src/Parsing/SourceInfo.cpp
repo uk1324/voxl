@@ -37,3 +37,8 @@ size_t SourceInfo::getLine(size_t offsetInFile) const
 	}
 	return lineStartOffsets.size() - 1;
 }
+
+SourceLocation::SourceLocation(size_t start, size_t end)
+	: start(start)
+	, end(end)
+{}

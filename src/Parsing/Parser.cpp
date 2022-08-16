@@ -1,4 +1,5 @@
 #include <Parsing/Parser.hpp>
+#include <Format.hpp>
 
 using namespace Voxl;
 
@@ -10,14 +11,14 @@ Parser::Parser(bool ignoreEofErrors)
 	: m_tokens(nullptr)
 	, m_currentTokenIndex(0)
 	, m_sourceInfo(nullptr)
-	, m_errorPrinter(nullptr)
+	, m_errorReporter(nullptr)
 	, m_hadError(false)
 	, m_ignoreEofErrors(ignoreEofErrors)
 {}
 
-Parser::Result Parser::parse(const std::vector<Token>& tokens, const SourceInfo& sourceInfo, ErrorPrinter& errorPrinter)
+Parser::Result Parser::parse(const std::vector<Token>& tokens, const SourceInfo& sourceInfo, ErrorReporter& errorReporter)
 {
-	m_errorPrinter = &errorPrinter;
+	m_errorReporter = &errorReporter;
 	m_tokens = &tokens;
 	m_sourceInfo = &sourceInfo;
 	m_currentTokenIndex = 0;
@@ -268,6 +269,13 @@ std::unique_ptr<Stmt> Parser::classStmt()
 	expect(TokenType::Identifier, "expected class name");
 	auto name = peekPrevious().identifier;
 
+	std::optional<std::string_view> superclassName;
+	if (match(TokenType::Less))
+	{
+		expect(TokenType::Identifier, "expected superclass name");
+		superclassName = peekPrevious().identifier;
+	}
+
 	expect(TokenType::LeftBrace, "expected '{'");
 
 	decltype(ClassStmt::methods) methods;
@@ -278,7 +286,7 @@ std::unique_ptr<Stmt> Parser::classStmt()
 	}
 	expect(TokenType::RightBrace, "expected '}'");
 	
-	return std::make_unique<ClassStmt>(name, std::move(methods), start, peekPrevious().end);
+	return std::make_unique<ClassStmt>(name, superclassName, std::move(methods), start, peekPrevious().end);
 }
 
 std::unique_ptr<Stmt> Parser::implStmt()
@@ -818,7 +826,7 @@ void Parser::expect(TokenType type, const char* format, ...)
 	{
 		va_list args;
 		va_start(args, format);
-		errorAtImplementation(peek().start, peek().end - peek().start, format, args);
+		errorAtImlementation(peek(), format, args);
 		va_end(args);
 		throw ParsingError{};
 	}
@@ -858,32 +866,23 @@ void Parser::synchronize()
 	}
 }
 
-Parser::ParsingError Parser::errorAt(size_t start, size_t end, const char* format, ...)
-{
-	va_list args;
-	va_start(args, format);
-	errorAtImplementation(start, end, format, args);
-	va_end(args);
-	return ParsingError{};
-}
-
 Parser::ParsingError Parser::errorAt(const Token& token, const char* format, ...)
 {
 	va_list args;
 	va_start(args, format);
-	errorAtImplementation(token.start, token.end, format, args);
+	errorAtImlementation(token, format, args);
 	va_end(args);
 	return ParsingError{};
 }
 
-void Parser::errorAtImplementation(size_t start, size_t end, const char* format, va_list args)
+void Parser::errorAtImlementation(const Token& token, const char* format, va_list args)
 {
 	m_hadError = true;
-	if (check(TokenType::Error) || (m_ignoreEofErrors && check(TokenType::Eof)))
+	if ((check(TokenType::Error) || (m_ignoreEofErrors && check(TokenType::Eof))) == false)
 	{
-		return;
+		const auto message = formatToTempBuffer(format, args);
+		m_errorReporter->onParserError(token, message);
 	}
-	m_errorPrinter->at(start, end, format, args);
 }
 
 void Parser::advance()

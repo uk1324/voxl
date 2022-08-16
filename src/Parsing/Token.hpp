@@ -1,7 +1,9 @@
 #pragma once
 
-#include <string_view>
 #include <Value.hpp>
+#include <Parsing/SourceInfo.hpp>
+
+#include <string_view>
 
 namespace Voxl
 {
@@ -99,6 +101,8 @@ public:
 
 	size_t start;
 	size_t end;
+
+	SourceLocation location() const;
 
 	union
 	{

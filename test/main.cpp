@@ -5,6 +5,7 @@
 #include <Compiling/Compiler.hpp>
 #include <Vm/Vm.hpp>
 #include <Debug/DebugOptions.hpp>
+#include <TerminalErrorReporter.hpp>
 #include <ReadFile.hpp>
 
 #include <fstream>
@@ -41,6 +42,7 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "throw_inside_catch", "trycatchfinally" },
 	{ "break_inside_try_catch", "trycatchfinallytryfinally" },
 	{ "ret_inside_try_catch", "trycatchfinallytryfinally" },
+	{ "inheritance", "xy" },
 };
 
 void testFailed(std::string_view name)
@@ -92,10 +94,10 @@ int main()
 		auto filename = std::string("test/tests/") + std::string(name) + std::string(".voxl");
 		auto source = stringFromFile(filename);
 		SourceInfo sourceInfo{ filename, std::filesystem::path(filename).parent_path(), source };
-		ErrorPrinter errorPrinter(std::cerr, sourceInfo);
+		TerminalErrorReporter errorReporter(std::cerr, sourceInfo, 8);
 
-		auto scannerResult = scanner.parse(sourceInfo, errorPrinter);
-		auto parserResult = parser.parse(scannerResult.tokens, sourceInfo, errorPrinter);
+		auto scannerResult = scanner.parse(sourceInfo, errorReporter);
+		auto parserResult = parser.parse(scannerResult.tokens, sourceInfo, errorReporter);
 
 		if (scannerResult.hadError || parserResult.hadError)
 		{
@@ -103,7 +105,7 @@ int main()
 			continue;
 		}
 
-		auto compilerResult = compiler.compile(parserResult.ast, errorPrinter);
+		auto compilerResult = compiler.compile(parserResult.ast, sourceInfo, errorReporter);
 		if (compilerResult.hadError)
 		{
 			testFailed(name);
@@ -114,7 +116,7 @@ int main()
 		vm->reset();
 		vm->defineNativeFunction("put", put, 1);
 		vm->defineNativeFunction("putln", putln, 1);
-		auto vmResult = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, errorPrinter);
+		auto vmResult = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, sourceInfo, errorReporter);
 		if (vmResult == VmResult::RuntimeError)
 		{
 			testFailed(name);

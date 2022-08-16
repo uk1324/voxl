@@ -2,7 +2,7 @@
 
 #include <Parsing/Token.hpp>
 #include <Parsing/SourceInfo.hpp>
-#include <ErrorPrinter.hpp>
+#include <ErrorReporter.hpp>
 
 namespace Voxl
 {
@@ -28,7 +28,7 @@ public:
 public:
 	Scanner();
 
-	Result parse(SourceInfo& sourceInfoToComplete, ErrorPrinter& errorPrinter);
+	Result parse(SourceInfo& sourceInfoToComplete, ErrorReporter& errorPrinter);
 
 private:
 	Token token();
@@ -70,7 +70,7 @@ private:
 	size_t m_currentCharIndex;
 	size_t m_tokenStartIndex;
 
-	ErrorPrinter* m_errorPrinter;
+	ErrorReporter* m_errorReporter;
 
 	bool m_hadError;
 };

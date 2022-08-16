@@ -2,6 +2,7 @@
 #include <Parsing/Parser.hpp>
 #include <Parsing/Scanner.hpp>
 #include <Compiling/Compiler.hpp>
+#include <TerminalErrorReporter.hpp>
 #include <Vm/Vm.hpp>
 #include <iostream>
 
@@ -13,7 +14,7 @@ int Voxl::runRepl()
 	sourceInfo.displayedFilename = "<repl>";
 	sourceInfo.directory = std::filesystem::current_path();
 
-	ErrorPrinter errorPrinter(std::cerr, sourceInfo);
+	TerminalErrorReporter errorReporter(std::cerr, sourceInfo, 4);
 	Allocator allocator;
 	Parser parser(true);
 	Scanner scanner;
@@ -35,11 +36,11 @@ int Voxl::runRepl()
 			sourceInfo.source = source;
 			sourceInfo.lineStartOffsets.clear();
 
-			const auto scannerResult = scanner.parse(sourceInfo, errorPrinter);
+			const auto scannerResult = scanner.parse(sourceInfo, errorReporter);
 			if (scannerResult.hadError)
 				break;
 
-			const auto parserResult = parser.parse(scannerResult.tokens, sourceInfo, errorPrinter);
+			const auto parserResult = parser.parse(scannerResult.tokens, sourceInfo, errorReporter);
 			if (parserResult.errorAtEof)
 			{
 				std::cout << "... ";
@@ -50,12 +51,12 @@ int Voxl::runRepl()
 				break;
 			}
 
-			const auto compilerResult = compiler.compile(parserResult.ast, errorPrinter);
+			const auto compilerResult = compiler.compile(parserResult.ast, sourceInfo, errorReporter);
 
 			if (compilerResult.hadError)
 				break;
 
-			const auto vmResult = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, errorPrinter);
+			const auto vmResult = vm->execute(compilerResult.program, compilerResult.module, scanner, parser, compiler, sourceInfo, errorReporter);
 			break;
 		}
 		source.clear();

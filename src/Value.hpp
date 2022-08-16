@@ -42,19 +42,25 @@ public:
 	VALUE_TYPE_LIST(GENERATE_HELPERS)
 #undef GENERATE_HELPERS
 
-	Int asInt()
+	const Int asInt() const
 	{
 		ASSERT(isInt());
 		return as.intNumber;
 	}
 
-	Float asFloat()
+	const Float asFloat() const
 	{
 		ASSERT(isFloat());
 		return as.floatNumber;
 	}
 
 	Obj* asObj()
+	{
+		ASSERT(isObj());
+		return as.obj;
+	}
+
+	const Obj* asObj() const
 	{
 		ASSERT(isObj());
 		return as.obj;

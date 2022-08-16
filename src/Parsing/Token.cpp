@@ -52,3 +52,8 @@ Token::~Token()
 			break;
 	}
 }
+
+SourceLocation Token::location() const
+{
+	return SourceLocation(start, end);
+}

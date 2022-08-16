@@ -82,5 +82,6 @@ namespace Voxl
 		CloneTop, // [value] -> [value value]
 		ExpressionStatementBegin, // [] -> []
 		ExpressionStatementReturn,
+		Inherit, // [class, superclass] -> [class]
 	};
 }

@@ -1,0 +1,192 @@
+class Range {
+	$init(start, max, step) {
+		$.current = 0;
+		$.max = max;
+		$.step = step;
+	}
+
+	$iter() {
+		ret $;
+	}
+
+	$next() {
+		if $.current == $.max {
+			throw StopIteration();
+		}
+		result : $.current;
+		$.current += $.step;
+		ret result;
+	}
+}
+
+class RuntimeError {
+	$init(msg) {
+		$.msg = msg;
+	}
+}
+
+class Number {
+	$init(value) {
+		$.value = value;
+	}
+}
+
+class NaryExpr {
+	$init(op, args) {
+		$.op = op;
+		$.args = args;
+	}
+}
+
+class Constant {
+	$init(name) {
+		$.name = name;
+	}
+}
+Constant.PI = Constant("PI");
+
+NaryExpr.addOp = 0;
+NaryExpr.mulOp = 1;
+
+fn op_str(op) {
+	match op {
+		{NaryExpr.addOp} => ret "+";
+		{NaryExpr.mulOp} => ret "*";
+		* => throw RuntimeError("invalid operator");
+	}
+}
+
+fn op_idnetity_value(op) {
+	match op {
+		{NaryExpr.addOp} => ret 0;
+		{NaryExpr.mulOp} => ret 1;
+		* => throw RuntimeError("invalid operator");
+	}
+}
+
+fn op_is_communicative(op) {
+	match op {
+		{NaryExpr.addOp} => ret true;
+		{NaryExpr.mulOp} => ret true;
+		* => throw RuntimeError("invalid operator");
+	}
+}
+
+fn apply_op(op, lhs, rhs) {
+	match op {
+		{NaryExpr.addOp} => ret lhs + rhs;
+		{NaryExpr.mulOp} => ret lhs * rhs;
+		* => throw RuntimeError("invalid operator");
+	}
+}
+
+fn expr_put(expr) {
+	match expr {
+		Number => {
+			put(expr.value);
+		}
+		NaryExpr => {
+			put("(");
+			
+			for i in Range(0, expr.args.size(), 1) {
+				expr_put(expr.args[i]);
+				if i != (expr.args.size() - 1) {
+					put(" ");
+					put(op_str(expr.op));
+					put(" ");
+				}
+			}
+			put(")");
+		}
+		Constant => {
+			put(expr.name);
+		}
+		* => { put("how"); throw RuntimeError("invalid expr"); }
+	}
+}
+
+class SimplificationFailed {}
+
+fn expr_add(lhs, rhs) {
+	match lhs {
+		Number => {
+			match rhs {
+				Number => {
+					ret Number(lhs.value, rhs.value);
+				}
+			}
+		}
+	}
+	throw SimplificationFailed();
+}
+
+fn simplify(expr) {
+	loop {
+		try {
+			expr = expr_simplify(expr);
+		} catch SimplificationFailed {
+			break;
+		}
+	}
+	ret expr;
+}
+
+fn try_simplify(expr) {
+	try {
+		ret simplify(expr);
+	} catch SimplificationFailed {
+		ret expr;
+	}
+}
+
+fn expr_simplify(expr) {
+	match expr {
+		// Having a special pattern with an if might be useful so it normally falls back and doesn't finish like this does.
+		NaryExpr => if op_is_communicative(expr.op) {
+			accumulator : op_idnetity_value(expr.op);
+			rest : List();
+			for arg in expr.args {
+				arg = try_simplify(arg);
+				match arg {
+					Number => { 
+						accumulator = apply_op(expr.op, accumulator, arg.value); 
+					}
+					* => { rest.push(arg); }
+				}
+			}
+			if rest.size() == 0 {
+				ret Number(accumulator);
+			}
+			if accumulator != op_idnetity_value(expr.op) {
+				rest.push(Number(accumulator));
+			} else if rest.size() == 1 {
+				ret rest[0];
+			}
+			if expr.args.size() == rest.size() {
+				throw SimplificationFailed();			
+			}
+			ret NaryExpr(expr.op, rest);
+		}
+	}
+	throw SimplificationFailed();
+}
+
+a2 : List();
+a2.push(Number(3));
+a2.push(Number(4));
+a2.push(Number(2));
+e1 : NaryExpr(NaryExpr.mulOp, a2);
+
+a1 : List();
+a1.push(Number(5));
+a1.push(Constant.PI);
+a1.push(e1);
+
+e2 : NaryExpr(NaryExpr.addOp, a1);
+
+expr : e2;
+
+expr_put(expr);
+put("\n");
+expr = try_simplify(expr);
+expr_put(expr);
