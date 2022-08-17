@@ -44,6 +44,10 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "ret_inside_try_catch", "trycatchfinallytryfinally" },
 	{ "inheritance", "xy" },
 	{ "list_literals", "thistrueisnulla4test" },
+	{ "inheriting_from_native_class", "47" },
+	{ "module_private_use", "null" },
+	// TODO: Add this to error tests.
+	//{ "module_private_use_all", "null" },
 };
 
 void testFailed(std::string_view name)

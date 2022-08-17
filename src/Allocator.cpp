@@ -133,6 +133,7 @@ ObjNativeInstance* Allocator::allocateNativeInstance(ObjClass* class_)
 {
 	auto obj = allocateObj(class_->instanceSize, ObjType::NativeInstance)->asNativeInstance();
 	obj->class_ = class_;
+	class_->nativeInstanceCount++;
 	class_->init(obj);
 	return obj;
 }
@@ -213,6 +214,7 @@ ObjClass* Allocator::allocateClass(ObjString* name)
 	obj->init = nullptr;
 	obj->free = nullptr;
 	obj->instanceSize = 0;
+	obj->nativeInstanceCount = 0;
 	new (&obj->superclass) std::optional<ObjClass&>();
 	new (&obj->fields) HashTable();
 	return obj;
@@ -400,7 +402,7 @@ void Allocator::runGc()
 	// Constant's don't need to be added because this only deletes objects created normally.
 	while (obj != nullptr)
 	{
-		if (obj->isMarked)
+		if (obj->isMarked || (obj->isClass() && obj->asClass()->nativeInstanceCount > 0))
 		{
 			obj->isMarked = false;
 			previous = obj;
@@ -487,7 +489,11 @@ void Allocator::freeObj(Obj* obj)
 		case ObjType::NativeInstance:
 		{
 			auto instance = obj->asNativeInstance();
-			if (instance->class_->free)
+
+			instance->class_->nativeInstanceCount--;
+			// If this was a copying garbage collector this would be valid.
+			// Store free inside instance or use reference counting.
+			if (instance->class_->free != nullptr)
 				instance->class_->free(instance);
 			break;
 		}

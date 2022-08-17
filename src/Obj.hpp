@@ -136,6 +136,14 @@ struct ObjClass : public Obj
 	// TODO: Could store optional.
 	FreeFunction free;
 
+	// This count is needed because to free an instance of a class the free function stored inside class is needed so the class
+	// has to be kept alive if all the instances haven't been deleted yet. With the current implementation a faster way to achieve this
+	// would be to store objects allocated first in front or just have a doubly liked list. A instance of a class
+	// can't be allocated before the class so when freeing the instances will always be freed before the classes.
+	// Another alternative to this would be to store the free function inside each instance, but this would take up more memory than the first 
+	// option.
+	size_t nativeInstanceCount;
+
 	bool isNative()
 	{
 		return instanceSize != 0;

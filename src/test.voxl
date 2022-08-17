@@ -5,3 +5,7 @@ fn test0() {
 fn test1() {
 	ret 3;
 }
+
+fn _test() {
+	ret 5;
+}

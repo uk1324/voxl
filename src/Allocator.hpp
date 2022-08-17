@@ -152,6 +152,7 @@ Voxl::ObjClass* Voxl::Allocator::allocateNativeClass(ObjString* name, void(*init
 	obj->init = reinterpret_cast<InitFunction>(init);
 	obj->free = reinterpret_cast<FreeFunction>(free);
 	obj->instanceSize = sizeof(T);
+	obj->nativeInstanceCount = 0;
 	new (&obj->superclass) std::optional<ObjClass&>();
 	new (&obj->fields) HashTable();
 	return obj;

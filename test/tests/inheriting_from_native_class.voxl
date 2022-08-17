@@ -1,0 +1,12 @@
+class MyList < List {
+	$init() {
+		$.push(4);
+	}
+}
+
+l : MyList();
+
+l.push(7);
+for e in l {
+	put(e);
+}

@@ -105,6 +105,7 @@ private:
 	std::optional<Value&> getGlobal(ObjString* name);
 	bool setGlobal(ObjString* name, const Value& value);
 	void debugPrintStack();
+	static bool isModuleMemberPublic(const ObjString* name);
 
 private:
 	static void mark(Vm* vm, Allocator& allocator);

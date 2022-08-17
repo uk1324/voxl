@@ -1,3 +1,4 @@
+#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Vm/List.hpp>
 #include <Utf8.hpp>
@@ -935,7 +936,7 @@ Vm::Result Vm::run()
 			{
 				return fatalError("import error");
 			}
-			auto compilerResult = m_compiler->compile(parserResult.ast, *m_sourceInfo, *m_errorReporter);
+			auto compilerResult = m_compiler->compile(parserResult.ast, sourceInfo, *m_errorReporter);
 			if (compilerResult.hadError)
 			{
 				return fatalError("import error");
@@ -964,7 +965,8 @@ Vm::Result Vm::run()
 			{
 				// TODO: maybe check if this overrides.
 				// Would require the function to return if the key already exits. Right now it sets it and returns false.
-				setGlobal(key, value);
+				if (isModuleMemberPublic(key))
+					setGlobal(key, value);
 			}
 			m_stack.pop();
 			break;
@@ -984,7 +986,6 @@ Vm::Result Vm::run()
 			ASSERT(m_finallyBlockDepth != 0);
 			m_finallyBlockDepth--;
 			break;
-
 
 		case Op::Inherit:
 		{
@@ -1330,8 +1331,8 @@ std::optional<Value> Vm::getField(Value& value, ObjString* fieldName)
 		else if (obj->isModule())
 		{
 			const auto module = obj->asModule();
-			// TODO: Maybe add check so names that begin with an underscore are private.
-			return *module->globals.get(fieldName);
+			if (isModuleMemberPublic(fieldName))
+				return *module->globals.get(fieldName);
 		}
 	}
 	
@@ -1440,6 +1441,11 @@ void Vm::debugPrintStack()
 		std::cout << ' ';
 	}
 	std::cout << "]\n";
+}
+
+bool Vm::isModuleMemberPublic(const ObjString* name)
+{
+	return (name->size > 0) && (name->chars[0] != '_');
 }
 
 void Vm::mark(Vm* vm, Allocator& allocator)

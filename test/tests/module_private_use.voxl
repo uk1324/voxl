@@ -1,0 +1,3 @@
+use "module_private";
+
+put(module_private._test);
