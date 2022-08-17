@@ -12,8 +12,6 @@
 
 using namespace Voxl;
 
-// TODO!!!!!!!!!!: Should offets into the line start at 0 or 1?
-
 TerminalErrorReporter::TerminalErrorReporter(std::ostream& errorOut, const SourceInfo& sourceInfo, size_t tabWidth)
 	: m_out(errorOut)
 	, m_sourceInfo(sourceInfo)
@@ -162,7 +160,7 @@ void TerminalErrorReporter::printErrorStart(size_t line, size_t offsetInLine, st
 {
 	m_out << m_sourceInfo.displayedFilename
 		<< ':' << line + 1
-		<< ':' << offsetInLine
+		<< ':' << offsetInLine + 1
 		<< ":" TERM_COL_RED " error: " TERM_COL_RESET
 		<< TERM_COL_CYAN << message << TERM_COL_RESET << '\n';
 }

@@ -84,6 +84,14 @@ struct ObjString : public Obj
 	size_t size;
 	// UTF-8 char count.
 	size_t length;
+	size_t hash;
+
+	static size_t hashString(const char* chars, size_t charsSize)
+	{
+		// TODO: Don't need to hash the whole thing if the string is long.
+		// Don't know what the implementation does.
+		return std::hash<std::string_view>()(std::string_view(chars, charsSize));
+	}
 };
 
 struct ObjFunction : public Obj

@@ -1,4 +1,12 @@
-use "test";
-
-put(test._test);
-
+try {
+	try {
+		throw null;
+	} catch * {
+		put("catch");
+		throw null;
+	} finally {
+		put("finally");
+	}
+} catch * {
+	put("second catch");
+}

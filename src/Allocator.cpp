@@ -90,6 +90,7 @@ ObjString* Allocator::allocateString(std::string_view chars, size_t length)
 	// Null terminating for compatiblity with foreign functions. There maybe be some issue if I wanted to create a string view like Obj.
 	data[obj->size] = '\0';
 	obj->chars = data;
+	obj->hash = ObjString::hashString(obj->chars, obj->size);
 	m_stringPool.insert(obj);
 	return obj;
 }
@@ -179,6 +180,7 @@ Allocator::StringConstant Allocator::allocateStringConstant(std::string_view cha
 	data[chars.size()] = '\0';
 	obj->chars = data;
 	obj->length = length;
+	obj->hash = ObjString::hashString(obj->chars, obj->size);
 	m_stringPool.insert(obj);
 	return { createConstant(Value(obj)), obj };
 }
@@ -446,15 +448,10 @@ void Allocator::addValue(Value& value)
 
 void Allocator::addHashTable(HashTable& hashTable)
 {
-	for (size_t i = 0; i < hashTable.capacity(); i++)
+	for (auto& [key, value] : hashTable)
 	{
-		auto& bucket = hashTable.data()[i];
-
-		if (hashTable.isBucketEmpty(bucket) == false)
-		{
-			addObj((bucket.key));
-			addValue(bucket.value);
-		}
+		addObj(key);
+		addValue(value);
 	}
 }
 

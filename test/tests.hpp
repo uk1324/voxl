@@ -35,4 +35,4 @@ void fail(std::string_view testName, int lineNumber, const char* filename);
 		} \
 	} while(false)
 
-void hashMapTests();
+void hashTableTests();

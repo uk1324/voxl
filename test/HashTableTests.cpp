@@ -5,11 +5,18 @@
 
 using namespace Voxl;
 
+static void markHashTable(HashTable* hashTable, Allocator& allocator)
+{
+	allocator.addHashTable(*hashTable);
+}
+
 #define INIT() \
 	Allocator _a; \
 	HashTable _m; \
+	const auto _h = _a.registerMarkingFunction(&_m, markHashTable);
 
 #define PUT(k, v) _m.set(_a.allocateString(k), v)
+#define PUT_IF_NOT_SET(k, v) _m.insertIfNotSet(_a.allocateString(k), v)
 #define GET(k) (_m.get(_a.allocateString(k)))
 #define DEL(k) (_m.remove(_a.allocateString(k)))
 
@@ -17,9 +24,23 @@ static void insertTest()
 {
 	INIT();
 
-	PUT("abc", Value::integer(5));
+	const auto isNewKey = PUT("abc", Value::integer(5));
+	ASSERT_TRUE(isNewKey);
 	const auto v = GET("abc");
 	ASSERT_TRUE(v.has_value());
+	ASSERT_EQ(GET("abc")->asInt(), 5);
+
+	SUCCESS();
+}
+
+static void insertIfNotSetTest()
+{
+	INIT();
+
+	PUT("abc", Value::integer(5));
+	const bool inserted = PUT_IF_NOT_SET("abc", Value::integer(3));
+	ASSERT_FALSE(inserted);
+	const auto v = GET("abc");
 	ASSERT_EQ(GET("abc")->asInt(), 5);
 
 	SUCCESS();
@@ -33,8 +54,19 @@ static void insertAndDeleteTest()
 	const auto v = GET("test");
 	ASSERT_TRUE(v.has_value());
 	ASSERT_EQ(GET("test")->asInt(), 2);
-	DEL("test");
+	const auto deleted = DEL("test");
+	ASSERT_TRUE(deleted);
 	ASSERT_FALSE(GET("test").has_value());
+
+	SUCCESS();
+}
+
+static void deleteNonexistentKeyTest()
+{
+	INIT();
+
+	const auto deleted = DEL("test");
+	ASSERT_FALSE(deleted);
 
 	SUCCESS();
 }
@@ -74,7 +106,7 @@ static void rehashTest()
 	SUCCESS();
 }
 
-static void getNonExistingKeyTest()
+static void getNonexistentKeyTest()
 {
 	INIT();
 
@@ -128,12 +160,14 @@ static void iteratorTest()
 
 // Can't allocate too much because memory the hashmap isn't registered as a GC root.
 
-void hashMapTests()
+void hashTableTests()
 {
-	std::cout << "HashMap tests\n";
+	std::cout << "HashTable tests\n";
 	insertTest();
+	insertIfNotSetTest();
 	insertAndDeleteTest();
+	deleteNonexistentKeyTest();
 	rehashTest();
-	getNonExistingKeyTest();
+	getNonexistentKeyTest();
 	iteratorTest();
 }

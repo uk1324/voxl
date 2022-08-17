@@ -11,41 +11,33 @@ HashTable::HashTable()
 	m_data = nullptr;
 }
 
-bool HashTable::set(ObjString* newKey, const Value& newValue)
+bool HashTable::set(ObjString* key, const Value& value)
 {
-	if ((static_cast<float>(m_size + 1) / static_cast<float>(m_capacity)) > MAX_LOAD_FACTOR)
-	{
-		const auto oldData = m_data;
-		const auto oldCapacity = m_capacity;
-		m_capacity = (m_capacity == 0) ? INITIAL_SIZE : capacity() * 2;
-		m_data = reinterpret_cast<Bucket*>(::operator new(sizeof(Bucket) * m_capacity));
-		m_size = 0;
-		setAllKeysToNull();
+	resizeIfNeeded(m_size + 1);
 
-		for (size_t i = 0; i < oldCapacity; i++)
-		{
-			const auto& [key, value] = oldData[i];
-			if ((isKeyNull(key) == false) && (isKeyTombstone(key) == false))
-			{
-				const auto isNewItem = set(key, value);
-				// TODO: This can be slightly optmized by changing the call to set() with just 
-				// inserting the item without doing the check if it is a new item becuase
-				// when rehashing it should always be a new key.
-				ASSERT(isNewItem);
-			}
-		}
-
-		::operator delete(oldData);
-	}
-
-	auto& bucket = findBucket(newKey);
+	auto& bucket = findBucket(key);
 	const auto isNewItem = isBucketEmpty(bucket);
 	if (isNewItem)
 		m_size++;
 
-	bucket.key = newKey;
-	bucket.value = newValue;
+	bucket.key = key;
+	bucket.value = value;
 
+	return isNewItem;
+}
+
+bool HashTable::insertIfNotSet(ObjString* key, const Value& value)
+{
+	resizeIfNeeded(m_size + 1);
+
+	auto& bucket = findBucket(key);
+	const auto isNewItem = isBucketEmpty(bucket);
+	if (isNewItem)
+	{
+		bucket.key = key;
+		bucket.value = value;
+		m_size++;
+	}
 	return isNewItem;
 }
 
@@ -81,99 +73,22 @@ bool HashTable::remove(std::string_view key)
 
 std::optional<Value&> HashTable::get(const ObjString* key)
 {
-	if (m_size == 0)
-		return std::nullopt;
-
-	auto& bucket = findBucket(key);
-	if (isKeyNull(bucket.key) || isKeyTombstone(bucket.key))
-	{
-		return std::nullopt;
-	}
-	return bucket.value;
+	return getImplementation<const ObjString*>(key);
 }
 
 std::optional<Value&> HashTable::get(std::string_view key)
 {
-	if (m_size == 0)
-		return std::nullopt;
-
-	auto& bucket = findBucket(key);
-	if (isKeyNull(bucket.key) || isKeyTombstone(bucket.key))
-	{
-		return std::nullopt;
-	}
-	return bucket.value;
+	return getImplementation<std::string_view>(key);
 }
 
 HashTable::Bucket& HashTable::findBucket(const ObjString* key)
 {
-	auto index = hashKey(key) % m_capacity;
-
-	Bucket* tombstone = nullptr;
-
-	for (;;)
-	{
-		auto& bucket = data()[index];
-
-		if (isKeyNull(bucket.key))
-		{
-			return (tombstone == nullptr) ? bucket : *tombstone;
-		}
-		else if (isKeyTombstone(bucket.key))
-		{
-			// This check makes it so the first found tombstone is always used.
-			// When using linear probing this check makes it so the elements are inserted closer
-			// to their ideal spot.
-			// Example without the if check
-			// [_, 1, 2, _]
-			// [_, T, T, _]
-			// [_, T, 1, _]
-			// [_, T, 1, 2]
-			// The probe length increased for both buckets and an extra tombstone exists.
-			if (tombstone == nullptr)
-			{
-				tombstone = &bucket;
-			}
-		}
-		else if (compareKeys(bucket.key, key))
-		{
-			return bucket;
-		}
-
-		// TODO: Find a better probing method
-		// Robing hood probing and siwsstables implementation are apparently good.
-		index = (index + 1) % capacity();
-	}
+	return findBucketImplementation<const ObjString*>(key);
 }
 
 HashTable::Bucket& HashTable::findBucket(std::string_view key)
 {
-	auto index = hashKey(key) % m_capacity;
-
-	Bucket* tombstone = nullptr;
-
-	for (;;)
-	{
-		auto& bucket = data()[index];
-
-		if (isKeyNull(bucket.key))
-		{
-			return (tombstone == nullptr) ? bucket : *tombstone;
-		}
-		else if (isKeyTombstone(bucket.key))
-		{
-			if (tombstone == nullptr)
-			{
-				tombstone = &bucket;
-			}
-		}
-		else if (compareKeys(key, bucket.key))
-		{
-			return bucket;
-		}
-
-		index = (index + 1) % capacity();
-	}
+	return findBucketImplementation<std::string_view>(key);
 }
 
 bool HashTable::isBucketEmpty(const Bucket& bucket)
@@ -250,9 +165,40 @@ void HashTable::setAllKeysToNull()
 	}
 }
 
+void HashTable::resizeIfNeeded(size_t newSize)
+{
+	if ((static_cast<float>(newSize) / static_cast<float>(m_capacity)) > MAX_LOAD_FACTOR)
+	{
+		const auto oldData = m_data;
+		const auto oldCapacity = m_capacity;
+		m_capacity = (m_capacity == 0) ? INITIAL_SIZE : capacity() * 2;
+		m_data = reinterpret_cast<Bucket*>(::operator new(sizeof(Bucket) * m_capacity));
+		m_size = newSize;
+		setAllKeysToNull();
+
+		for (size_t i = 0; i < oldCapacity; i++)
+		{
+			const auto& [key, value] = oldData[i];
+			if ((isKeyNull(key) == false) && (isKeyTombstone(key) == false))
+			{
+				// TODO: This can be slightly optmized by changing the call to set() with just 
+				// inserting the item without doing the check if it is a new item becuase
+				// when rehashing it should always be a new key.
+				auto& bucket = findBucket(key);
+				const auto isNewItem = isBucketEmpty(bucket);
+				ASSERT(isNewItem);
+				bucket.key = key;
+				bucket.value = value;
+			}
+		}
+
+		::operator delete(oldData);
+	}
+}
+
 bool HashTable::compareKeys(const ObjString* a, const ObjString* b)
 {
-	return (a->size == b->size) && (memcmp(a->chars, b->chars, a->size) == 0);
+	return a == b;
 }
 
 bool HashTable::compareKeys(std::string_view a, const ObjString* b)
@@ -262,13 +208,12 @@ bool HashTable::compareKeys(std::string_view a, const ObjString* b)
 
 size_t HashTable::hashKey(const ObjString* key)
 {
-	// Don't need to hash the whole thing if the string is long.
-	return std::hash<std::string_view>()(std::string_view(key->chars, key->size));
+	return key->hash;
 }
 
 size_t HashTable::hashKey(std::string_view key)
 {
-	return std::hash<std::string_view>()(key);
+	return ObjString::hashString(key.data(), key.size());
 }
 
 void HashTable::setKeyNull(ObjString*& key)

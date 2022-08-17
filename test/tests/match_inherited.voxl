@@ -1,0 +1,6 @@
+class Super {}
+class Sub < Super {}
+
+match Sub() {
+	Super => { put("match"); }
+}

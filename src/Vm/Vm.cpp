@@ -1,4 +1,3 @@
-#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Vm/List.hpp>
 #include <Utf8.hpp>
@@ -130,19 +129,11 @@ VmResult Vm::execute(
 	m_stack.clear();
 	m_errorReporter = &errorReporter;
 
-	if (m_callStack.push() == false)
+	if (callObjFunction(program, 0, 0, false).type != ResultType::Ok)
 	{
 		ASSERT_NOT_REACHED();
 		return VmResult::RuntimeError;
 	}
-	auto& frame = m_callStack.top();
-	// TODO: Maybe just call callValue()?
-	frame.instructionPointer = program->byteCode.code.data();
-	frame.values = m_stack.topPtr;
-	frame.function = program;
-	frame.numberOfValuesToPopOffExceptArgs = 0;
-	frame.callable = program;
-	m_globals = program->globals;
 
 	try 
 	{
@@ -884,10 +875,26 @@ Vm::Result Vm::run()
 
 		case Op::MatchClass:
 		{
+			//const auto& class_ = m_stack.peek(0).as.obj->asClass();
+			//const auto& value = m_stack.peek(1);
+			//const auto valueClass = getClass(value);
+			//m_stack.top() = Value(valueClass.has_value() && (&*valueClass == class_));
+			//break;
+
 			const auto& class_ = m_stack.peek(0).as.obj->asClass();
 			const auto& value = m_stack.peek(1);
-			const auto valueClass = getClass(value);
-			m_stack.top() = Value(valueClass.has_value() && (&*valueClass == class_));
+			auto valueClass = getClass(value);
+			bool matched = false;
+			while (valueClass.has_value())
+			{
+				if (&*valueClass == class_)
+				{
+					matched = true;
+					break;
+				}
+				valueClass = valueClass->superclass;
+			}
+			m_stack.top() = Value(matched);
 			break;
 		}
 

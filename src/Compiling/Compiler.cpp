@@ -440,8 +440,12 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 		setJumpToHere(jumpToFinallyWithRethrow);
 		beginScope();
 		// Register caught value to the compiler so it is popped of when needed.
-		TRY(createVariable("", stmt.location()));
+		const auto caughtValueName = "";
+		TRY(createVariable(caughtValueName, stmt.location()));
 		currentByteCode().append(finallyBlockByteCode);
+		// Remove caught value so it can be rethrown.
+		const auto variablesRemoved = m_scopes.back().localVariables.erase(caughtValueName);
+		ASSERT(variablesRemoved == 1);
 		endScope();
 		emitOp(Op::Throw);
 
@@ -526,6 +530,9 @@ Compiler::Status Compiler::implStmt(const ImplStmt& stmt)
 Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 {
 	// TODO: Check if there are multiple AlwaysTrue patterns or patterns after AlwaysTrue. Report only warning.
+
+	beginScope();
+
 	TRY(compile(stmt.expr));
 	TRY(createVariable(".matchedValue", stmt.location()));
 	
@@ -534,7 +541,7 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 	{
 		TRY(compile(case_.pattern));
 		const auto jumpToNextCase = emitJump(Op::JumpIfFalseAndPop);
-		auto isStmtAllowedInMatchExpr = [](const std::unique_ptr<Stmt>& stmt) {
+		auto isStmtAllowedInMatchStmt = [](const std::unique_ptr<Stmt>& stmt) {
 			// TODO: Maybe give better error messages.
 			// Using a switch to get warnings if this is not exhaustive.
 			switch (stmt->type)
@@ -558,7 +565,7 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 			}
 			return false;
 		};
-		if (isStmtAllowedInMatchExpr(case_.stmt) == false)
+		if (isStmtAllowedInMatchStmt(case_.stmt) == false)
 			return errorAt(stmt.location(), "statement not allowed in match expression");
 
 		TRY(compile(case_.stmt));
@@ -570,6 +577,8 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 	{
 		setJumpToHere(jump);
 	}
+
+	endScope();
 
 	return Status::Ok;
 }

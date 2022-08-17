@@ -48,6 +48,7 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "module_private_use", "null" },
 	// TODO: Add this to error tests.
 	//{ "module_private_use_all", "null" },
+	{ "match_inherited", "match" },
 };
 
 void testFailed(std::string_view name)
@@ -77,19 +78,11 @@ static LocalValue putln(Context& c)
 // TODO: Maybe test multidimensional arrays.
 int main()
 {
+	hashTableTests();
+
+	std::cout << "Language tests\n";
 	std::stringstream output;
 	std::cout.set_rdbuf(output.rdbuf());
-
-//#define LOOP_TESTS
-#ifdef LOOP_TESTS
-	for (;;)
-	{
-#endif
-// TODO: Make a function to register the hash map to the GC.
-#ifndef VOXL_DEBUG_STRESS_TEST_GC
-	hashMapTests();
-#endif 
-	std::cout << "Language tests\n";
 	Scanner scanner;
 	Parser parser;
 	Allocator allocator;
@@ -97,6 +90,11 @@ int main()
 	auto vm = std::make_unique<Vm>(allocator);
 	vm->createModule("test", testModuleMain);
 
+//#define LOOP_TESTS
+#ifdef LOOP_TESTS
+	for (;;)
+	{
+#endif
 	for (const auto& [name, expectedResult] : tests)
 	{
 		auto filename = std::string("test/tests/") + std::string(name) + std::string(".voxl");
