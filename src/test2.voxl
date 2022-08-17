@@ -1,5 +1,17 @@
-x : ["this", true, "is", null, "a", 4, "test"];
+class MyList < List {
+	$init() {
+		$.push(5);
+	}
+}
 
-for i in x {
-	put(i);
+l : MyList();
+
+l.push(3);
+for e in l {
+	put(e);
+}
+
+loop {
+	x : List();
+	x.push(2);
 }

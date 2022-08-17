@@ -206,7 +206,6 @@ private:
 	size_t currentLocation();
 	int currentFunctionDepth();
 
-	// TODO: It might be better to have a function location that would return a struct contaning the start end.
 	Status errorAt(const SourceLocation& location, const char* format, ...);
 
 	// If only constants are allocated by the compiler the marking function probably isn't needed.

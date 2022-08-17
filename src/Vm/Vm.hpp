@@ -34,10 +34,7 @@ public:
 		Obj* callable;
 		int numberOfValuesToPopOffExceptArgs;
 		bool isInitializer;
-		// TODO: Try catch doesn't pop the block off the stack when an exception happens.
-		// To fix this I could store the stack value before try on Op::TryBegin otherwise it would be set to nullptr
-		// indicating that try isn't set.
-
+		
 		bool isNativeFunction() const;
 		void setNativeFunction();
 	};

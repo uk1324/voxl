@@ -29,9 +29,6 @@ enum class ObjType
 OBJ_TYPE_LIST(FORWARD_DECLARE)
 #undef FORWARD_DECLARE
 
-class Allocator;
-using MarkingFunction = void (*)(void*, Allocator&);
-
 struct Obj
 {
 	ObjType type;
@@ -75,6 +72,11 @@ struct Obj
 		return false;
 	}
 };
+
+class Allocator;
+using MarkingFunction = void (*)(void*, Allocator&);
+using InitFunction = void (*)(void*);
+using FreeFunction = void (*)(void*);
 
 struct ObjString : public Obj
 {
@@ -121,6 +123,23 @@ struct ObjClass : public Obj
 	size_t instanceSize;
 	std::optional<ObjClass&> superclass;
 	MarkingFunction mark;
+
+	// This is called before $init so the object is in a valid state when entering $init. The user might try to allocate
+	// something inside $init and if the object sin't a valid state at that time undefined behaviour happens. 
+	// Also when inheriting from a native class the subclass has to be initialized without storing this here 
+	// on each initializer of a class inherited from a native class the class hierarchy would need to be checked for
+	// the init method.
+	InitFunction init;
+	// TODO: Almost every native class needs an init so it might be better to use it instead of mark for checking
+	// the type.
+
+	// TODO: Could store optional.
+	FreeFunction free;
+
+	bool isNative()
+	{
+		return instanceSize != 0;
+	}
 };
 
 struct ObjInstance : public Obj

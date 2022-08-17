@@ -50,7 +50,9 @@ public:
 	ObjClosure* allocateClosure(ObjFunction* function);
 	ObjUpvalue* allocateUpvalue(Value* localVariable);
 	ObjNativeFunction* allocateForeignFunction(ObjString* name, NativeFunction function, int argCount, HashTable* globals, void* context);
-	ObjClass* allocateClass(ObjString* name, size_t instanceSize, MarkingFunction mark);
+	ObjClass* allocateClass(ObjString* name);
+	template<typename T>
+	ObjClass* allocateNativeClass(ObjString* name, void (*init)(T*), void (*free)(T*));
 	ObjInstance* allocateInstance(ObjClass* class_);
 	ObjNativeInstance* allocateNativeInstance(ObjClass* class_);
 	ObjBoundFunction* allocateBoundFunction(Obj* callable, const Value& value);
@@ -137,4 +139,20 @@ Voxl::Allocator::MarkingFunctionHandle Voxl::Allocator::registerMarkingFunction(
 	});
 
 	return MarkingFunctionHandle{ *this, id };
+}
+
+template<typename T>
+Voxl::ObjClass* Voxl::Allocator::allocateNativeClass(ObjString* name, void(*init)(T*), void(*free)(T*))
+{
+	static_assert(std::is_base_of_v<ObjNativeInstance, T>);
+	auto obj = allocateObj(sizeof(ObjClass), ObjType::Class)->asClass();
+	obj->name = name;
+	// static_cast to prevent ambigous overload.
+	obj->mark = reinterpret_cast<MarkingFunction>(static_cast<void(*)(T*, Allocator&)>(T::mark));
+	obj->init = reinterpret_cast<InitFunction>(init);
+	obj->free = reinterpret_cast<FreeFunction>(free);
+	obj->instanceSize = sizeof(T);
+	new (&obj->superclass) std::optional<ObjClass&>();
+	new (&obj->fields) HashTable();
+	return obj;
 }

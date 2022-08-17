@@ -73,7 +73,7 @@ Vm::Vm(Allocator& allocator)
 	, m_finallyBlockDepth(0)
 {
 	auto listString = m_allocator->allocateStringConstant("List").value;
-	m_listType = m_allocator->allocateClass(listString, sizeof(List), reinterpret_cast<MarkingFunction>(List::mark));	
+	m_listType = m_allocator->allocateNativeClass(listString, List::init, List::free);
 
 	auto addFn = [this](ObjClass* type, std::string_view name, NativeFunction function, int argCount)
 	{
@@ -81,7 +81,6 @@ Vm::Vm(Allocator& allocator)
 		auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount, &m_builtins, nullptr);
 		type->fields.set(nameObj, Value(functionObj));
 	};
-	addFn(m_listType, "$init", List::init, 1);
 	addFn(m_listType, "$iter", List::iter, 1);
 	addFn(m_listType, "push", List::push, 2);
 	addFn(m_listType, "size", List::get_size, 1);
@@ -89,21 +88,21 @@ Vm::Vm(Allocator& allocator)
 	addFn(m_listType, "$set_index", List::set_index, 3);
 
 	auto listIteratorString = m_allocator->allocateStringConstant("_ListIterator").value;
-	m_listIteratorType = m_allocator->allocateClass(listIteratorString, sizeof(ListIterator), reinterpret_cast<MarkingFunction>(ListIterator::mark));
+	m_listIteratorType = m_allocator->allocateNativeClass<ListIterator>(listIteratorString, ListIterator::init, nullptr);
 	addFn(m_listIteratorType, "$init", ListIterator::init, 2);
 	addFn(m_listIteratorType, "$next", ListIterator::next, 1);
 
 	auto intString = m_allocator->allocateStringConstant("Int").value;
-	m_intType = m_allocator->allocateClass(intString, 0, nullptr);
+	m_intType = m_allocator->allocateClass(intString);
 
 	auto stringString = m_allocator->allocateStringConstant("String").value;
-	m_stringType = m_allocator->allocateClass(stringString, 0, nullptr);
+	m_stringType = m_allocator->allocateClass(stringString);
 
 	auto stopIterationString = m_allocator->allocateStringConstant("StopIteration").value;
-	m_stopIterationType = m_allocator->allocateClass(stopIterationString, 0, nullptr);
+	m_stopIterationType = m_allocator->allocateClass(stopIterationString);
 
 	auto typeErrorString = m_allocator->allocateStringConstant("TypeError").value;
-	m_typeErrorType = m_allocator->allocateClass(typeErrorString, 0, nullptr);
+	m_typeErrorType = m_allocator->allocateClass(typeErrorString);
 
 	reset();
 }
@@ -803,7 +802,7 @@ Vm::Result Vm::run()
 
 			ASSERT((nameValue.type == ValueType::Obj) && (nameValue.as.obj->isString()));
 			auto name = nameValue.as.obj->asString();
-			auto class_ = m_allocator->allocateClass(name, 0, nullptr);
+			auto class_ = m_allocator->allocateClass(name);
 			m_stack.pop();
 			TRY_PUSH(Value(class_));
 			break;
@@ -989,7 +988,7 @@ Vm::Result Vm::run()
 
 		case Op::Inherit:
 		{
-			const auto& class_ = m_stack.peek(1).asObj()->asClass();
+			auto class_ = m_stack.peek(1).asObj()->asClass();
 			auto& superclassValue = m_stack.peek(0);
 			if ((superclassValue.isObj() == false) || (superclassValue.asObj()->isClass() == false))
 			{
@@ -997,6 +996,13 @@ Vm::Result Vm::run()
 			}
 			auto superclass = superclassValue.asObj()->asClass();
 			class_->superclass = *superclass;
+			if (superclass->isNative())
+			{
+				class_->mark = superclass->mark;
+				class_->init = superclass->init;
+				class_->instanceSize = superclass->instanceSize;
+			}
+
 			m_stack.pop();
 			break;
 		}
@@ -1247,9 +1253,9 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			ASSERT(numberOfValuesToPopOffExceptArgs == 1);
 
 			auto class_ = obj->asClass();
-			auto instance = (class_->instanceSize == 0)
-				? static_cast<Obj*>(m_allocator->allocateInstance(class_))
-				: static_cast<Obj*>(m_allocator->allocateNativeInstance(class_));
+			auto instance = class_->isNative()
+				? static_cast<Obj*>(m_allocator->allocateNativeInstance(class_))
+				: static_cast<Obj*>(m_allocator->allocateInstance(class_));
 
 			// TODO: Handle special classes like Int.
 			m_stack.topPtr[-argCount - 1] = Value(instance); // Replace the class with the instance.

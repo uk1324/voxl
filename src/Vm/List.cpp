@@ -5,13 +5,6 @@
 
 using namespace Voxl;
 
-LocalValue List::init(Context& c)
-{
-	auto list = c.args(0).asObj<List>();
-	list->init();
-	return LocalValue::null(c);
-}
-
 LocalValue List::iter(Context& c)
 {
 	auto iteratorType = c.getGlobal("_ListIterator");
@@ -71,6 +64,11 @@ void List::push(const Value& value)
 	size++;
 }
 
+void List::init(List* list)
+{
+	list->init();
+}
+
 void List::free(List* list)
 {
 	:: operator delete(list->data);
@@ -89,7 +87,6 @@ LocalValue ListIterator::init(Context& c)
 	auto iterator = c.args(0).asObj<ListIterator>();
 	auto list = c.args(1).asObj<List>();
 	iterator->list = list.obj;
-	iterator->index = 0;
 	return LocalValue(iterator);
 }
 
@@ -107,7 +104,15 @@ LocalValue ListIterator::next(Context& c)
 	return LocalValue(result, c);
 }
 
+void ListIterator::init(ListIterator* iterator)
+{
+	iterator->list = nullptr;
+	iterator->index = 0;
+}
+
 void ListIterator::mark(ListIterator* iterator, Allocator& allocator)
 {
+	if (iterator->list == nullptr)
+		return;
 	allocator.addObj(reinterpret_cast<Obj*>(iterator));
 }

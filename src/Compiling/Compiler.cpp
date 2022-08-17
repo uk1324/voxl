@@ -378,7 +378,7 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 		m_functionByteCodeStack.pop_back();
 	}
 	
-	// TODO Could just store one copy of this or maybe just store a std::optinal<Bytecode&>.
+	// TODO Could just store one copy of this or maybe just store a std::optional<Bytecode&>.
 	ByteCode emptyByteCode;
 	// TODO: could remove this if there is no finally.
 	const auto jumpToFinallyWithRethrow = emitJump(Op::TryBegin);
@@ -494,7 +494,6 @@ Compiler::Status Compiler::classStmt(const ClassStmt& stmt)
 
 	const auto [classNameConstant, className] = m_allocator.allocateStringConstant(stmt.name);
 
-	// TODO: When inheriting from native classes also allocate a native class.
 	TRY(loadConstant(classNameConstant));
 	emitOp(Op::CreateClass);
 
@@ -1307,7 +1306,9 @@ Compiler::Status Compiler::cleanUpBeforeJumpingOutOfScope(const Scope& scope, bo
 
 bool Compiler::canVariableBeCreatedAndAssigned(std::string_view name)
 {
-	return (name != "$");
+	if (name.size() > 0)
+		return (name[0] != '$');
+	return true;
 }
 
 Compiler::Status Compiler::errorAt(const SourceLocation& location, const char* format, ...)

@@ -133,6 +133,7 @@ ObjNativeInstance* Allocator::allocateNativeInstance(ObjClass* class_)
 {
 	auto obj = allocateObj(class_->instanceSize, ObjType::NativeInstance)->asNativeInstance();
 	obj->class_ = class_;
+	class_->init(obj);
 	return obj;
 }
 
@@ -204,14 +205,14 @@ ObjNativeFunction* Allocator::allocateForeignFunction(ObjString* name, NativeFun
 	return obj;
 }
 
-#include <iostream>
-
-ObjClass* Allocator::allocateClass(ObjString* name, size_t instanceSize, MarkingFunction mark)
+ObjClass* Allocator::allocateClass(ObjString* name)
 {
 	auto obj = allocateObj(sizeof(ObjClass), ObjType::Class)->asClass();
 	obj->name = name;
-	obj->mark = mark;
-	obj->instanceSize = instanceSize;
+	obj->mark = nullptr;
+	obj->init = nullptr;
+	obj->free = nullptr;
+	obj->instanceSize = 0;
 	new (&obj->superclass) std::optional<ObjClass&>();
 	new (&obj->fields) HashTable();
 	return obj;
@@ -476,7 +477,47 @@ void Allocator::freeObj(Obj* obj)
 			break;
 		}
 
-		default:
+		case ObjType::Closure:
+		{
+			auto closure = obj->asClosure();
+			::operator delete(closure->upvalues);
+			break;
+		}
+
+		case ObjType::NativeInstance:
+		{
+			auto instance = obj->asNativeInstance();
+			if (instance->class_->free)
+				instance->class_->free(instance);
+			break;
+		}
+
+		case ObjType::Instance:
+		{
+			auto instance = obj->asInstance();
+			instance->fields.~HashTable();
+			break;
+		}
+
+		case ObjType::Class:
+		{
+			auto class_ = obj->asClass();
+			class_->fields.~HashTable();
+			break;
+		}
+
+		case ObjType::Module:
+		{
+			auto module = obj->asModule();
+			module->globals.~HashTable();
+			break;
+		}
+
+		case ObjType::Upvalue:
+		case ObjType::NativeFunction:
+		case ObjType::BoundFunction:
+		case ObjType::String:
+			// TODO: Maybe remove from string pool here?
 			break;
 	}
 }
