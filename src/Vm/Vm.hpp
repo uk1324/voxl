@@ -146,10 +146,13 @@ public:
 	ObjString* m_geString;
 	ObjString* m_getIndexString;
 	ObjString* m_setIndexString;
+	ObjString* m_emptyString;
 
 	ObjClass* m_listType;
 	ObjClass* m_listIteratorType;
+	ObjClass* m_numberType;
 	ObjClass* m_intType;
+	ObjClass* m_floatType;
 	ObjClass* m_stringType;
 	ObjClass* m_stopIterationType;
 	ObjClass* m_typeErrorType;

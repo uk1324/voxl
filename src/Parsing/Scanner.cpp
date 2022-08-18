@@ -231,6 +231,7 @@ Token Scanner::keywordOrIdentifier()
 		{ "null", TokenType::Null },
 		{ "if", TokenType::If },
 		{ "else", TokenType::Else },
+		{ "elif", TokenType::Elif },
 		{ "loop", TokenType::Loop },
 		{ "while", TokenType::While },
 		{ "for", TokenType::For },
@@ -292,6 +293,7 @@ Token Scanner::string()
 			auto token = makeToken(TokenType::Error);
 			token.type = TokenType::StringConstant;
 			new (&token.string.text) std::string(std::move(result));
+			token.string.length = length;
 			return token;
 		}
 		

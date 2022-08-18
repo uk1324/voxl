@@ -6,6 +6,7 @@
 #include <Vm/Vm.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <TerminalErrorReporter.hpp>
+#include <TerminalColors.hpp>
 #include <ReadFile.hpp>
 
 #include <fstream>
@@ -49,16 +50,24 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	// TODO: Add this to error tests.
 	//{ "module_private_use_all", "null" },
 	{ "match_inherited", "match" },
+	{ "string_len", "9" },
+	{ "match_number", "numbernumber" },
+	{ "match_int", "int" },
+	{ "match_float", "float" },
 };
 
 void testFailed(std::string_view name)
 {
-	std::cerr << "[FAILED] " << name << '\n';
+	std::cerr 
+		<< TerminalColors::RED << "[FAILED] " << TerminalColors::RESET 
+		<< name << '\n';
 }
 
 void testFailed(std::string_view name, std::string_view got, std::string_view expected)
 {
-	std::cerr << "[FAILED] " << name << " | expected \"" << expected << "\" got \"" << got << "\"\n";
+	std::cerr 
+		<< TerminalColors::RED << "[FAILED] " << TerminalColors::RESET
+		<< name << " | expected \"" << expected << "\" got \"" << got << "\"\n";
 }
 
 static LocalValue put(Context& c)
@@ -89,12 +98,12 @@ int main()
 	Compiler compiler(allocator);
 	auto vm = std::make_unique<Vm>(allocator);
 	vm->createModule("test", testModuleMain);
-
 //#define LOOP_TESTS
 #ifdef LOOP_TESTS
 	for (;;)
 	{
 #endif
+	int testsPassed = 0;
 	for (const auto& [name, expectedResult] : tests)
 	{
 		auto filename = std::string("test/tests/") + std::string(name) + std::string(".voxl");
@@ -136,8 +145,10 @@ int main()
 			continue;
 		}
 
-		std::cerr << "[PASSED] " << name << '\n';
+		testsPassed++;
+		std::cerr << TerminalColors::GREEN << "[PASSED] " << TerminalColors::RESET << name << '\n';
 	}
+	std::cerr << "Passed " << testsPassed << "/" << (sizeof(tests) / sizeof(tests[0])) << " language tests.";
 #ifdef LOOP_TESTS
 	}
 #endif

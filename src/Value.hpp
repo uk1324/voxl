@@ -74,7 +74,8 @@ public:
 
 public:
 	static Value null();
-	static Value integer(Int value);
+	static Value intNum(Int value);
+	static Value floatNum(Float value);
 
 	ValueType type;
 

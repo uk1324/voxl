@@ -173,7 +173,6 @@ void HashTable::resizeIfNeeded(size_t newSize)
 		const auto oldCapacity = m_capacity;
 		m_capacity = (m_capacity == 0) ? INITIAL_SIZE : capacity() * 2;
 		m_data = reinterpret_cast<Bucket*>(::operator new(sizeof(Bucket) * m_capacity));
-		m_size = newSize;
 		setAllKeysToNull();
 
 		for (size_t i = 0; i < oldCapacity; i++)
@@ -181,9 +180,6 @@ void HashTable::resizeIfNeeded(size_t newSize)
 			const auto& [key, value] = oldData[i];
 			if ((isKeyNull(key) == false) && (isKeyTombstone(key) == false))
 			{
-				// TODO: This can be slightly optmized by changing the call to set() with just 
-				// inserting the item without doing the check if it is a new item becuase
-				// when rehashing it should always be a new key.
 				auto& bucket = findBucket(key);
 				const auto isNewItem = isBucketEmpty(bucket);
 				ASSERT(isNewItem);

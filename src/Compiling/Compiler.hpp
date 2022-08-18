@@ -199,6 +199,7 @@ private:
 	void emitUint8(uint8_t value);
 	void emitUint32(uint32_t value);
 	// Could make a class RAII class that reports an error if the jump was not set at the end of the scope.
+	// This would be needed if the compiler could synchronize.
 	size_t emitJump(Op op);
 	void emitJump(Op op, size_t location);
 	void setJumpToHere(size_t placeToPatch);

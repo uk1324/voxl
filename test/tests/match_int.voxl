@@ -1,0 +1,4 @@
+match Int(0.5) {
+	Float => put("float");
+	Int => put("int");
+}

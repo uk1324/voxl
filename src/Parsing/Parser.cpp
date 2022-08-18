@@ -146,21 +146,20 @@ std::unique_ptr<Stmt> Parser::ifStmt()
 
 	auto ifThen = block();
 
-	if (match(TokenType::Else) == false)
+	if (match(TokenType::Else))
 	{
-		return std::make_unique<IfStmt>(std::move(condition), std::move(ifThen), std::nullopt, start, peekPrevious().end);
+		expect(TokenType::LeftBrace, "expected '{'");
+		auto elseThen = blockStmt();
+		return std::make_unique<IfStmt>(std::move(condition), std::move(ifThen), std::move(elseThen), start, peekPrevious().end);
 	}
-
-	if (match(TokenType::If))
+	else if (match(TokenType::Elif))
 	{
 		auto elseThen = ifStmt();
 		return std::make_unique<IfStmt>(std::move(condition), std::move(ifThen), std::move(elseThen), start, peekPrevious().end);
 	}
 	else
 	{
-		expect(TokenType::LeftBrace, "expected '{'");
-		auto elseThen = blockStmt();
-		return std::make_unique<IfStmt>(std::move(condition), std::move(ifThen), std::move(elseThen), start, peekPrevious().end);
+		return std::make_unique<IfStmt>(std::move(condition), std::move(ifThen), std::nullopt, start, peekPrevious().end);
 	}
 }
 

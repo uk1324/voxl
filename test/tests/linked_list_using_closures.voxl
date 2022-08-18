@@ -2,7 +2,7 @@ fn linked_list(value, next) {
 	fn instance(n) {
 		if n == 0 {
 			ret value;
-		} else if n == 1 {
+		} elif n == 1 {
 			ret next;
 		}
 	}

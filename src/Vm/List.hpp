@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Value.hpp>
 #include <Allocator.hpp>
 

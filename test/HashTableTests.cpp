@@ -24,7 +24,7 @@ static void insertTest()
 {
 	INIT();
 
-	const auto isNewKey = PUT("abc", Value::integer(5));
+	const auto isNewKey = PUT("abc", Value::intNum(5));
 	ASSERT_TRUE(isNewKey);
 	const auto v = GET("abc");
 	ASSERT_TRUE(v.has_value());
@@ -37,8 +37,8 @@ static void insertIfNotSetTest()
 {
 	INIT();
 
-	PUT("abc", Value::integer(5));
-	const bool inserted = PUT_IF_NOT_SET("abc", Value::integer(3));
+	PUT("abc", Value::intNum(5));
+	const bool inserted = PUT_IF_NOT_SET("abc", Value::intNum(3));
 	ASSERT_FALSE(inserted);
 	const auto v = GET("abc");
 	ASSERT_EQ(GET("abc")->asInt(), 5);
@@ -50,7 +50,7 @@ static void insertAndDeleteTest()
 {
 	INIT();
 
-	PUT("test", Value::integer(2));
+	PUT("test", Value::intNum(2));
 	const auto v = GET("test");
 	ASSERT_TRUE(v.has_value());
 	ASSERT_EQ(GET("test")->asInt(), 2);
@@ -79,7 +79,7 @@ static void rehashTest()
 	for (char i = 0; i < SIZE; i++)
 	{
 		char key[] = { 'a' + i, '\0' };
-		PUT(key, Value::integer(i));
+		PUT(key, Value::intNum(i));
 	}
 
 	for (char i = 0; i < SIZE; i += 2)
@@ -125,7 +125,7 @@ static void iteratorTest()
 	for (char i = 0; i < ITEMS_COUNT; i++)
 	{
 		char key[] = { 'a' + i, '\0' };
-		PUT(key, Value::integer(i));
+		PUT(key, Value::intNum(i));
 	}
 
 #define CHECK(expectedKey, expectedValue) \

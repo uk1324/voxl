@@ -1,7 +1,24 @@
+#include "Context.hpp"
+#include "Context.hpp"
 #include <Context.hpp>
 #include <Vm/Vm.hpp>
 
 using namespace Voxl;
+
+std::string_view LocalObjString::chars() const
+{
+	return std::string_view(obj->chars, obj->size);
+}
+
+size_t LocalObjString::len() const
+{
+	return obj->length;
+}
+
+size_t LocalObjString::size() const
+{
+	return obj->size;
+}
 
 LocalValue::LocalValue(const Value& value, Context& context)
 	: value(value)
@@ -24,7 +41,7 @@ LocalValue::~LocalValue()
 
 LocalValue LocalValue::intNum(Int value, Context& context)
 {
-	return LocalValue(Value::integer(value), context);
+	return LocalValue(Value::intNum(value), context);
 }
 
 LocalValue LocalValue::floatNum(Float value, Context& context)
@@ -35,6 +52,16 @@ LocalValue LocalValue::floatNum(Float value, Context& context)
 LocalValue LocalValue::null(Context& context)
 {
 	return LocalValue(Value::null(), context);
+}
+
+LocalObjString LocalValue::asString()
+{
+	auto obj = value.as.obj;
+	if ((value.isObj() == false) || (obj->isString() == false))
+	{
+		throw NativeException(m_context.typeErrorMustBe("TODO"));
+	}
+	return LocalObjString(obj->asString(), m_context);
 }
 
 bool LocalValue::isInt() const
@@ -69,6 +96,22 @@ Float LocalValue::asFloat() const
 {
 	ASSERT(isFloat());
 	return value.as.floatNumber;
+}
+
+bool LocalValue::isNumber() const
+{
+	return value.isFloat() || value.isInt();
+}
+
+Float LocalValue::asNumber() const
+{
+	if (value.isFloat())
+		return value.asFloat();
+
+	if (value.isInt())
+		return static_cast<Float>(value.asInt());
+
+	throw m_context.typeErrorMustBe("number");
 }
 
 Context::Context(Value* args, int argCount, Allocator& allocator, Vm& vm)

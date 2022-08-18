@@ -179,7 +179,7 @@ Compiler::Status Compiler::variableDeclarationStmt(const VariableDeclarationStmt
 {
 	for (const auto& [name, initializer] : stmt.variables)
 	{
-		// Local variables are create by just leaving the result of the initializer on top of the stack.
+		// Local variables are created by just leaving the result of the initializer on top of the stack.
 		if (initializer.has_value())
 		{
 			TRY(compile(*initializer));
@@ -546,7 +546,7 @@ Compiler::Status Compiler::matchStmt(const MatchStmt& stmt)
 			// Using a switch to get warnings if this is not exhaustive.
 			switch (stmt->type)
 			{
-			case StmtType::Expr: return false;
+			case StmtType::Expr: return true;
 			case StmtType::VariableDeclaration: return false;
 			case StmtType::Block: return true;
 			case StmtType::Fn: return false;

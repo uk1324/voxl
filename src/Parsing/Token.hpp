@@ -61,6 +61,7 @@ enum class TokenType
 	Null,
 	If,
 	Else,
+	Elif,
 	Loop,
 	While,
 	For,

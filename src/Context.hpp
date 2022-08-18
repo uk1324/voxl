@@ -14,17 +14,29 @@ class LocalValue;
 template<typename T>
 class LocalObj
 {
+	static_assert(std::is_base_of_v<Obj, T>);
+
 	friend class LocalValue;
 public:
-	T* operator->();
 	LocalObj(T* obj, Context& context);
 	LocalObj(LocalObj& other);
 	~LocalObj();
+	T* operator->();
 
 public:
 	T* obj;
 private:
 	Context& m_context;
+};
+
+class LocalObjString : public LocalObj<ObjString>
+{
+public:
+	using LocalObj<ObjString>::LocalObj;
+
+	std::string_view chars() const;
+	size_t len() const;
+	size_t size() const;
 };
 
 class LocalValue
@@ -42,6 +54,7 @@ public:
 
 	template<typename T>
 	LocalObj<T> asObj();
+	LocalObjString asString();
 
 	bool isInt() const;
 	Int asInt() const;
@@ -49,18 +62,14 @@ public:
 	bool asBool() const;
 	bool isFloat() const;
 	Float asFloat() const;
+	bool isNumber() const;
+	Float asNumber() const;
 
 public:
 	Value value;
 private:
 	Context& m_context;
 };
-
-template<typename T>
-T* LocalObj<T>::operator->()
-{
-	return obj;
-}
 
 template<typename T>
 LocalObj<T>::LocalObj(T* obj, Context& context)
@@ -82,6 +91,12 @@ template<typename T>
 LocalObj<T>::~LocalObj()
 {
 	m_context.allocator.unregisterLocal(reinterpret_cast<Obj**>(&this->obj));
+}
+
+template<typename T>
+T* LocalObj<T>::operator->()
+{
+	return obj;
 }
 
 class Vm;

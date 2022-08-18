@@ -36,7 +36,12 @@ Value Value::null()
 	return value;
 }
 
-Value Value::integer(Int value)
+Value Value::intNum(Int value)
+{
+	return Value(value);
+}
+
+Value Value::floatNum(Float value)
 {
 	return Value(value);
 }

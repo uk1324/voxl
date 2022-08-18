@@ -1,0 +1,7 @@
+match 5.0 {
+	Number => put("number");
+}
+
+match 5 {
+	Number => put("number");
+}

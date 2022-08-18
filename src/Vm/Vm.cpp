@@ -1,5 +1,7 @@
 #include <Vm/Vm.hpp>
 #include <Vm/List.hpp>
+#include <Vm/String.hpp>
+#include <Vm/Number.hpp>
 #include <Utf8.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -61,11 +63,14 @@ Vm::Vm(Allocator& allocator)
 	, m_geString(m_allocator->allocateStringConstant("$ge").value)
 	, m_getIndexString(m_allocator->allocateStringConstant("$get_index").value)
 	, m_setIndexString(m_allocator->allocateStringConstant("$set_index").value)
+	, m_emptyString(m_allocator->allocateStringConstant("").value)
 // TODO: The GC might run during the constructor so the values have to be check for begin null.
 // This also may be fixable by making constant classes that are always marked.
 // Currently only strings and functions can be constant because they don't contain any changing content.
 	, m_listType(nullptr)
+	, m_numberType(nullptr)
 	, m_intType(nullptr)
+	, m_floatType(nullptr)
 	, m_listIteratorType(nullptr)
 	, m_stopIterationType(nullptr)
 	, m_stringType(nullptr)
@@ -92,11 +97,23 @@ Vm::Vm(Allocator& allocator)
 	addFn(m_listIteratorType, "$init", ListIterator::init, 2);
 	addFn(m_listIteratorType, "$next", ListIterator::next, 1);
 
+	auto numberString = m_allocator->allocateStringConstant("Number").value;
+	m_numberType = m_allocator->allocateClass(numberString);
+	addFn(m_numberType, "sin", Number::sin, 1);
+	addFn(m_numberType, "cos", Number::cos, 1);
+	addFn(m_numberType, "tan", Number::tan, 1);
+
 	auto intString = m_allocator->allocateStringConstant("Int").value;
 	m_intType = m_allocator->allocateClass(intString);
+	m_intType->superclass = *m_numberType;
+
+	auto floatString = m_allocator->allocateStringConstant("Float").value;
+	m_floatType = m_allocator->allocateClass(floatString);
+	m_floatType->superclass = *m_numberType;
 
 	auto stringString = m_allocator->allocateStringConstant("String").value;
 	m_stringType = m_allocator->allocateClass(stringString);
+	addFn(m_stringType, "len", String::len, 1);
 
 	auto stopIterationString = m_allocator->allocateStringConstant("StopIteration").value;
 	m_stopIterationType = m_allocator->allocateClass(stopIterationString);
@@ -158,7 +175,9 @@ void Vm::reset()
 	m_builtins.clear();
 	m_modules.clear();
 	m_builtins.set(m_listType->name, Value(m_listType));
+	m_builtins.set(m_numberType->name, Value(m_numberType));
 	m_builtins.set(m_intType->name, Value(m_intType));
+	m_builtins.set(m_floatType->name, Value(m_floatType));
 	m_builtins.set(m_stringType->name, Value(m_stringType));
 	m_builtins.set(m_stopIterationType->name, Value(m_stopIterationType));
 	m_builtins.set(m_listIteratorType->name, Value(m_listIteratorType));
@@ -551,7 +570,9 @@ Vm::Result Vm::run()
 				const auto lhsObj = lhs.asObj();
 				if (lhsObj->isModule() && (lhsObj->asModule()->isLoaded == false))
 				{
-					return fatalError("partially initialized module 'TODO' has no attribute 'TODO' (most likely due to a circular import)");
+					return fatalError(
+						"partially initialized module has no field '%s' (most likely due to a circular import)", 
+						fieldName->chars);
 				}
 			}
 
@@ -1261,27 +1282,75 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			ASSERT(numberOfValuesToPopOffExceptArgs == 1);
 
 			auto class_ = obj->asClass();
-			auto instance = class_->isNative()
-				? static_cast<Obj*>(m_allocator->allocateNativeInstance(class_))
-				: static_cast<Obj*>(m_allocator->allocateInstance(class_));
 
-			// TODO: Handle special classes like Int.
-			m_stack.topPtr[-argCount - 1] = Value(instance); // Replace the class with the instance.
-			if (const auto initializer = class_->fields.get(m_initString); initializer.has_value())
+			auto returnFromSpecialConstructor = [this, argCount, numberOfValuesToPopOffExceptArgs](const Value& value)
 			{
-				TRY(callValue(*initializer, argCount + 1, 0, true));
-				// Could check if the function returns null like python,
-				// or I could just ignore the return value like javascript and it with the instance.
-				// Another option would be to check if it return value is the instance or maybe the same type as class.
+				m_stack.topPtr -= static_cast<intptr_t>(argCount) + static_cast<intptr_t>(numberOfValuesToPopOffExceptArgs);
+				*m_stack.topPtr = value;
+				m_stack.topPtr++;
+			};
 
-				// All of these options would require storing something inside the call frame.
-				// An option would be to if numberOfValuesToPopOffExceptArgs is negative then
-				// don't push the return value.
-			}
-			else if (argCount != 0)
+			if (class_ == m_intType)
 			{
-				return fatalError("expected 0 args but got %d", argCount);
+				if (argCount != 1)
+					return fatalError("expected 1 args but got %d", argCount);
+
+				const auto args = m_stack.topPtr - argCount;
+
+				if (args[0].isInt())
+					returnFromSpecialConstructor(args[0]);
+				else if (args[0].isFloat())
+					// TODO: Don't know what rounding to use.
+					returnFromSpecialConstructor(Value::intNum(static_cast<Int>(args[0].asFloat())));
+				else
+					return fatalError("expected number got b");
 			}
+			else if ((class_ == m_floatType) || (class_ == m_numberType))
+			{
+				if (argCount != 1)
+					return fatalError("expected 1 args but got %d", argCount);
+
+				const auto args = m_stack.topPtr - argCount;
+
+				if (args[0].isFloat())
+					returnFromSpecialConstructor(args[0]);
+				else if (args[0].isInt())
+					returnFromSpecialConstructor(Value::floatNum(static_cast<Float>(args[0].asInt())));
+				else
+					return fatalError("expected number got b");
+			}
+			else if (class_ == m_stringType)
+			{
+				if (argCount != 0)
+					return fatalError("expected 0 args but got %d", argCount);
+
+				returnFromSpecialConstructor(Value(m_emptyString));
+			}
+			else
+			{
+				auto instance = class_->isNative()
+					? static_cast<Obj*>(m_allocator->allocateNativeInstance(class_))
+					: static_cast<Obj*>(m_allocator->allocateInstance(class_));
+
+				// TODO: Handle special classes like Int.
+				m_stack.topPtr[-argCount - 1] = Value(instance); // Replace the class with the instance.
+				if (const auto initializer = class_->fields.get(m_initString); initializer.has_value())
+				{
+					TRY(callValue(*initializer, argCount + 1, 0, true));
+					// Could check if the function returns null like python,
+					// or I could just ignore the return value like javascript and it with the instance.
+					// Another option would be to check if it return value is the instance or maybe the same type as class.
+
+					// All of these options would require storing something inside the call frame.
+					// An option would be to if numberOfValuesToPopOffExceptArgs is negative then
+					// don't push the return value.
+				}
+				else if (argCount != 0)
+				{
+					return fatalError("expected 0 args but got %d", argCount);
+				}
+			}
+			
 			break;
 		}
 
@@ -1358,6 +1427,7 @@ std::optional<Value> Vm::getMethod(Value& value, ObjString* methodName)
 {
 	// TODO: Maybe have a seperate hash table for method and fields of a class. Method could only be added using Impl.
 	// Could return by reference instead of value.
+	// This also prevents overriding methods like constructors.
 	auto class_ = getClass(value);
 	while (class_.has_value())
 	{
@@ -1407,6 +1477,8 @@ std::optional<ObjClass&> Vm::getClass(const Value& value)
 {
 	if (value.isInt())
 		return *m_intType;
+	if (value.isFloat())
+		return *m_floatType;
 
 	if (value.isObj())
 	{
@@ -1468,14 +1540,25 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 	allocator.addHashTable(vm->m_builtins);
 	if (vm->m_listType != nullptr)
 		allocator.addObj(vm->m_listType);
+
+	if (vm->m_numberType != nullptr)
+		allocator.addObj(vm->m_numberType);
+
 	if (vm->m_intType != nullptr)
 		allocator.addObj(vm->m_intType);
+
+	if (vm->m_floatType != nullptr)
+		allocator.addObj(vm->m_floatType);
+
 	if (vm->m_listIteratorType != nullptr)
 		allocator.addObj(vm->m_listIteratorType);
+
 	if (vm->m_stopIterationType != nullptr)
 	allocator.addObj(vm->m_stopIterationType);
+
 	if (vm->m_stringType != nullptr)
 		allocator.addObj(vm->m_stringType);
+
 	if (vm->m_typeErrorType)
 		allocator.addObj(vm->m_typeErrorType);
 
