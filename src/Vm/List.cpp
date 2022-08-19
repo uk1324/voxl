@@ -43,7 +43,7 @@ LocalValue List::set_index(Context& c)
 	return LocalValue(c.args(1).asObj<List>()->data[c.args(2).asInt()] = c.args(0).value, c);
 }
 
-void List::init()
+void List::initialize()
 {
 	capacity = 0;
 	size = 0;
@@ -66,7 +66,7 @@ void List::push(const Value& value)
 
 void List::init(List* list)
 {
-	list->init();
+	list->initialize();
 }
 
 void List::free(List* list)
@@ -104,7 +104,7 @@ LocalValue ListIterator::next(Context& c)
 	return LocalValue(result, c);
 }
 
-void ListIterator::init(ListIterator* iterator)
+void ListIterator::construct(ListIterator* iterator)
 {
 	iterator->list = nullptr;
 	iterator->index = 0;

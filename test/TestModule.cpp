@@ -35,6 +35,7 @@ static LocalValue throw_3(Context& c)
 }
 
 }
+
 LocalValue testModuleMain(Context& c)
 {
 	using namespace Test;
@@ -42,5 +43,34 @@ LocalValue testModuleMain(Context& c)
 	c.createFunction("invoke", invoke, 1);
 	c.createFunction("get_5", get_5, 0);
 	c.createFunction("throw_3", throw_3, 0);
+
+	c.createClass<U8>(
+		"U8",
+		{
+			{ "$init", U8::init, U8::initArgCount },
+			{ "get", U8::get, U8::getArgCount },
+			{ "set", U8::set, U8::setArgCount }
+		});
+
+	return LocalValue::null(c);
+}
+
+LocalValue U8::init(Context& c)
+{
+	auto u8 = c.args(0).asObj<U8>();
+	u8->value = c.args(1).asNumber();
+	return LocalValue::null(c);
+}
+
+LocalValue U8::get(Context& c)
+{
+	auto u8 = c.args(0).asObj<U8>();
+	return LocalValue::intNum(static_cast<Int>(u8->value), c);
+}
+
+LocalValue U8::set(Context& c)
+{
+	auto u8 = c.args(0).asObj<U8>();
+	u8->value = c.args(1).asNumber();
 	return LocalValue::null(c);
 }

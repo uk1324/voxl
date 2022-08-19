@@ -18,8 +18,11 @@ enum class VmResult
 	RuntimeError,
 };
 
+class Context;
+
 class Vm
 {
+	friend class Context;
 private:
 	struct FatalException {};
 
@@ -27,16 +30,12 @@ public:
 	// Order members to reduce the size.
 	struct CallFrame
 	{
-		const uint8_t* instructionPointer;
+		const uint8_t* instructionPointerBeforeCall;
 		Value* values;
 		ObjUpvalue** upvalues;
-		ObjFunction* function;
 		Obj* callable;
 		int numberOfValuesToPopOffExceptArgs;
 		bool isInitializer;
-		
-		bool isNativeFunction() const;
-		void setNativeFunction();
 	};
 
 	struct ExceptionHandler
@@ -118,6 +117,7 @@ public:
 	HashTable m_builtins;
 	// Don't use directly use getGlobal() and setGlobal() instead.
 	HashTable* m_globals;
+	const uint8_t* m_instructionPointer;
 	
 	StaticStack<Value, 1024> m_stack;
 	StaticStack<CallFrame, 128> m_callStack;

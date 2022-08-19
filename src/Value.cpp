@@ -150,6 +150,11 @@ std::ostream& operator<< (std::ostream& os, Voxl::Obj* obj)
 
 bool operator==(const Value& lhs, const Value& rhs)
 {
+	if (lhs.isInt() && rhs.isFloat())
+		return static_cast<Float>(lhs.asInt()) == rhs.asFloat();
+	if (lhs.isFloat() && rhs.isInt())
+		return lhs.asFloat() == static_cast<Float>(rhs.asInt());
+
 	if (lhs.type != rhs.type)
 		return false;
 

@@ -74,9 +74,16 @@ struct Obj
 };
 
 class Allocator;
-using MarkingFunction = void (*)(void*, Allocator&);
-using InitFunction = void (*)(void*);
-using FreeFunction = void (*)(void*);
+using MarkingFunctionPtr = void (*)(void*, Allocator&);
+using InitFunctionPtr = void (*)(void*);
+using FreeFunctionPtr = void (*)(void*);
+
+template<typename T>
+using MarkingFunction = void (*)(T*, Allocator&);
+template<typename T>
+using InitFunction = void (*)(T*);
+template<typename T>
+using FreeFunction = void (*)(T*);
 
 struct ObjString : public Obj
 {
@@ -130,19 +137,19 @@ struct ObjClass : public Obj
 	HashTable fields;
 	size_t instanceSize;
 	std::optional<ObjClass&> superclass;
-	MarkingFunction mark;
+	MarkingFunctionPtr mark;
 
 	// This is called before $init so the object is in a valid state when entering $init. The user might try to allocate
 	// something inside $init and if the object sin't a valid state at that time undefined behaviour happens. 
 	// Also when inheriting from a native class the subclass has to be initialized without storing this here 
 	// on each initializer of a class inherited from a native class the class hierarchy would need to be checked for
 	// the init method.
-	InitFunction init;
+	InitFunctionPtr init;
 	// TODO: Almost every native class needs an init so it might be better to use it instead of mark for checking
 	// the type.
 
 	// TODO: Could store optional.
-	FreeFunction free;
+	FreeFunctionPtr free;
 
 	// This count is needed because to free an instance of a class the free function stored inside class is needed so the class
 	// has to be kept alive if all the instances haven't been deleted yet. With the current implementation a faster way to achieve this

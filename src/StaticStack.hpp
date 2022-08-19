@@ -105,6 +105,7 @@ T& StaticStack<T, SIZE>::peek(size_t i)
 template<typename T, size_t SIZE>
 T& StaticStack<T, SIZE>::top()
 {
+	ASSERT(size() > 0);
 	return *(topPtr - 1);
 }
 

@@ -1,0 +1,6 @@
+use "test" -> (U8);
+
+n : U8(5);
+put(n.get());
+n.set(3);
+put(n.get());

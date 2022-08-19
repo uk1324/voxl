@@ -92,17 +92,27 @@ void TerminalErrorReporter::onVmError(const Vm& vm, std::string_view message)
 	for (auto frame = vm.m_callStack.crbegin(); frame != vm.m_callStack.crend(); ++frame)
 	{
 		// TODO: Also print native functions. Currently calling a native function doesn't store it in the call frame.
-		if (frame->isNativeFunction())
-			continue;
-
-		const auto function = frame->function;
-		const auto instructionOffset = frame->instructionPointer - function->byteCode.code.data();
-		const auto lineNumber = function->byteCode.lineNumberAtOffset[instructionOffset] + 1;
-		m_out << "line " << lineNumber << " in " << function->name->chars << "()\n";
+		const auto callable = frame->callable;
+		if (callable->isFunction())
+		{
+			const auto function = callable->asFunction();
+			const auto instructionOffset = frame->instructionPointerBeforeCall - function->byteCode.code.data();
+			const auto lineNumber = function->byteCode.lineNumberAtOffset[instructionOffset] + 1;
+			m_out << "line " << lineNumber << " in " << function->name->chars << "()\n";
+		}
+		else if (callable->isNativeFunction())
+		{
+			const auto function = callable->asNativeFunction();
+			m_out << "in native " << function->name->chars << "()\n";
+		}
+		else
+		{
+			ASSERT_NOT_REACHED();
+		}
 	}
 }
 
-void TerminalErrorReporter::onUncaughtException(const Vm& vm, const Value& value, std::string_view message)
+void TerminalErrorReporter::onUncaughtException(const Vm&, const Value&, std::string_view)
 {
 	ASSERT_NOT_REACHED();
 }

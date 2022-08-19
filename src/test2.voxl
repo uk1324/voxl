@@ -1,4 +1,4 @@
-match Float(1) {
-	Int => put("int");
-	Float => put("float");
-}
+use "test" -> (U8);
+//
+//n : U8(5);
+//put(n.get());

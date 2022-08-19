@@ -23,7 +23,7 @@ private:
 
 	struct MarkingFunctionEntry
 	{
-		MarkingFunction function;
+		MarkingFunctionPtr function;
 		void* data;
 		size_t id;
 	};
@@ -52,7 +52,21 @@ public:
 	ObjNativeFunction* allocateForeignFunction(ObjString* name, NativeFunction function, int argCount, HashTable* globals, void* context);
 	ObjClass* allocateClass(ObjString* name);
 	template<typename T>
-	ObjClass* allocateNativeClass(ObjString* name, void (*init)(T*), void (*free)(T*));
+	ObjClass* allocateNativeClass(ObjString* name, InitFunction<T> init, FreeFunction<T> free);
+	struct Method
+	{
+		std::string_view name;
+		NativeFunction function;
+		int argCount;
+	};
+	template<typename T>
+	ObjClass* allocateNativeClass(
+		ObjString* name,
+		std::initializer_list<Method> methods,
+		HashTable* globals,
+		InitFunction<T> init = nullptr,
+		FreeFunction<T> free = nullptr,
+		void* context = nullptr);
 	ObjInstance* allocateInstance(ObjClass* class_);
 	ObjNativeInstance* allocateNativeInstance(ObjClass* class_);
 	ObjBoundFunction* allocateBoundFunction(Obj* callable, const Value& value);
@@ -133,7 +147,7 @@ Voxl::Allocator::MarkingFunctionHandle Voxl::Allocator::registerMarkingFunction(
 		: m_markingFunctions.back().id + 1;
 
 	m_markingFunctions.push_back(MarkingFunctionEntry{ 
-		reinterpret_cast<MarkingFunction>(function),
+		reinterpret_cast<MarkingFunctionPtr>(function),
 		data,
 		id
 	});
@@ -142,18 +156,75 @@ Voxl::Allocator::MarkingFunctionHandle Voxl::Allocator::registerMarkingFunction(
 }
 
 template<typename T>
-Voxl::ObjClass* Voxl::Allocator::allocateNativeClass(ObjString* name, void(*init)(T*), void(*free)(T*))
+Voxl::ObjClass* Voxl::Allocator::allocateNativeClass(ObjString* name, InitFunction<T> init, FreeFunction<T>free)
 {
 	static_assert(std::is_base_of_v<ObjNativeInstance, T>);
 	auto obj = allocateObj(sizeof(ObjClass), ObjType::Class)->asClass();
 	obj->name = name;
 	// static_cast to prevent ambigous overload.
-	obj->mark = reinterpret_cast<MarkingFunction>(static_cast<void(*)(T*, Allocator&)>(T::mark));
-	obj->init = reinterpret_cast<InitFunction>(init);
-	obj->free = reinterpret_cast<FreeFunction>(free);
+	obj->mark = reinterpret_cast<MarkingFunctionPtr>(static_cast<void(*)(T*, Allocator&)>(T::mark));
+	obj->init = reinterpret_cast<InitFunctionPtr>(init);
+	obj->free = reinterpret_cast<FreeFunctionPtr>(free);
 	obj->instanceSize = sizeof(T);
 	obj->nativeInstanceCount = 0;
 	new (&obj->superclass) std::optional<ObjClass&>();
 	new (&obj->fields) HashTable();
 	return obj;
 }
+
+template<typename T>
+Voxl::ObjClass* Voxl::Allocator::allocateNativeClass(
+	ObjString* name,
+	std::initializer_list<Method> methods, 
+	HashTable* globals,
+	InitFunction<T> init,
+	FreeFunction<T> free,
+	void* context)
+{
+	auto class_ = allocateNativeClass<T>(name, init, free);
+	// Could make foreign functions constants instead of doing this.
+	auto _ = registerMarkingFunction(class_, +[](ObjClass* class_, Allocator& allocator)
+		{
+			allocator.addObj(class_);
+		});
+
+	for (const auto& method : methods)
+	{
+		const auto methodName = allocateStringConstant(method.name).value;
+		const auto methodDisplayedName =
+			allocateStringConstant((std::string(name->chars, name->size) + "." + std::string(method.name))).value;
+		const auto methodFunction = allocateForeignFunction(
+			methodDisplayedName,
+			method.function,
+			method.argCount,
+			globals,
+			context);
+
+		bool inserted = class_->fields.insertIfNotSet(methodName, Value(methodFunction));
+		ASSERT(inserted);
+	}
+
+	return class_;
+}
+
+
+//return allocateNativeClass(name, init, free);
+//LocalObjClass class_(
+//	allocator.allocateNativeClass(name, init, free),
+//	*this);
+
+//for (const auto& method : methods)
+//{
+//	const auto methodName = allocator.allocateStringConstant(method.name).value;
+//	const auto methodDisplayedName =
+//		allocator.allocateStringConstant((std::string(name.chars, name.size) + "." + std::string(method.name))).value;
+//	const auto methodFunction = allocator.allocateForeignFunction(
+//		methodDisplayedName,
+//		method.function,
+//		method.argCount,
+//		vm.m_globals,
+//		context);
+
+//	bool inserted = class_->fields.insertIfNotSet(methodName, Value(methodFunction));
+//	ASSERT(inserted);
+//}

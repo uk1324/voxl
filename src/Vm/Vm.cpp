@@ -16,18 +16,15 @@
 
 using namespace Voxl;
 
-// TODO: Calling stack.top requires 2 levles of indirection 
-// Using the global variable requires 1 level of indirection but also requires setting and unsetting the pointer on call and return.
-// The former is simpler.
-
 #define TRY(somethingThatReturnsResult) \
-	{ \
+	 do \
+	 { \
 		const auto expressionResult = somethingThatReturnsResult; \
 		if (expressionResult.type != ResultType::Ok) \
 		{ \
 			return expressionResult; \
 		} \
-	}
+	} while (false)
 
 #define TRY_PUSH(value) \
 	if (m_stack.push(value) == false) \
@@ -51,32 +48,34 @@ Vm::Vm(Allocator& allocator)
 	: m_allocator(&allocator)
 	, m_errorReporter(nullptr)
 	, m_rootMarkingFunctionHandle(allocator.registerMarkingFunction(this, mark))
-	, m_initString(m_allocator->allocateStringConstant("$init").value)
-	, m_addString(m_allocator->allocateStringConstant("$add").value)
-	, m_subString(m_allocator->allocateStringConstant("$sub").value)
-	, m_mulString(m_allocator->allocateStringConstant("$mul").value)
-	, m_divString(m_allocator->allocateStringConstant("$div").value)
-	, m_modString(m_allocator->allocateStringConstant("$mod").value)
-	, m_ltString(m_allocator->allocateStringConstant("$lt").value)
-	, m_leString(m_allocator->allocateStringConstant("$le").value)
-	, m_gtString(m_allocator->allocateStringConstant("$gt").value)
-	, m_geString(m_allocator->allocateStringConstant("$ge").value)
-	, m_getIndexString(m_allocator->allocateStringConstant("$get_index").value)
-	, m_setIndexString(m_allocator->allocateStringConstant("$set_index").value)
-	, m_emptyString(m_allocator->allocateStringConstant("").value)
-// TODO: The GC might run during the constructor so the values have to be check for begin null.
+	, m_initString(allocator.allocateStringConstant("$init").value)
+	, m_addString(allocator.allocateStringConstant("$add").value)
+	, m_subString(allocator.allocateStringConstant("$sub").value)
+	, m_mulString(allocator.allocateStringConstant("$mul").value)
+	, m_divString(allocator.allocateStringConstant("$div").value)
+	, m_modString(allocator.allocateStringConstant("$mod").value)
+	, m_ltString(allocator.allocateStringConstant("$lt").value)
+	, m_leString(allocator.allocateStringConstant("$le").value)
+	, m_gtString(allocator.allocateStringConstant("$gt").value)
+	, m_geString(allocator.allocateStringConstant("$ge").value)
+	, m_getIndexString(allocator.allocateStringConstant("$get_index").value)
+	, m_setIndexString(allocator.allocateStringConstant("$set_index").value)
+	, m_emptyString(allocator.allocateStringConstant("").value)
+// The GC might run during the constructor so the values have to be checked inside mark for begin null.
 // This also may be fixable by making constant classes that are always marked.
-// Currently only strings and functions can be constant because they don't contain any changing content.
+// Currently only strings and functions can be constant because they don't contain any changing data.
 	, m_listType(nullptr)
+	, m_listIteratorType(nullptr)
 	, m_numberType(nullptr)
 	, m_intType(nullptr)
 	, m_floatType(nullptr)
-	, m_listIteratorType(nullptr)
 	, m_stopIterationType(nullptr)
 	, m_stringType(nullptr)
 	, m_typeErrorType(nullptr)
 	, m_finallyBlockDepth(0)
 {
+	// Cannot use allocateNativeClass overload with initializer list inside constructor because the GC might run. 
+
 	auto listString = m_allocator->allocateStringConstant("List").value;
 	m_listType = m_allocator->allocateNativeClass(listString, List::init, List::free);
 
@@ -93,15 +92,22 @@ Vm::Vm(Allocator& allocator)
 	addFn(m_listType, "$set_index", List::set_index, 3);
 
 	auto listIteratorString = m_allocator->allocateStringConstant("_ListIterator").value;
-	m_listIteratorType = m_allocator->allocateNativeClass<ListIterator>(listIteratorString, ListIterator::init, nullptr);
+	m_listIteratorType = m_allocator->allocateNativeClass<ListIterator>(listIteratorString, ListIterator::construct, nullptr);
 	addFn(m_listIteratorType, "$init", ListIterator::init, 2);
 	addFn(m_listIteratorType, "$next", ListIterator::next, 1);
 
 	auto numberString = m_allocator->allocateStringConstant("Number").value;
 	m_numberType = m_allocator->allocateClass(numberString);
-	addFn(m_numberType, "sin", Number::sin, 1);
-	addFn(m_numberType, "cos", Number::cos, 1);
-	addFn(m_numberType, "tan", Number::tan, 1);
+	addFn(m_numberType, "floor", Number::floor, Number::floorArgCount);
+	addFn(m_numberType, "ceil", Number::ceil, Number::ceilArgCount);
+	addFn(m_numberType, "round", Number::round, Number::roundArgcount);
+	addFn(m_numberType, "pow", Number::pow, Number::powArgCount);
+	addFn(m_numberType, "sqrt", Number::sqrt, Number::sqrtArgCount);
+	addFn(m_numberType, "is_nan", Number::is_nan, Number::isNanArgCount);
+	addFn(m_numberType, "is_inf", Number::is_inf, Number::isInfArgCount);
+	addFn(m_numberType, "sin", Number::sin, Number::sinArgCount);
+	addFn(m_numberType, "cos", Number::cos, Number::cosArgCount);
+	addFn(m_numberType, "tan", Number::tan, Number::tanArgCount);
 
 	auto intString = m_allocator->allocateStringConstant("Int").value;
 	m_intType = m_allocator->allocateClass(intString);
@@ -189,28 +195,35 @@ Vm::Result Vm::run()
 	{
 	#ifdef VOXL_DEBUG_PRINT_VM_EXECUTION_TRACE
 		debugPrintStack();
-		disassembleInstruction(
-			m_callStack.top().function->byteCode,
-			m_callStack.top().instructionPointer - m_callStack.top().function->byteCode.code.data(), *m_allocator);
-		std::cout << '\n';
+		if (m_callStack.top().callable->isFunction())
+		{
+			const auto function = m_callStack.top().callable->asFunction();
+			disassembleInstruction(
+				m_callStack.top().function->byteCode,
+				m_instructionPointer - function->byteCode.code.data(), *m_allocator);
+			std::cout << '\n';
+		}
+		else
+		{
+			std::cout << "cannot disassemble non function\n";
+			ASSERT_NOT_REACHED();
+		}
+		
 	#endif
 
 	#ifdef VOXL_DEBUG_STRESS_TEST_GC
 		m_allocator->runGc();
 	#endif
-
-		auto op = static_cast<Op>(*m_callStack.top().instructionPointer);
-		m_callStack.top().instructionPointer++;
+		auto op = static_cast<Op>(*m_instructionPointer);
+		m_instructionPointer++;
 
 		switch (op)
 		{
-// TODO:
-// Could make this better by not popping of both values and just replacing them.
-// Also it uses values instead of references for peeking.
+
 #define BINARY_ARITHMETIC_OP(op, overloadNameString) \
 	{ \
-		Value lhs = m_stack.peek(1); \
-		Value rhs = m_stack.peek(0); \
+		const auto& lhs = m_stack.peek(1); \
+		const auto& rhs = m_stack.peek(0); \
 		if (lhs.isObj() && lhs.as.obj->isInstance()) \
 		{ \
 			auto instance = lhs.as.obj->asInstance(); \
@@ -227,22 +240,21 @@ Vm::Result Vm::run()
 		else \
 		{ \
 			m_stack.pop(); \
-			m_stack.pop(); \
 			if (lhs.isInt() && rhs.isInt()) \
 			{ \
-				TRY_PUSH(Value(lhs.as.intNumber op rhs.as.intNumber)); \
+				m_stack.top() = Value(lhs.as.intNumber op rhs.as.intNumber); \
 			} \
 			else if (lhs.isFloat() && rhs.isFloat()) \
 			{ \
-				TRY_PUSH(Value(lhs.as.floatNumber op rhs.as.floatNumber)); \
+				m_stack.top() = Value(lhs.as.floatNumber op rhs.as.floatNumber); \
 			} \
 			else if (lhs.isFloat() && rhs.isInt()) \
 			{ \
-				TRY_PUSH(Value(lhs.as.floatNumber op static_cast<Float>(rhs.as.intNumber))); \
+				m_stack.top() = Value(lhs.as.floatNumber op static_cast<Float>(rhs.as.intNumber)); \
 			} \
 			else if (lhs.isInt() && rhs.isFloat()) \
 			{ \
-				TRY_PUSH(Value(static_cast<Float>(lhs.as.intNumber) op rhs.as.floatNumber)); \
+				m_stack.top() = Value(static_cast<Float>(lhs.as.intNumber) op rhs.as.floatNumber); \
 			} \
 			else \
 			{ \
@@ -255,100 +267,105 @@ Vm::Result Vm::run()
 		case Op::Subtract: BINARY_ARITHMETIC_OP(-, m_subString)
 		case Op::Multiply: BINARY_ARITHMETIC_OP(*, m_mulString)
 #undef BINARY_ARITHMETIC_OP
-			// TODO: handle integer division by zero
 		case Op::Divide: 
 		{
-			Value lhs = m_stack.peek(1);
-			Value rhs = m_stack.peek(0);
+			const auto& lhs = m_stack.peek(1);
+			const auto& rhs = m_stack.peek(0);
 			if (lhs.isObj() && lhs.as.obj->isInstance())
 			{
 				auto instance = lhs.as.obj->asInstance();
-				auto optMethod = instance->class_->fields.get(m_modString);
+				auto optMethod = instance->class_->fields.get(m_divString);
 				if (optMethod.has_value())
-				{
 					TRY(callValue(*optMethod, 2, 0));
-				}
 				else
-				{
-					return fatalError("no operator % for these types");
-				}
+					goto noOverloadForDivision;
+
+				break;
 			}
 			else
 			{
-				m_stack.pop();
-				m_stack.pop();
-				if (lhs.isInt() && rhs.isInt())
-				{
-					TRY_PUSH(Value(static_cast<Float>(lhs.as.intNumber) / static_cast<Float>(rhs.as.intNumber)));
-				}
-				else if (lhs.isFloat() && rhs.isFloat())
-				{
-					TRY_PUSH(Value(lhs.as.floatNumber /rhs.as.floatNumber));
-				}
-				else if (lhs.isFloat() && rhs.isInt())
-				{
-					TRY_PUSH(Value(lhs.as.floatNumber / static_cast<Float>(rhs.as.intNumber)));
-				}
-				else if (lhs.isInt() && rhs.isFloat())
-				{
-					TRY_PUSH(Value(static_cast<Float>(lhs.as.intNumber) / rhs.as.floatNumber));
-				}
+				Float a, b;
+
+				if (lhs.isInt())
+					a = static_cast<Float>(lhs.asInt());
+				else if (lhs.isFloat())
+					a = lhs.asFloat();
 				else
-				{
-					return fatalError("no operator % for these types");
-				}
+					goto noOverloadForDivision;
+
+				if (rhs.isInt())
+					b = static_cast<Float>(rhs.asInt());
+				else if (rhs.isFloat())
+					b = rhs.asFloat();
+				else
+					goto noOverloadForDivision;
+
+				if (b == static_cast<Float>(0))
+					return fatalError("cannot divide by 0");
+
+				m_stack.pop();
+				m_stack.top() = Value::floatNum(a / b);
+
+				break;
 			}
-			break;
+		noOverloadForDivision:
+			return fatalError("no operator / for these types");
 		}
 		case Op::Modulo: 
 		{
-			Value lhs = m_stack.peek(1);
-			Value rhs = m_stack.peek(0);
+			const auto& lhs = m_stack.peek(1);
+			const auto& rhs = m_stack.peek(0);
 			if (lhs.isObj() && lhs.as.obj->isInstance())
 			{
 				auto instance = lhs.as.obj->asInstance();
 				auto optMethod = instance->class_->fields.get(m_modString);
 				if (optMethod.has_value())
-				{
 					TRY(callValue(*optMethod, 2, 0));
-				}
 				else
-				{
-					return fatalError("no operator % for these types");
-				}
+					goto noOverloadForModulo;
+
+				break;
+			}
+			else if (lhs.isInt() && rhs.isInt())
+			{
+				m_stack.pop();
+				m_stack.top() = Value::intNum(lhs.asInt() % rhs.asInt());
+				break;
 			}
 			else
 			{
-				m_stack.pop();
-				m_stack.pop();
-				if (lhs.isInt() && rhs.isInt())
-				{
-					TRY_PUSH(Value(lhs.as.intNumber % rhs.as.intNumber));
-				}
-				else if (lhs.isFloat() && rhs.isFloat())
-				{
-					TRY_PUSH(Value(fmod(lhs.as.floatNumber, rhs.as.floatNumber)));
-				}
-				else if (lhs.isFloat() && rhs.isInt())
-				{
-					TRY_PUSH(Value(fmod(lhs.as.floatNumber, static_cast<Float>(rhs.as.intNumber))));
-				}
-				else if (lhs.isInt() && rhs.isFloat())
-				{
-					TRY_PUSH(Value(fmod(static_cast<Float>(lhs.as.intNumber), rhs.as.floatNumber)));
-				}
+				Float a, b;
+
+				if (lhs.isInt())
+					a = static_cast<Float>(lhs.asInt());
+				else if (lhs.isFloat())
+					a = lhs.asFloat();
 				else
-				{
-					return fatalError("no operator % for these types");
-				}
-			}
+					goto noOverloadForModulo;
+
+				if (rhs.isInt())
+					b = static_cast<Float>(rhs.asInt());
+				else if (rhs.isFloat())
+					b = rhs.asFloat();
+				else
+					goto noOverloadForModulo;
+
+				if (b == static_cast<Float>(0))
+					return fatalError("cannot divide by 0");
+
+				m_stack.pop();
+				m_stack.top() = Value::floatNum(fmod(a, b));
+
 				break;
+			}
+		noOverloadForModulo:
+			return fatalError("no operator % for these types");
 		}
 
 #define BINARY_COMPARASION_OP(op, overloadNameString) \
 	{ \
-		Value lhs = m_stack.peek(1); \
-		Value rhs = m_stack.peek(0); \
+		const auto& lhs = m_stack.peek(1); \
+		const auto& rhs = m_stack.peek(0); \
 		if (lhs.isObj()) \
 		{ \
 			if (rhs.isObj() && lhs.as.obj->isString() && rhs.as.obj->isString()) \
@@ -356,8 +373,7 @@ Vm::Result Vm::run()
 				auto left = lhs.as.obj->asString(); \
 				auto right = rhs.as.obj->asString(); \
 				m_stack.pop(); \
-				m_stack.pop(); \
-				TRY_PUSH(Value(Utf8::strcmp(left->chars, left->size, right->chars, right->size) op 0)); \
+				m_stack.top() = Value(Utf8::strcmp(left->chars, left->size, right->chars, right->size) op 0); \
 			} \
 			else if (lhs.as.obj->isInstance()) \
 			{ \
@@ -376,22 +392,21 @@ Vm::Result Vm::run()
 		else \
 		{ \
 			m_stack.pop(); \
-			m_stack.pop(); \
 			if (lhs.isInt() && rhs.isInt()) \
 			{ \
-				TRY_PUSH(Value(lhs.as.intNumber op rhs.as.intNumber)); \
+				m_stack.top() = Value(lhs.as.intNumber op rhs.as.intNumber); \
 			} \
 			else if (lhs.isFloat() && rhs.isFloat()) \
 			{ \
-				TRY_PUSH(Value(lhs.as.floatNumber op rhs.as.floatNumber)); \
+				m_stack.top() = Value(lhs.as.floatNumber op rhs.as.floatNumber); \
 			} \
 			else if (lhs.isFloat() && rhs.isInt()) \
 			{ \
-				TRY_PUSH(Value(lhs.as.floatNumber op static_cast<Float>(rhs.as.intNumber))); \
+				m_stack.top() = Value(lhs.as.floatNumber op static_cast<Float>(rhs.as.intNumber)); \
 			} \
 			else if (lhs.isInt() && rhs.isFloat()) \
 			{ \
-				TRY_PUSH(Value(static_cast<Float>(lhs.as.intNumber) op rhs.as.floatNumber)); \
+				m_stack.top() = Value(static_cast<Float>(lhs.as.intNumber) op rhs.as.floatNumber); \
 			} \
 			else \
 			{ \
@@ -674,7 +689,7 @@ Vm::Result Vm::run()
 		case Op::Jump:
 		{
 			auto jump = readUint32();
-			m_callStack.top().instructionPointer += jump;
+			m_instructionPointer += jump;
 			break;
 		}
 
@@ -688,7 +703,7 @@ Vm::Result Vm::run()
 			}
 			if (value.as.boolean)
 			{
-				m_callStack.top().instructionPointer += jump;
+				m_instructionPointer += jump;
 			}
 			break;
 		}
@@ -703,7 +718,7 @@ Vm::Result Vm::run()
 			}
 			if (value.as.boolean == false)
 			{
-				m_callStack.top().instructionPointer += jump;
+				m_instructionPointer += jump;
 			}
 			break;
 		}
@@ -718,7 +733,7 @@ Vm::Result Vm::run()
 			}
 			if (value.as.boolean == false)
 			{
-				m_callStack.top().instructionPointer += jump;
+				m_instructionPointer += jump;
 			}
 			m_stack.pop();
 			break;
@@ -727,7 +742,7 @@ Vm::Result Vm::run()
 		case Op::JumpBack:
 		{
 			const auto jump = readUint32();
-			m_callStack.top().instructionPointer -= jump;
+			m_instructionPointer -= jump;
 			break;
 		}
 
@@ -782,8 +797,8 @@ Vm::Result Vm::run()
 					m_exceptionHandlers.pop();
 				}
 
+				m_instructionPointer = m_callStack.top().instructionPointerBeforeCall;
 				m_callStack.pop();
-
 				auto callable = m_callStack.top().callable;
 				switch (callable->type)
 				{
@@ -801,10 +816,8 @@ Vm::Result Vm::run()
 
 				TRY_PUSH(result);
 
-				if (m_callStack.top().isNativeFunction())
-				{
+				if (m_callStack.top().callable->isNativeFunction())
 					return Result::ok();
-				}
 			}
 			break;
 		}
@@ -828,7 +841,7 @@ Vm::Result Vm::run()
 			auto& handler = m_exceptionHandlers.top();
 			auto& frame = m_callStack.top();
 			handler.callFrame = &frame;
-			handler.handlerCodeLocation = frame.instructionPointer + jump;
+			handler.handlerCodeLocation = m_instructionPointer + jump;
 			handler.stackTopPtrBeforeTry = m_stack.topPtr;
 			break;
 		}
@@ -957,6 +970,7 @@ Vm::Result Vm::run()
 			sourceInfo.displayedFilename = filename->chars;
 			sourceInfo.directory = std::move(path.remove_filename());
 			auto source = stringFromFile(pathString->chars);
+			// If cannot find search the std library.
 			sourceInfo.source = source;
 			auto scannerResult = m_scanner->parse(sourceInfo, *m_errorReporter);
 			auto parserResult = m_parser->parse(scannerResult.tokens, sourceInfo, *m_errorReporter);
@@ -1039,7 +1053,7 @@ Vm::Result Vm::run()
 		case Op::CreateList:
 		{
 			auto list = m_allocator->allocateNativeInstance(m_listType);
-			static_cast<List*>(list)->init();
+			static_cast<List*>(list)->initialize();
 			TRY_PUSH(Value(list));
 			break;
 		}
@@ -1053,7 +1067,7 @@ Vm::Result Vm::run()
 			ASSERT(listObj->isNativeInstance());
 			auto listInstance = listObj->asNativeInstance();
 			// TODO: Make this check a function.
-			ASSERT(listInstance->class_->mark == reinterpret_cast<MarkingFunction>(List::mark));
+			ASSERT(listInstance->class_->mark == reinterpret_cast<MarkingFunctionPtr>(List::mark));
 			const auto list = static_cast<List*>(listInstance);
 			m_stack.pop();
 			list->push(newElement);
@@ -1156,14 +1170,16 @@ Value Vm::call(const Value& calle, Value* values, int argCount)
 
 uint8_t Vm::readUint8()
 {
-	uint8_t value = *m_callStack.top().instructionPointer;
-	m_callStack.top().instructionPointer++;
+	uint8_t value = *m_instructionPointer;
+	m_instructionPointer++;
 	return value;
 }
 
 // TODO: could make a constructor for NativeFunctionResult that takes the vm and a message which it logs.
 Vm::Result Vm::fatalError(const char* format, ...)
 {
+	// Save the instruction pointer so onVmError can read it.
+	m_callStack.top().instructionPointerBeforeCall = m_instructionPointer;
 	va_list args;
 	va_start(args, format);
 	const auto message = formatToTempBuffer(format, args);
@@ -1181,9 +1197,9 @@ Vm::Result Vm::callObjFunction(ObjFunction* function, int argCount, int numberOf
 
 	TRY_PUSH_CALL_STACK();
 	auto& frame = m_callStack.top();
-	frame.instructionPointer = function->byteCode.code.data();
+	frame.instructionPointerBeforeCall = m_instructionPointer;
+	m_instructionPointer = function->byteCode.code.data();
 	frame.values = m_stack.topPtr - argCount;
-	frame.function = function;
 	frame.callable = function;
 	m_globals = function->globals;
 	frame.numberOfValuesToPopOffExceptArgs = numberOfValuesToPopOffExceptArgs;
@@ -1224,9 +1240,9 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			} 
 			TRY_PUSH_CALL_STACK();
 			auto& frame = m_callStack.top();
-			frame.setNativeFunction();
 			frame.callable = function;
 			frame.isInitializer = isInitializer;
+			frame.instructionPointerBeforeCall = m_instructionPointer;
 			m_globals = function->globals;
 			try
 			{
@@ -1235,6 +1251,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 				const auto result = function->function(context);
 				m_stack.topPtr -= numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount);
 				TRY_PUSH(isInitializer ? args[0] : result.value);
+				m_instructionPointer = m_callStack.top().instructionPointerBeforeCall;
 				m_callStack.pop();
 				auto callable = m_callStack.top().callable;
 				switch (callable->type)
@@ -1253,6 +1270,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			}
 			catch (const NativeException& exception)
 			{
+				m_instructionPointer = m_callStack.top().instructionPointerBeforeCall;
 				m_callStack.pop();
 
 				auto callable = m_callStack.top().callable;
@@ -1332,7 +1350,6 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 					? static_cast<Obj*>(m_allocator->allocateNativeInstance(class_))
 					: static_cast<Obj*>(m_allocator->allocateInstance(class_));
 
-				// TODO: Handle special classes like Int.
 				m_stack.topPtr[-argCount - 1] = Value(instance); // Replace the class with the instance.
 				if (const auto initializer = class_->fields.get(m_initString); initializer.has_value())
 				{
@@ -1363,7 +1380,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			{
 				return fatalError("cannot bind a function twice");
 			}
-			TRY(callValue(Value(boundFunction->callable), argCount + 1, 0))
+			TRY(callValue(Value(boundFunction->callable), argCount + 1, 0));
 			break;
 		}
 
@@ -1408,7 +1425,12 @@ std::optional<Value> Vm::getField(Value& value, ObjString* fieldName)
 		{
 			const auto module = obj->asModule();
 			if (isModuleMemberPublic(fieldName))
-				return *module->globals.get(fieldName);
+			{
+				auto field = module->globals.get(fieldName);
+				if (field.has_value())
+					return *field;
+				return std::nullopt;
+			}
 		}
 	}
 	
@@ -1457,7 +1479,7 @@ Vm::Result Vm::throwValue(const Value& value)
 
 	for (auto frame = m_callStack.crbegin(); (frame != m_callStack.crend()) && (&*frame > &catchFrame); ++frame)
 	{
-		if (frame->isNativeFunction())
+		if (frame->callable->isNativeFunction())
 		{
 			return Result::exception(value);
 		}
@@ -1465,7 +1487,7 @@ Vm::Result Vm::throwValue(const Value& value)
 	}
 
 	m_stack.topPtr = handler.stackTopPtrBeforeTry;
-	catchFrame.instructionPointer = handler.handlerCodeLocation;
+	m_instructionPointer = handler.handlerCodeLocation;
 	TRY_PUSH(value);
 
 	m_exceptionHandlers.pop();
@@ -1564,8 +1586,7 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 
 	for (const auto& frame : vm->m_callStack)
 	{
-		if (frame.function != nullptr)
-			allocator.addObj(frame.function);
+		allocator.addObj(frame.callable);
 	}
 
 	for (auto upvalue : vm->m_openUpvalues)
@@ -1583,16 +1604,6 @@ uint32_t Vm::readUint32()
 		value |= static_cast<uint32_t>(readUint8());
 	}
 	return value;
-}
-
-bool Vm::CallFrame::isNativeFunction() const
-{
-	return function == nullptr;
-}
-
-void Vm::CallFrame::setNativeFunction()
-{
-	function = nullptr;
 }
 
 Vm::Result Vm::Result::ok()

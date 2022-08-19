@@ -47,13 +47,14 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "list_literals", "thistrueisnulla4test" },
 	{ "inheriting_from_native_class", "47" },
 	{ "module_private_use", "null" },
-	// TODO: Add this to error tests.
-	//{ "module_private_use_all", "null" },
+	//// TODO: Add this to error tests.
+	////{ "module_private_use_all", "null" },
 	{ "match_inherited", "match" },
 	{ "string_len", "9" },
 	{ "match_number", "numbernumber" },
 	{ "match_int", "int" },
 	{ "match_float", "float" },
+	{ "native_class", "53" },
 };
 
 void testFailed(std::string_view name)

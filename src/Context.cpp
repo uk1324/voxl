@@ -1,5 +1,3 @@
-#include "Context.hpp"
-#include "Context.hpp"
 #include <Context.hpp>
 #include <Vm/Vm.hpp>
 
@@ -72,8 +70,7 @@ bool LocalValue::isInt() const
 Int LocalValue::asInt() const
 {
 	ASSERT(isInt());
-	// TODO: Make asInt a function of value and the just call it from here to avoid duplication.
-	return value.as.intNumber;
+	return value.asInt();
 }
 
 bool LocalValue::isBool() const
@@ -126,7 +123,10 @@ LocalValue Context::args(size_t index)
 	const auto i = static_cast<int>(index);
 
 	if (i >= m_argCount)
+	{
+		ASSERT_NOT_REACHED();
 		throw NativeException(LocalValue::null(*this));
+	}
 
 	return LocalValue(m_args[i], *this);
 }
@@ -156,5 +156,7 @@ void Context::createFunction(std::string_view name, NativeFunction function, int
 {
 	const auto nameString = allocator.allocateStringConstant(name).value;
 	ASSERT(argCount >= 0);
-	vm.m_globals->set(nameString, Value(allocator.allocateForeignFunction(nameString, function, argCount, vm.m_globals, context)));
+	vm.m_globals->set(
+		nameString, 
+		Value(allocator.allocateForeignFunction(nameString, function, argCount, vm.m_globals, context)));
 }

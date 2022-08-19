@@ -7,11 +7,14 @@
 	#define NOMINMAX
 	#include <windows.h>
 	#define ASSERT(condition) \
-		if ((condition) == false) \
+		do \
 		{ \
-			std::cout << "assertion failed\n"; \
-			DebugBreak(); \
-		}
+			if ((condition) == false) \
+			{ \
+				std::cout << "assertion failed\n"; \
+				DebugBreak(); \
+			} \
+		} while (false)
 	#define ASSERT_NOT_REACHED() DebugBreak();
 #else
 	#include <assert.h>

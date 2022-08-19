@@ -19,7 +19,7 @@ public:
 	// TODO: It might be better to provide a iterator that would allow accessing the stack trace and provide so implementation independent information
 	// The iterator would store a Span and an index to the CallFrames.
 	virtual void onVmError(const Vm& vm, std::string_view message) = 0;
-	// TODO: Also provide a std::string_view into an ObjString that contains the result of calling exception.$str().
+	// TODO: Also provide a std::optional<std::string_view> into an ObjString that contains the result of calling exception.$str().
 	virtual void onUncaughtException(const Vm& vm, const Value& value, std::string_view message) = 0;
 };
 

@@ -22,6 +22,7 @@ public:
 	LocalObj(LocalObj& other);
 	~LocalObj();
 	T* operator->();
+	const T* operator->() const;
 
 public:
 	T* obj;
@@ -37,6 +38,12 @@ public:
 	std::string_view chars() const;
 	size_t len() const;
 	size_t size() const;
+};
+
+class LocalObjClass : public LocalObj<ObjClass>
+{
+public:
+	using LocalObj<ObjClass>::LocalObj;
 };
 
 class LocalValue
@@ -99,6 +106,12 @@ T* LocalObj<T>::operator->()
 	return obj;
 }
 
+template<typename T>
+inline const T* LocalObj<T>::operator->() const
+{
+	return obj;
+}
+
 class Vm;
 
 class Context
@@ -113,6 +126,13 @@ public:
 	std::optional<LocalValue> getGlobal(std::string_view name);
 	void setGlobal(std::string_view name, const LocalValue& value);
 	void createFunction(std::string_view name, NativeFunction function, int argCount, void* context = nullptr);
+	template<typename T>
+	void createClass(
+		std::string_view name, 
+		std::initializer_list<Allocator::Method> methods,
+		InitFunction<T> init = nullptr, 
+		FreeFunction<T> free = nullptr,
+		void* context = nullptr);
 
 public:
 	Allocator& allocator;
@@ -133,9 +153,12 @@ LocalValue Context::call(const LocalValue& calle, Vals&&... args)
 		for (const auto value : values)
 		{
 			const auto wasPushed = vm.m_stack.push(value);
-			ASSERT(wasPushed == true);
+			if (wasPushed == false)
+			{
+				[[maybe_unused]] const auto& _ = vm.fatalError("stack overflow");
+				throw Vm::FatalException{};
+			}
 		}
-		/*return LocalValue(vm.call(calle.value, values, sizeof...(args)), *this);*/
 		const auto result = LocalValue(vm.call(calle.value, top, sizeof...(args)), *this);
 		vm.m_stack.topPtr -= sizeof(values) / sizeof(Value);
 		return result;
@@ -145,7 +168,19 @@ LocalValue Context::call(const LocalValue& calle, Vals&&... args)
 	{
 		return LocalValue(vm.call(calle.value, nullptr, 0), *this);
 	}
-	// TODO: Maybe pushing the values onto the stack and calling them would be faster. 
+}
+
+template<typename T>
+void Context::createClass(
+	std::string_view name, 
+	std::initializer_list<Allocator::Method> methods, 
+	InitFunction<T> init, 
+	FreeFunction<T> free, 
+	void* context)
+{
+	auto className = allocator.allocateStringConstant(name).value;
+	auto class_ = allocator.allocateNativeClass(className, methods, vm.m_globals, init, free, context);
+	vm.m_globals->set(className, Value(class_));
 }
 
 template<typename T>
@@ -159,7 +194,7 @@ LocalObj<T> LocalValue::asObj()
 	auto obj = value.as.obj;
 	if ((value.isObj() == false)
 		|| (obj->isNativeInstance() == false) 
-		|| (obj->asNativeInstance()->class_->mark != reinterpret_cast<MarkingFunction>(&T::mark)))
+		|| (obj->asNativeInstance()->class_->mark != reinterpret_cast<MarkingFunctionPtr>(&T::mark)))
 	{
 		throw NativeException(m_context.typeErrorMustBe("TODO"));
 	}

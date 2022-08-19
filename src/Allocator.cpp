@@ -135,7 +135,8 @@ ObjNativeInstance* Allocator::allocateNativeInstance(ObjClass* class_)
 	auto obj = allocateObj(class_->instanceSize, ObjType::NativeInstance)->asNativeInstance();
 	obj->class_ = class_;
 	class_->nativeInstanceCount++;
-	class_->init(obj);
+	if (class_->init != nullptr)
+		class_->init(obj);
 	return obj;
 }
 
