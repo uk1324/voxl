@@ -1,8 +1,45 @@
-#include "Context.hpp"
 #include <Context.hpp>
 #include <Vm/Vm.hpp>
 
+#define TRY(somethingThatReturnsResult) \
+	do \
+	{ \
+		const auto expressionResult = somethingThatReturnsResult; \
+		switch (expressionResult.type) \
+		{ \
+		case Vm::ResultType::Exception: \
+			throw NativeException(expressionResult.exceptionValue); \
+		case Vm::ResultType::Fatal: \
+			throw Vm::FatalException(); \
+		case Vm::ResultType::ExceptionHandled: \
+			ASSERT_NOT_REACHED(); \
+		case Vm::ResultType::Ok: \
+			break; \
+		} \
+	} while(false)
+
+#define TRY_WITH_VALUE(resultWithValue) \
+	do \
+	{ \
+		const auto expressionResult = resultWithValue; \
+		switch (resultWithValue.type) \
+		{ \
+		case Vm::ResultType::Exception: \
+			throw NativeException(expressionResult.value); \
+		case Vm::ResultType::Fatal: \
+			throw Vm::FatalException(); \
+		case Vm::ResultType::ExceptionHandled: \
+			ASSERT_NOT_REACHED(); \
+		case Vm::ResultType::Ok: \
+			break; \
+		} \
+	} while(false)
+
 using namespace Voxl;
+
+LocalObjString::LocalObjString(std::string_view string, Context& context)
+	: LocalObj(context.allocator.allocateString(string), context)
+{}
 
 std::string_view LocalObjString::chars() const
 {
@@ -33,6 +70,10 @@ LocalValue::LocalValue(const LocalValue& other)
 	m_context.allocator.registerLocal(&this->value);
 }
 
+LocalValue::LocalValue(std::string_view string, Context& context)
+	: LocalValue(Value(context.allocator.allocateString(string)), context)
+{}
+
 LocalValue::~LocalValue()
 {
 	m_context.allocator.unregisterLocal(&value);
@@ -53,18 +94,27 @@ LocalValue LocalValue::null(Context& context)
 	return LocalValue(Value::null(), context);
 }
 
-LocalValue LocalValue::at(std::string_view fieldName)
+std::optional<LocalValue> LocalValue::at(std::string_view fieldName)
 {
-	// Maybe change to LocalObjString. Can't be non constant because getField might allocate.
-	const auto fieldNameString = m_context.allocator.allocateStringConstant(fieldName).value;
-	const auto field = m_context.vm.getField(value, fieldNameString);
+	const auto fieldNameString = LocalObjString(fieldName, m_context);
+	const auto field = m_context.vm.atField(value, fieldNameString.obj);
 	if (field.has_value())
-	{
 		return LocalValue(*field, m_context);
-	}
-	// TODO: Change this.
-	ASSERT_NOT_REACHED();
-	throw Vm::FatalException();
+	return std::nullopt;
+}
+
+LocalValue LocalValue::get(std::string_view fieldName)
+{
+	const auto fieldNameString = LocalObjString(fieldName, m_context);
+	TRY(m_context.vm.getField(value, fieldNameString.obj));
+	const auto result = m_context.vm.m_stack.popAndReturn();
+	return LocalValue(result, m_context);
+}
+
+void LocalValue::set(std::string_view fieldName, const LocalValue& rhs)
+{
+	const auto fieldNameString = LocalObjString(fieldName, m_context);
+	TRY(m_context.vm.setField(value, fieldNameString.obj, rhs.value));
 }
 
 LocalObjString LocalValue::asString()
@@ -151,7 +201,7 @@ LocalValue Context::typeErrorMustBe(std::string_view /*whatItMustBe*/)
 	return LocalValue(Value::null(), *this);
 }
 
-std::optional<LocalValue> Context::getGlobal(std::string_view name)
+std::optional<LocalValue> Context::at(std::string_view name)
 {
 	if (const auto value = vm.m_globals->get(name); value.has_value())
 		return LocalValue(*value, *this);
@@ -162,7 +212,15 @@ std::optional<LocalValue> Context::getGlobal(std::string_view name)
 	return std::nullopt;
 }
 
-void Context::setGlobal(std::string_view name, const LocalValue& value)
+LocalValue Context::get(std::string_view name)
+{
+	const auto nameString = LocalObjString(name, *this);
+	const auto result = vm.getGlobal(nameString.obj);
+	TRY_WITH_VALUE(result);
+	return LocalValue(result.value, *this);
+}
+
+void Context::set(std::string_view name, const LocalValue& value)
 {
 	vm.m_globals->set(allocator.allocateStringConstant(name).value, value.value);
 }
@@ -179,25 +237,20 @@ void Context::createFunction(std::string_view name, NativeFunction function, int
 LocalValue Context::useModule(std::string_view name, std::optional<std::string_view> variableName)
 {
 	const auto nameString = allocator.allocateStringConstant(name).value;
-	const auto result = vm.importModule(nameString);
+	TRY(vm.importModule(nameString));
 	const auto module = vm.m_stack.top();
 	vm.m_stack.pop();
-	switch (result.type)
+	
+
+	if (variableName.has_value())
 	{
-	case Vm::ResultType::Exception:
-		throw NativeException(result.exceptionValue);
-	case Vm::ResultType::Fatal:
-		throw Vm::FatalException();
-	case Vm::ResultType::Ok:
-		if (variableName.has_value())
-		{
-			const auto variableNameString = allocator.allocateStringConstant(*variableName).value;
-			vm.m_globals->set(variableNameString, module);
-		}
-		else
-		{
-			vm.m_globals->set(nameString, module);
-		}
+		const auto variableNameString = allocator.allocateStringConstant(*variableName).value;
+		vm.m_globals->set(variableNameString, module);
 	}
+	else
+	{
+		vm.m_globals->set(nameString, module);
+	}
+
 	return LocalValue(module, *this);
 }

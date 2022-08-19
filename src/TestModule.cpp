@@ -10,17 +10,9 @@ static LocalValue test(Context& c)
 
 static LocalValue testFromTest(Context& c)
 {
-	auto module = c.getGlobal("testModule");
-	if (module.has_value())
-	{
-		auto function = (*module).at("test0");
-		return function();
-	}
-	else
-	{
-		ASSERT_NOT_REACHED();
-	}
-	return LocalValue::null(c);
+	auto module = c.get("testModule");
+	auto function = module.get("test0");
+	return function();
 }
 
 LocalValue testModuleMain(Context& c)

@@ -1,13 +1,8 @@
-#include "Vm.hpp"
-#include "Vm.hpp"
-#include "Vm.hpp"
-#include "Vm.hpp"
-#include "Vm.hpp"
-#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Vm/List.hpp>
 #include <Vm/String.hpp>
 #include <Vm/Number.hpp>
+#include <Vm/Errors.hpp>
 #include <Utf8.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -22,7 +17,7 @@
 
 using namespace Voxl;
 
-#define TRY(somethingThatReturnsResult) \
+#define TRY_OUTSIDE_RUN(somethingThatReturnsResult) \
 	 do \
 	 { \
 		const auto expressionResult = somethingThatReturnsResult; \
@@ -30,6 +25,69 @@ using namespace Voxl;
 		{ \
 			return expressionResult; \
 		} \
+	} while (false)
+
+#define TRY_INSIDE_RUN(somethingThatReturnsResult) \
+	 do \
+	 { \
+		const auto expressionResult = somethingThatReturnsResult; \
+		if (expressionResult.type == ResultType::ExceptionHandled) \
+		{ \
+			goto switchBreak; \
+		} \
+		else if (expressionResult.type != ResultType::Ok) \
+		{ \
+			return expressionResult; \
+		} \
+	} while (false)
+
+#define TRY_WITH_VALUE_OUTSIDE_RUN(resultWithValue) \
+	 do \
+	 { \
+		const auto expressionResult = resultWithValue; \
+		if (expressionResult.type != ResultType::Ok) \
+		{ \
+			Result newResult(expressionResult.type); \
+			newResult.exceptionValue = expressionResult.value; \
+			return newResult; \
+		} \
+	} while (false)
+
+#define TRY_WITH_VALUE_INSIDE_RUN(resultWithValue) \
+	 do \
+	 { \
+		const auto expressionResult = resultWithValue; \
+		if (expressionResult.type == ResultType::ExceptionHandled) \
+		{ \
+			goto switchBreak; \
+		} \
+		else if (expressionResult.type != ResultType::Ok) \
+		{ \
+			Result newResult(expressionResult.type); \
+			newResult.exceptionValue = expressionResult.value; \
+			return newResult; \
+		} \
+	} while (false)
+
+#define TRY_WITHOUT_VALUE(result) \
+	 do \
+	 { \
+		const auto expressionResult = result; \
+		if (expressionResult.type != ResultType::Ok) \
+		{ \
+			ResultWithValue resultWithValue(expressionResult.type); \
+			resultWithValue.value = expressionResult.exceptionValue; \
+			return resultWithValue; \
+		} \
+	} while (false)
+
+#define RETURN_WITHOUT_VALUE(result) \
+	do \
+	 { \
+		const auto expressionResult = result; \
+		ResultWithValue resultWithValue(expressionResult.type); \
+		resultWithValue.value = expressionResult.exceptionValue; \
+		return resultWithValue; \
 	} while (false)
 
 #define TRY_PUSH(value) \
@@ -66,6 +124,8 @@ Vm::Vm(Allocator& allocator)
 	, m_geString(allocator.allocateStringConstant("$ge").value)
 	, m_getIndexString(allocator.allocateStringConstant("$get_index").value)
 	, m_setIndexString(allocator.allocateStringConstant("$set_index").value)
+	, m_strString(allocator.allocateStringConstant("$str").value)
+	, m_msgString(allocator.allocateStringConstant("msg").value)
 	, m_emptyString(allocator.allocateStringConstant("").value)
 // The GC might run during the constructor so the values have to be checked inside mark for begin null.
 // This also may be fixable by making constant classes that are always marked.
@@ -78,6 +138,7 @@ Vm::Vm(Allocator& allocator)
 	, m_stopIterationType(nullptr)
 	, m_stringType(nullptr)
 	, m_typeErrorType(nullptr)
+	, m_nameErrorType(nullptr)
 	, m_finallyBlockDepth(0)
 {
 	// Cannot use allocateNativeClass overload with initializer list inside constructor because the GC might run. 
@@ -132,6 +193,11 @@ Vm::Vm(Allocator& allocator)
 
 	auto typeErrorString = m_allocator->allocateStringConstant("TypeError").value;
 	m_typeErrorType = m_allocator->allocateClass(typeErrorString);
+
+	auto nameErrorString = m_allocator->allocateStringConstant("NameError").value;
+	m_nameErrorType = m_allocator->allocateClass(nameErrorString);
+	addFn(m_nameErrorType, "$init", NameError::init, NameError::initArgCount);
+	addFn(m_nameErrorType, "$str", NameError::str, NameError::strArgCount);
 
 	reset();
 }
@@ -193,8 +259,11 @@ void Vm::reset()
 	m_builtins.set(m_stringType->name, Value(m_stringType));
 	m_builtins.set(m_stopIterationType->name, Value(m_stopIterationType));
 	m_builtins.set(m_listIteratorType->name, Value(m_listIteratorType));
+	m_builtins.set(m_nameErrorType->name, Value(m_nameErrorType));
 }
 
+#define TRY TRY_INSIDE_RUN
+#define TRY_WITH_VALUE TRY_WITH_VALUE_INSIDE_RUN
 Vm::Result Vm::run()
 {
 	for (;;)
@@ -521,10 +590,10 @@ Vm::Result Vm::run()
 			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
 			auto name = m_stack.peek(0).asObj()->asString();
 			auto& value = m_stack.peek(1);
-			bool doesNotAlreadyExist = setGlobal(name, value);
+			bool doesNotAlreadyExist = m_globals->set(name, value);
 			if (doesNotAlreadyExist == false)
 			{
-				return fatalError("redeclaration of '%s'", name->chars);
+				TRY(throwNameError("redeclaration of '%s'", name->chars));
 			}
 			m_stack.pop();
 			m_stack.pop();
@@ -534,26 +603,18 @@ Vm::Result Vm::run()
 		case Op::GetGlobal:
 		{
 			auto name = m_stack.peek(0).asObj()->asString();
-			const auto& value = getGlobal(name);
-			if (value.has_value() == false)
-			{
-				return fatalError("'%s' is not defined", name->chars);
-			}
+			const auto result = getGlobal(name);
+			TRY_WITH_VALUE(result);
 			m_stack.pop();
-			TRY_PUSH(*value);
+			TRY_PUSH(result.value);
 			break;
 		}
 
 		case Op::SetGlobal:
 		{
-			// Don't know if I should allow redeclaration of global in a language focused on being used as a REPL.
 			auto name = m_stack.peek(0).asObj()->asString();
 			auto& value = m_stack.peek(1);
-			bool doesNotAlreadyExist = setGlobal(name, value);
-			if (doesNotAlreadyExist)
-			{
-				return fatalError("'%s' is not defined", name->chars);
-			}
+			TRY(setGlobal(name, value));
 			m_stack.pop();
 			break;
 		}
@@ -577,29 +638,12 @@ Vm::Result Vm::run()
 			auto fieldName = m_stack.peek(0).as.obj->asString();
 			auto lhs = m_stack.peek(1);
 
-			const auto field = getField(lhs, fieldName);
+			TRY(getField(lhs, fieldName));
+			const auto value = m_stack.top();
 			m_stack.pop();
 			m_stack.pop();
-			if (field.has_value())
-			{
-				TRY_PUSH(*field);
-				break;
-			}
-
-			if (lhs.isObj())
-			{
-				const auto lhsObj = lhs.asObj();
-				if (lhsObj->isModule() && (lhsObj->asModule()->isLoaded == false))
-				{
-					return fatalError(
-						"partially initialized module has no field '%s' (most likely due to a circular import)", 
-						fieldName->chars);
-				}
-			}
-
-			TRY_PUSH(Value::null());
-			// Maybe "value of type %t"
-			//return fatalError("value has no field '%s'", fieldName->chars);
+			m_stack.pop();
+			TRY_PUSH(value);
 			break;
 		}
 
@@ -608,25 +652,9 @@ Vm::Result Vm::run()
 			auto fieldName = m_stack.peek(0).as.obj->asString();
 			auto lhs = m_stack.peek(1);
 			auto rhs = m_stack.peek(2);
-			if ((lhs.isObj() == false))
-			{
-				return fatalError("cannot use field access on this type");
-			}
-			auto obj = lhs.as.obj;
+			TRY(setField(lhs, fieldName, rhs));
 			m_stack.pop();
 			m_stack.pop();
-			if (obj->isInstance())
-			{
-				obj->asInstance()->fields.set(fieldName, rhs);
-				break;
-			}
-			else if (obj->isClass())
-			{
-				obj->asClass()->fields.set(fieldName, rhs);
-				break;
-			}
-
-			return fatalError("cannot use field access on this type");
 			break;
 		}
 
@@ -951,7 +979,10 @@ Vm::Result Vm::run()
 				// TODO: maybe check if this overrides.
 				// Would require the function to return if the key already exits. Right now it sets it and returns false.
 				if (isModuleMemberPublic(key))
-					setGlobal(key, value);
+					m_globals->set(key, value);
+					// TODO: Change
+					//setGlobal(key, value);
+					//setGlobal(key, value);
 			}
 			m_stack.pop();
 			break;
@@ -1021,8 +1052,14 @@ Vm::Result Vm::run()
 			ASSERT_NOT_REACHED();
 			return Result::fatal();
 		}
+
+		switchBreak:;
 	}
 }
+#undef TRY
+#define TRY TRY_OUTSIDE_RUN
+#undef TRY_WITH_VALUE
+#define TRY_WITH_VALUE TRY_WITH_VALUE_OUTSIDE_RUN
 
 void Vm::defineNativeFunction(std::string_view name, NativeFunction function, int argCount)
 {
@@ -1229,7 +1266,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 	return Result::ok();
 }
 
-std::optional<Value> Vm::getField(Value& value, ObjString* fieldName)
+std::optional<Value> Vm::atField(Value& value, ObjString* fieldName)
 {
 	// TODO: When using type errors just use
 	/*printf("expected %s got %s", a->name, b->name)*/
@@ -1298,6 +1335,52 @@ std::optional<Value> Vm::getMethod(Value& value, ObjString* methodName)
 	return std::nullopt;
 }
 
+Vm::Result Vm::setField(const Value& lhs, ObjString* fieldName, const Value& rhs)
+{
+	if ((lhs.isObj() == false))
+		return fatalError("cannot use field access on this type");
+
+	auto obj = lhs.as.obj;
+	if (obj->isInstance())
+	{
+		obj->asInstance()->fields.set(fieldName, rhs);
+		return Result::ok();
+	}
+	else if (obj->isClass())
+	{
+		obj->asClass()->fields.set(fieldName, rhs);
+		return Result::ok();
+	}
+
+	return fatalError("cannot use field access on this type");
+}
+
+Vm::Result Vm::getField(Value& value, ObjString* fieldName)
+{
+	const auto field = atField(value, fieldName);
+	if (field.has_value())
+	{
+		TRY_PUSH(*field);
+		return Result::ok();
+	}
+
+	if (value.isObj())
+	{
+		const auto lhsObj = value.asObj();
+		if (lhsObj->isModule() && (lhsObj->asModule()->isLoaded == false))
+		{
+			return fatalError(
+				"partially initialized module has no field '%s' (most likely due to a circular import)",
+				fieldName->chars);
+		}
+	}
+
+	TRY_PUSH(Value::null());
+	// Maybe "value of type %t"
+	//return fatalError("value has no field '%s'", fieldName->chars);
+	return Result::ok();
+}
+
 Vm::Result Vm::throwValue(const Value& value)
 {
 	if (m_exceptionHandlers.isEmpty())
@@ -1328,7 +1411,7 @@ Vm::Result Vm::throwValue(const Value& value)
 
 	m_exceptionHandlers.pop();
 
-	return Result::ok();
+	return Result::exceptionHandled();
 }
 
 std::optional<ObjClass&> Vm::getClass(const Value& value)
@@ -1355,7 +1438,7 @@ Value Vm::typeErrorExpected(ObjClass*)
 	return Value(m_allocator->allocateInstance(m_typeErrorType));
 }
 
-std::optional<Value&> Vm::getGlobal(ObjString* name)
+std::optional<Value&> Vm::atGlobal(ObjString* name)
 {
 	auto optValue = m_globals->get(name);
 	if (optValue.has_value())
@@ -1364,9 +1447,24 @@ std::optional<Value&> Vm::getGlobal(ObjString* name)
 	return m_builtins.get(name);
 }
 
-bool Vm::setGlobal(ObjString* name, const Value& value)
+Vm::ResultWithValue Vm::getGlobal(ObjString* name)
 {
-	return m_globals->set(name, value);
+	const auto value = atGlobal(name);
+	if (value.has_value() == false)
+	{
+		RETURN_WITHOUT_VALUE(throwNameError("'%s' is not defined", name->chars));
+	}
+	return ResultWithValue::ok(*value);
+}
+
+Vm::Result Vm::setGlobal(ObjString* name, Value& value)
+{
+	bool doesNotAlreadyExist = m_globals->set(name, value);
+	if (doesNotAlreadyExist)
+	{
+		return throwNameError("'%s' is not defined", name->chars);
+	}
+	return Result::ok();
 }
 
 void Vm::debugPrintStack()
@@ -1526,6 +1624,8 @@ Value Vm::callFromNativeFunction(const Value& calle, Value* values, int argCount
 	const auto result = callAndReturnValue(calle, values, argCount);
 	switch (result.type)
 	{
+	case ResultType::ExceptionHandled:
+		ASSERT_NOT_REACHED();
 	case ResultType::Ok:
 	{
 		const auto& returnValue = m_stack.peek(0);
@@ -1613,6 +1713,22 @@ Value Vm::callFromNativeFunction(const Value& calle, Value* values, int argCount
 	//return Value::null();
 }
 
+Vm::Result Vm::throwNameError(const char* format, ...)
+{
+	const auto instance = m_allocator->allocateInstance(m_nameErrorType);
+	TRY_PUSH(Value(instance)); // GC
+
+	va_list args;
+	va_start(args, format);
+	const auto message = formatToTempBuffer(format, args);
+	va_end(args);
+
+	const auto string = m_allocator->allocateString(message);
+	instance->fields.set(m_msgString, Value(string));
+	m_stack.pop();
+	return throwValue(Value(instance));
+}
+
 Vm::Result Vm::callFromVmAndReturnValue(const Value& calle, Value* values, int argCount)
 {
 	TRY(pushDummyCallFrame());
@@ -1661,6 +1777,9 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 	if (vm->m_typeErrorType)
 		allocator.addObj(vm->m_typeErrorType);
 
+	if (vm->m_nameErrorType)
+		allocator.addObj(vm->m_nameErrorType);
+
 	for (const auto& frame : vm->m_callStack)
 	{
 		if (frame.callable != nullptr)
@@ -1696,11 +1815,44 @@ Vm::Result Vm::Result::exception(const Value& value)
 	return result;
 }
 
+Vm::Result Vm::Result::exceptionHandled()
+{
+	return Result(ResultType::ExceptionHandled);
+}
+
 Vm::Result Vm::Result::fatal()
 {
 	return Result(ResultType::Fatal);
 }
 
 Vm::Result::Result(ResultType type)
+	: type(type)
+{}
+
+Vm::ResultWithValue Vm::ResultWithValue::ok(const Value& value)
+{
+	ResultWithValue result(ResultType::Ok);
+	result.value = value;
+	return result;
+}
+
+Vm::ResultWithValue Vm::ResultWithValue::exception(const Value& value)
+{
+	ResultWithValue result(ResultType::Exception);
+	result.value = value;
+	return result;
+}
+
+Vm::ResultWithValue Vm::ResultWithValue::exceptionHandled()
+{
+	return ResultWithValue(ResultType::ExceptionHandled);
+}
+
+Vm::ResultWithValue Vm::ResultWithValue::fatal()
+{
+	return ResultWithValue(ResultType::Fatal);
+}
+
+Vm::ResultWithValue::ResultWithValue(ResultType type)
 	: type(type)
 {}

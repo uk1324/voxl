@@ -7,9 +7,8 @@ using namespace Voxl;
 
 LocalValue List::iter(Context& c)
 {
-	auto iteratorType = c.getGlobal("_ListIterator");
-	ASSERT(iteratorType.has_value());
-	return (*iteratorType)(c.args(0));
+	auto iteratorType = c.get("_ListIterator");
+	return iteratorType(c.args(0));
 }
 
 LocalValue List::push(Context& c)
@@ -95,9 +94,8 @@ LocalValue ListIterator::next(Context& c)
 	auto iterator = c.args(0).asObj<ListIterator>();
 	if (iterator->index >= iterator->list->size) 
 	{
-		auto stopIterationType = c.getGlobal("StopIteration");
-		ASSERT(stopIterationType.has_value());
-		throw NativeException((*stopIterationType)());
+		auto stopIterationType = c.get("StopIteration");
+		throw NativeException(stopIterationType());
 	}
 	const auto& result = iterator->list->data[iterator->index];
 	iterator->index++;

@@ -37,7 +37,7 @@ static LocalValue throw_3(Context& c)
 static LocalValue imported_get_number(Context& c)
 {
 	auto module = c.useModule("./imported.voxl", "module");
-	return module.at("get_number")();
+	return module.get("get_number")();
 }
 
 }

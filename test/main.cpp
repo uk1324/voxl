@@ -56,6 +56,7 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "match_float", "float" },
 	{ "native_class", "53" },
 	{ "import_from_native_module", "123456" },
+	{ "undefined_variable", "undefinedundefined" },
 };
 
 void testFailed(std::string_view name)

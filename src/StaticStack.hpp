@@ -26,6 +26,7 @@ public:
 	[[nodiscard]] bool push(const T& value);
 	[[nodiscard]] bool push();
 	void pop();
+	T popAndReturn();
 	T& peek(size_t i);
 	T& top();
 	const T& top() const;
@@ -94,6 +95,14 @@ void StaticStack<T, SIZE>::pop()
 	ASSERT(topPtr != data());
 	topPtr--;
 	topPtr->~T();
+}
+
+template<typename T, size_t SIZE>
+inline T StaticStack<T, SIZE>::popAndReturn()
+{
+	ASSERT(topPtr != data());
+	topPtr--;
+	return std::move(*topPtr);
 }
 
 template<typename T, size_t SIZE>

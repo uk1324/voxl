@@ -439,7 +439,7 @@ void Allocator::addObj(Obj* obj)
 	m_markedObjs.push_back(obj);
 }
 
-void Allocator::addValue(Value& value)
+void Allocator::addValue(Value value)
 {
 	if (value.isObj())
 	{

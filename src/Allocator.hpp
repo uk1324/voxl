@@ -91,7 +91,7 @@ public:
 	void runGc();
 
 	void addObj(Obj* obj);
-	void addValue(Value& value);
+	void addValue(Value value);
 	void addHashTable(HashTable& hashTable);
 	const Value& getConstant(size_t id) const;
 	void registerLocal(Obj** obj);

@@ -32,8 +32,10 @@ private:
 
 class LocalObjString : public LocalObj<ObjString>
 {
-public:
+private:
 	using LocalObj<ObjString>::LocalObj;
+public:
+	LocalObjString(std::string_view string, Context& context);
 
 	std::string_view chars() const;
 	size_t len() const;
@@ -53,6 +55,7 @@ public:
 	template<typename T>
 	LocalValue(const LocalObj<T>& obj);
 	LocalValue(const LocalValue& other);
+	LocalValue(std::string_view string, Context& context);
 	~LocalValue();
 
 	// Could implement getting fields by returing a object that could be assigned which would set the field
@@ -65,7 +68,9 @@ public:
 	static LocalValue null(Context& context);
 	template <typename ...Vals>
 	LocalValue operator()(const Vals&&... args);
-	LocalValue at(std::string_view fieldName);
+	std::optional<LocalValue> at(std::string_view fieldName);
+	LocalValue get(std::string_view fieldName);
+	void set(std::string_view fieldName, const LocalValue& rhs);
 
 	template<typename T>
 	LocalObj<T> asObj();
@@ -129,8 +134,9 @@ public:
 
 	LocalValue args(size_t index);
 	LocalValue typeErrorMustBe(std::string_view whatItMustBe);
-	std::optional<LocalValue> getGlobal(std::string_view name);
-	void setGlobal(std::string_view name, const LocalValue& value);
+	std::optional<LocalValue> at(std::string_view name);
+	LocalValue get(std::string_view name);
+	void set(std::string_view name, const LocalValue& value);
 	void createFunction(std::string_view name, NativeFunction function, int argCount, void* context = nullptr);
 	template<typename T>
 	void createClass(
