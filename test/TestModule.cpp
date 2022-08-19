@@ -21,7 +21,7 @@ static LocalValue floor(Context& c)
 
 static LocalValue invoke(Context& c)
 {
-	return c.call(c.args(0));
+	return c.args(0)();
 }
 
 static LocalValue get_5(Context& c)
@@ -34,6 +34,12 @@ static LocalValue throw_3(Context& c)
 	throw NativeException(LocalValue::intNum(3, c));
 }
 
+static LocalValue imported_get_number(Context& c)
+{
+	auto module = c.useModule("./imported.voxl", "module");
+	return module.at("get_number")();
+}
+
 }
 
 LocalValue testModuleMain(Context& c)
@@ -43,6 +49,7 @@ LocalValue testModuleMain(Context& c)
 	c.createFunction("invoke", invoke, 1);
 	c.createFunction("get_5", get_5, 0);
 	c.createFunction("throw_3", throw_3, 0);
+	c.createFunction("imported_get_number", imported_get_number, 0);
 
 	c.createClass<U8>(
 		"U8",

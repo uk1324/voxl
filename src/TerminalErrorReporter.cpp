@@ -93,6 +93,9 @@ void TerminalErrorReporter::onVmError(const Vm& vm, std::string_view message)
 	{
 		// TODO: Also print native functions. Currently calling a native function doesn't store it in the call frame.
 		const auto callable = frame->callable;
+		if (callable == nullptr)
+			continue;
+
 		if (callable->isFunction())
 		{
 			const auto function = callable->asFunction();

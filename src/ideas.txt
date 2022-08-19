@@ -78,3 +78,31 @@ One issue with traits in a dynamically typed language is that method collision c
 With traits chaining iterators like map and filter is simpler although it could also be implemented by creating a class that takes an iterator and applies these methods onto the iterator it stores and also provides an iterface that allows iterating it.
 
 When using a reference counting garbage collector GCed objects can't be in a invalid state. All allocation could be considered roots and every once in a while a tracing GC would run through them. Native objects shouldn't store GCed objects directly inside them because then cyclic referencs can't be found (could also have a mark method but this would only be used for base types like List). The GCed objects could be stored inside a hash table just like in non native objects. This would make the FFI a lot easier to use.
+
+Default function arguments
+
+Should default arguments be evaluated at runtime based on the argument count like in javascript. This could be implemented with a switch with fallthoughs or something like this. Argcount could be obtained using a instruction.
+
+// Push nulls is probably not needed if statement expressions are not in the language.
+pushNulls(expectedArgCount - argCount);
+switch (argCount) 
+{
+	case 0:
+		setLocal(0, <expr0>);
+	case 1:
+		setLocal(1, <expr1>);
+}
+
+Python creates on one instance of the argument per function. This leads to unexpected results.
+def x(x = []):
+	x.append(1)
+	print(x)
+x()
+x()
+
+output:
+[1]
+[1, 1]
+
+Another option would be to only allow compile time expressions. Then the default values would be stored inside the class and push on the stack like in the frist example.
+

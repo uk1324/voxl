@@ -19,10 +19,12 @@ enum class VmResult
 };
 
 class Context;
+class LocalValue;
 
 class Vm
 {
 	friend class Context;
+	friend class LocalValue;
 private:
 	struct FatalException {};
 
@@ -59,7 +61,7 @@ public:
 		[[nodiscard]] static Result fatal();
 
 		ResultType type;
-		Value value;
+		Value exceptionValue;
 
 	private:
 		Result(ResultType type);
@@ -82,8 +84,6 @@ public:
 	void defineNativeFunction(std::string_view name, NativeFunction function, int argCount);
 	void createModule(std::string_view name, NativeFunction moduleMain);
 
-	//Value add(Value lhs, Value rhs);
-	Value call(const Value& calle, Value* values, int argCount);
 
 private:
 	Result run();
@@ -104,7 +104,17 @@ private:
 	std::optional<Value&> getGlobal(ObjString* name);
 	bool setGlobal(ObjString* name, const Value& value);
 	void debugPrintStack();
+	// If Result::Ok then on return Module is TOS.
+	Result importModule(ObjString* name);
+	Vm::Result pushDummyCallFrame();
+	void popCallStack();
 	static bool isModuleMemberPublic(const ObjString* name);
+	// The call frame has to be either a native function or a dummy call frame before calling. Returns on the stack.
+	Result callAndReturnValue(const Value& calle, Value* values = nullptr, int argCount = 0);
+	Value callFromNativeFunction(const Value& calle, Value* values = nullptr, int argCount = 0);
+	// Returns on the stack.
+	Result callFromVmAndReturnValue(const Value& calle, Value* values = nullptr, int argCount = 0);
+
 
 private:
 	static void mark(Vm* vm, Allocator& allocator);

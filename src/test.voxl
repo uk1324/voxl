@@ -1,5 +1,5 @@
 fn test0() {
-	ret 5;
+	ret 51;
 }
 
 fn test1() {

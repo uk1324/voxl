@@ -1,3 +1,4 @@
+#include "Context.hpp"
 #include <Context.hpp>
 #include <Vm/Vm.hpp>
 
@@ -50,6 +51,20 @@ LocalValue LocalValue::floatNum(Float value, Context& context)
 LocalValue LocalValue::null(Context& context)
 {
 	return LocalValue(Value::null(), context);
+}
+
+LocalValue LocalValue::at(std::string_view fieldName)
+{
+	// Maybe change to LocalObjString. Can't be non constant because getField might allocate.
+	const auto fieldNameString = m_context.allocator.allocateStringConstant(fieldName).value;
+	const auto field = m_context.vm.getField(value, fieldNameString);
+	if (field.has_value())
+	{
+		return LocalValue(*field, m_context);
+	}
+	// TODO: Change this.
+	ASSERT_NOT_REACHED();
+	throw Vm::FatalException();
 }
 
 LocalObjString LocalValue::asString()
@@ -159,4 +174,30 @@ void Context::createFunction(std::string_view name, NativeFunction function, int
 	vm.m_globals->set(
 		nameString, 
 		Value(allocator.allocateForeignFunction(nameString, function, argCount, vm.m_globals, context)));
+}
+
+LocalValue Context::useModule(std::string_view name, std::optional<std::string_view> variableName)
+{
+	const auto nameString = allocator.allocateStringConstant(name).value;
+	const auto result = vm.importModule(nameString);
+	const auto module = vm.m_stack.top();
+	vm.m_stack.pop();
+	switch (result.type)
+	{
+	case Vm::ResultType::Exception:
+		throw NativeException(result.exceptionValue);
+	case Vm::ResultType::Fatal:
+		throw Vm::FatalException();
+	case Vm::ResultType::Ok:
+		if (variableName.has_value())
+		{
+			const auto variableNameString = allocator.allocateStringConstant(*variableName).value;
+			vm.m_globals->set(variableNameString, module);
+		}
+		else
+		{
+			vm.m_globals->set(nameString, module);
+		}
+	}
+	return LocalValue(module, *this);
 }

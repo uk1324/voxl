@@ -588,10 +588,6 @@ Compiler::Status Compiler::loadModule(std::string_view filePath)
 	const auto filenameConstant = m_allocator.allocateStringConstant(filePath).constant;
 	TRY(loadConstant(filenameConstant));
 	emitOp(Op::Import);
-	// Pop the return value of the module main function. This can't be done inside Op::Import becuase to execute a non native main
-	// the instruction has to move onto the next one. It also may be posible to fix this by making module calls special; making them not return
-	// a value and removing the code for getting the return value in Op::Return.
-	emitOp(Op::PopStack);
 	emitOp(Op::ModuleSetLoaded);
 	return Status::Ok;
 }

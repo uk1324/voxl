@@ -9,7 +9,7 @@ LocalValue List::iter(Context& c)
 {
 	auto iteratorType = c.getGlobal("_ListIterator");
 	ASSERT(iteratorType.has_value());
-	return c.call(*iteratorType, c.args(0));
+	return (*iteratorType)(c.args(0));
 }
 
 LocalValue List::push(Context& c)
@@ -97,7 +97,7 @@ LocalValue ListIterator::next(Context& c)
 	{
 		auto stopIterationType = c.getGlobal("StopIteration");
 		ASSERT(stopIterationType.has_value());
-		throw NativeException(c.call(*stopIterationType));
+		throw NativeException((*stopIterationType)());
 	}
 	const auto& result = iterator->list->data[iterator->index];
 	iterator->index++;

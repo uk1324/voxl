@@ -1,3 +1,9 @@
+#include "Vm.hpp"
+#include "Vm.hpp"
+#include "Vm.hpp"
+#include "Vm.hpp"
+#include "Vm.hpp"
+#include "Vm.hpp"
 #include <Vm/Vm.hpp>
 #include <Vm/List.hpp>
 #include <Vm/String.hpp>
@@ -199,7 +205,7 @@ Vm::Result Vm::run()
 		{
 			const auto function = m_callStack.top().callable->asFunction();
 			disassembleInstruction(
-				m_callStack.top().function->byteCode,
+				function->byteCode,
 				m_instructionPointer - function->byteCode.code.data(), *m_allocator);
 			std::cout << '\n';
 		}
@@ -797,26 +803,12 @@ Vm::Result Vm::run()
 					m_exceptionHandlers.pop();
 				}
 
-				m_instructionPointer = m_callStack.top().instructionPointerBeforeCall;
-				m_callStack.pop();
-				auto callable = m_callStack.top().callable;
-				switch (callable->type)
-				{
-				case ObjType::Function:
-					m_globals = callable->asFunction()->globals;
-					break;
-
-				case ObjType::NativeFunction:
-					m_globals = callable->asNativeFunction()->globals;
-					break;
-
-				default:
-					ASSERT_NOT_REACHED();
-				}
+				popCallStack();
 
 				TRY_PUSH(result);
 
-				if (m_callStack.top().callable->isNativeFunction())
+				auto callable = m_callStack.top().callable;
+				if ((callable == nullptr) || callable->isNativeFunction())
 					return Result::ok();
 			}
 			break;
@@ -936,56 +928,7 @@ Vm::Result Vm::run()
 		{
 			auto filename = m_stack.peek(0).asObj()->asString();
 			m_stack.pop();
-			// At the end the stack has to contain the module and the return value of the main function which is always null.
-			// If a module is already loaded the value has to be pushed anyway.
-			if (const auto module = m_modules.get(filename); module.has_value())
-			{
-				TRY_PUSH(*module);
-				TRY_PUSH(Value::null());
-				break;
-			}
-			if (const auto module = m_nativeModulesMains.find(std::string_view(filename->chars, filename->size));
-				module != m_nativeModulesMains.end())
-			{
-				const auto moduleObj = m_allocator->allocateModule();
-				m_modules.set(filename, Value(moduleObj));
-				const auto main = m_allocator->allocateForeignFunction(filename, module->second, 0, &moduleObj->globals, nullptr);
-				TRY_PUSH(Value(moduleObj));
-				TRY(callValue(Value(main), 0, 0));
-				break;
-			}
-			auto path = std::filesystem::absolute(
-				m_sourceInfo->directory / std::filesystem::path(std::string_view(filename->chars, filename->size)));
-			if (path.has_extension() == false)
-				path.replace_extension("voxl");
-			auto pathString = m_allocator->allocateStringConstant(path.string()).value;
-			if (auto module = m_modules.get(pathString); module.has_value())
-			{
-				TRY_PUSH(*module);
-				TRY_PUSH(Value::null());
-				break;
-			}
-			SourceInfo sourceInfo;
-			// Should this be filename or pathString?
-			sourceInfo.displayedFilename = filename->chars;
-			sourceInfo.directory = std::move(path.remove_filename());
-			auto source = stringFromFile(pathString->chars);
-			// If cannot find search the std library.
-			sourceInfo.source = source;
-			auto scannerResult = m_scanner->parse(sourceInfo, *m_errorReporter);
-			auto parserResult = m_parser->parse(scannerResult.tokens, sourceInfo, *m_errorReporter);
-			if (scannerResult.hadError || parserResult.hadError)
-			{
-				return fatalError("import error");
-			}
-			auto compilerResult = m_compiler->compile(parserResult.ast, sourceInfo, *m_errorReporter);
-			if (compilerResult.hadError)
-			{
-				return fatalError("import error");
-			}
-			TRY_PUSH(Value(compilerResult.module));
-			m_modules.set(pathString, Value(compilerResult.module));
-			TRY(callObjFunction(compilerResult.program, 0, 0, false));
+			TRY(importModule(filename));
 			break;
 		}
 
@@ -1093,81 +1036,6 @@ void Vm::createModule(std::string_view name, NativeFunction moduleMain)
 	m_nativeModulesMains[name] = moduleMain;
 }
 
-Value Vm::call(const Value& calle, Value* values, int argCount)
-{
-	int numberOfValuesToPopOffExceptArgs = 0;
-	if (calle.isObj() && calle.as.obj->isClass())
-	{
-		numberOfValuesToPopOffExceptArgs = 1;
-		if (m_stack.push(calle) == false)
-		{
-			throw FatalException{};
-		}
-	}
-
-	for (int i = 0; i < argCount; i++)
-	{
-		if (m_stack.push(values[i]) == false)
-		{
-			throw FatalException{};
-		}
-	}
-
-	const auto callResult = callValue(calle, argCount, numberOfValuesToPopOffExceptArgs);
-	switch (callResult.type)
-	{
-	case ResultType::Ok: break;
-	case ResultType::Fatal: throw FatalException{};
-	case ResultType::Exception: throw NativeException(callResult.value);
-	}
-
-	// TODO: Would also need to check for native function in constructors.
-	// A simpler solution might be returning if the function is a native function from callValue
-	// Becuase so many places call callValue, I could create a new function callValueAndReturnIfNative.
-	// Then just call this function from callValue and ignore the reutrn value.
-	if (calle.isObj())
-	{
-		auto shouldCallRun = true;
-
-		if (calle.as.obj->isClass())
-		{
-			auto optInitializer = calle.as.obj->asClass()->fields.get(m_initString);
-			if ((optInitializer.has_value() == false) 
-				|| (optInitializer->isObj() && optInitializer->as.obj->isNativeFunction()))
-			{
-				shouldCallRun = false;
-			}
-		}
-		else if (calle.as.obj->isNativeFunction())
-		{
-			shouldCallRun = false;
-		}
-
-		if (shouldCallRun == false)
-		{
-			const auto& returnValue = m_stack.peek(0);
-			m_stack.pop();
-			return returnValue;
-		}
-	}
-
-	const auto runResult = run();
-	switch (runResult.type)
-	{
-		case ResultType::Ok:
-		{
-			const auto& returnValue = m_stack.peek(0);
-			m_stack.pop();
-			return returnValue;
-		}
-		case ResultType::Fatal: throw FatalException{};
-		case ResultType::Exception: throw NativeException(runResult.value);
-	}
-
-	ASSERT_NOT_REACHED();
-	return Value::null();
-}
-
 uint8_t Vm::readUint8()
 {
 	uint8_t value = *m_instructionPointer;
@@ -1251,43 +1119,11 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 				const auto result = function->function(context);
 				m_stack.topPtr -= numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount);
 				TRY_PUSH(isInitializer ? args[0] : result.value);
-				m_instructionPointer = m_callStack.top().instructionPointerBeforeCall;
-				m_callStack.pop();
-				auto callable = m_callStack.top().callable;
-				switch (callable->type)
-				{
-				case ObjType::Function:
-					m_globals = callable->asFunction()->globals;
-					break;
-
-				case ObjType::NativeFunction:
-					m_globals = callable->asNativeFunction()->globals;
-					break;
-
-				default:
-					ASSERT_NOT_REACHED();
-				}
+				popCallStack();
 			}
 			catch (const NativeException& exception)
 			{
-				m_instructionPointer = m_callStack.top().instructionPointerBeforeCall;
-				m_callStack.pop();
-
-				auto callable = m_callStack.top().callable;
-				switch (callable->type)
-				{
-				case ObjType::Function:
-					m_globals = callable->asFunction()->globals;
-					break;
-
-				case ObjType::NativeFunction:
-					m_globals = callable->asNativeFunction()->globals;
-					break;
-
-				default:
-					ASSERT_NOT_REACHED();
-				}
-
+				popCallStack();
 				TRY(throwValue(exception.value));
 			}
 
@@ -1544,10 +1380,251 @@ void Vm::debugPrintStack()
 	std::cout << "]\n";
 }
 
+Vm::Result Vm::importModule(ObjString* name)
+{
+	// At the end the stack has to contain the module and the return value of the main function which is always null.
+	// If a module is already loaded the value has to be pushed anyway.
+	if (const auto module = m_modules.get(name); module.has_value())
+	{
+		TRY_PUSH(*module);
+		return Result::ok();
+	}
+	if (const auto module = m_nativeModulesMains.find(std::string_view(name->chars, name->size));
+		module != m_nativeModulesMains.end())
+	{
+		const auto moduleObj = m_allocator->allocateModule();
+		m_modules.set(name, Value(moduleObj));
+		const auto main = m_allocator->allocateForeignFunction(name, module->second, 0, &moduleObj->globals, nullptr);
+		TRY_PUSH(Value(moduleObj));
+		TRY(callValue(Value(main), 0, 0));
+		m_stack.pop(); // Pop the return value.
+		return Result::ok();
+	}
+	auto path = std::filesystem::absolute(
+		m_sourceInfo->directory / std::filesystem::path(std::string_view(name->chars, name->size)));
+	if (path.has_extension() == false)
+		path.replace_extension("voxl");
+	auto pathString = m_allocator->allocateStringConstant(path.string()).value;
+	if (auto module = m_modules.get(pathString); module.has_value())
+	{
+		TRY_PUSH(*module);
+		return Result::ok();
+	}
+	SourceInfo sourceInfo;
+	// Should this be filename or pathString?
+	sourceInfo.displayedFilename = name->chars;
+	sourceInfo.directory = std::move(path.remove_filename());
+	auto source = stringFromFile(pathString->chars);
+	// If cannot find search the std library.
+	sourceInfo.source = source;
+	auto scannerResult = m_scanner->parse(sourceInfo, *m_errorReporter);
+	auto parserResult = m_parser->parse(scannerResult.tokens, sourceInfo, *m_errorReporter);
+	if (scannerResult.hadError || parserResult.hadError)
+	{
+		return fatalError("import error");
+	}
+	auto compilerResult = m_compiler->compile(parserResult.ast, sourceInfo, *m_errorReporter);
+	if (compilerResult.hadError)
+	{
+		return fatalError("import error");
+	}
+	TRY_PUSH(Value(compilerResult.module));
+	m_modules.set(pathString, Value(compilerResult.module));
+	TRY(callFromVmAndReturnValue(Value(compilerResult.program)));
+
+	return Result::ok();
+}
+
+Vm::Result Vm::pushDummyCallFrame()
+{
+	m_callStack.top().instructionPointerBeforeCall = m_instructionPointer;
+	TRY_PUSH_CALL_STACK();
+	m_callStack.top().instructionPointerBeforeCall = m_instructionPointer;
+	m_callStack.top().callable = nullptr;
+	return Result::ok();
+}
+
+void Vm::popCallStack()
+{
+	m_instructionPointer = m_callStack.top().instructionPointerBeforeCall;
+	m_callStack.pop();
+	auto callable = m_callStack.top().callable;
+	if (callable != nullptr)
+	{
+		switch (callable->type)
+		{
+		case ObjType::Function:
+			m_globals = callable->asFunction()->globals;
+			break;
+
+		case ObjType::NativeFunction:
+			m_globals = callable->asNativeFunction()->globals;
+			break;
+
+		default:
+			ASSERT_NOT_REACHED();
+		}
+	}
+}
+
 bool Vm::isModuleMemberPublic(const ObjString* name)
 {
 	return (name->size > 0) && (name->chars[0] != '_');
 }
+
+Vm::Result Vm::callAndReturnValue(const Value& calle, Value* values, int argCount)
+{
+	int numberOfValuesToPopOffExceptArgs = 0;
+	if (calle.isObj() && calle.as.obj->isClass())
+	{
+		numberOfValuesToPopOffExceptArgs = 1;
+		if (m_stack.push(calle) == false)
+		{
+			throw FatalException{};
+		}
+	}
+
+	for (int i = 0; i < argCount; i++)
+	{
+		if (m_stack.push(values[i]) == false)
+		{
+			throw FatalException{};
+		}
+	}
+
+	TRY(callValue(calle, argCount, numberOfValuesToPopOffExceptArgs));
+
+	if (calle.isObj())
+	{
+		auto shouldCallRun = true;
+
+		if (calle.as.obj->isClass())
+		{
+			auto optInitializer = calle.as.obj->asClass()->fields.get(m_initString);
+			if ((optInitializer.has_value() == false)
+				|| (optInitializer->isObj() && optInitializer->as.obj->isNativeFunction()))
+			{
+				shouldCallRun = false;
+			}
+		}
+		else if (calle.as.obj->isNativeFunction())
+		{
+			shouldCallRun = false;
+		}
+
+		if (shouldCallRun == false)
+		{
+			return Result::ok();
+		}
+	}
+
+	return run();
+}
+
+Value Vm::callFromNativeFunction(const Value& calle, Value* values, int argCount)
+{
+	const auto result = callAndReturnValue(calle, values, argCount);
+	switch (result.type)
+	{
+	case ResultType::Ok:
+	{
+		const auto& returnValue = m_stack.peek(0);
+		m_stack.pop();
+		return returnValue;
+	}
+	case ResultType::Fatal: throw FatalException{};
+	case ResultType::Exception: throw NativeException(result.exceptionValue);
+	}
+	const auto returnValue = m_stack.top();
+	m_stack.pop();
+	return returnValue;
+
+	//int numberOfValuesToPopOffExceptArgs = 0;
+	//if (calle.isObj() && calle.as.obj->isClass())
+	//{
+	//	numberOfValuesToPopOffExceptArgs = 1;
+	//	if (m_stack.push(calle) == false)
+	//	{
+	//		throw FatalException{};
+	//	}
+	//}
+
+	//for (int i = 0; i < argCount; i++)
+	//{
+	//	if (m_stack.push(values[i]) == false)
+	//	{
+	//		throw FatalException{};
+	//	}
+	//}
+
+	//const auto callResult = callValue(calle, argCount, numberOfValuesToPopOffExceptArgs);
+	//switch (callResult.type)
+	//{
+	//case ResultType::Ok: break;
+	//case ResultType::Fatal: throw FatalException{};
+	//case ResultType::Exception: throw NativeException(callResult.exceptionValue);
+	//}
+
+	//// TODO: Would also need to check for native function in constructors.
+	//// A simpler solution might be returning if the function is a native function from callValue
+	//// Becuase so many places call callValue, I could create a new function callValueAndReturnIfNative.
+	//// Then just call this function from callValue and ignore the reutrn value.
+	//if (calle.isObj())
+	//{
+	//	auto shouldCallRun = true;
+
+	//	if (calle.as.obj->isClass())
+	//	{
+	//		auto optInitializer = calle.as.obj->asClass()->fields.get(m_initString);
+	//		if ((optInitializer.has_value() == false)
+	//			|| (optInitializer->isObj() && optInitializer->as.obj->isNativeFunction()))
+	//		{
+	//			shouldCallRun = false;
+	//		}
+	//	}
+	//	else if (calle.as.obj->isNativeFunction())
+	//	{
+	//		shouldCallRun = false;
+	//	}
+
+	//	if (shouldCallRun == false)
+	//	{
+	//		const auto& returnValue = m_stack.peek(0);
+	//		m_stack.pop();
+	//		return returnValue;
+	//	}
+	//}
+
+	//const auto runResult = run();
+	//TRY(
+	//switch (runResult.type)
+	//{
+	//case ResultType::Ok:
+	//{
+	//	const auto& returnValue = m_stack.peek(0);
+	//	m_stack.pop();
+	//	return returnValue;
+	//}
+	//case ResultType::Fatal: throw FatalException{};
+	//case ResultType::Exception: throw NativeException(runResult.exceptionValue);
+	//}
+
+	//ASSERT_NOT_REACHED();
+	//return Value::null();
+}
+
+Vm::Result Vm::callFromVmAndReturnValue(const Value& calle, Value* values, int argCount)
+{
+	TRY(pushDummyCallFrame());
+	const auto result = callAndReturnValue(calle, values, argCount);
+	m_stack.pop();
+	if (result.type == ResultType::Exception)
+		TRY(throwValue(result.exceptionValue));
+	TRY(result);
+	popCallStack();
+	return Result::ok();
+}
+
 
 void Vm::mark(Vm* vm, Allocator& allocator)
 {
@@ -1586,7 +1663,8 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 
 	for (const auto& frame : vm->m_callStack)
 	{
-		allocator.addObj(frame.callable);
+		if (frame.callable != nullptr)
+			allocator.addObj(frame.callable);
 	}
 
 	for (auto upvalue : vm->m_openUpvalues)
@@ -1614,7 +1692,7 @@ Vm::Result Vm::Result::ok()
 Vm::Result Vm::Result::exception(const Value& value)
 {
 	Result result(ResultType::Exception);
-	result.value = value;
+	result.exceptionValue = value;
 	return result;
 }
 
