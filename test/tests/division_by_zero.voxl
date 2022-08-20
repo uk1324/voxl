@@ -1,0 +1,5 @@
+try {
+	1 / 0;
+} catch ZeroDivisionError => error {
+	put("divison by zero");
+}

@@ -12,7 +12,6 @@
 		case Vm::ResultType::Fatal: \
 			throw Vm::FatalException(); \
 		case Vm::ResultType::ExceptionHandled: \
-			ASSERT_NOT_REACHED(); \
 		case Vm::ResultType::Ok: \
 			break; \
 		} \
@@ -29,7 +28,6 @@
 		case Vm::ResultType::Fatal: \
 			throw Vm::FatalException(); \
 		case Vm::ResultType::ExceptionHandled: \
-			ASSERT_NOT_REACHED(); \
 		case Vm::ResultType::Ok: \
 			break; \
 		} \

@@ -17,6 +17,9 @@
 
 using namespace Voxl;
 
+// TODO: Maybe instead all those functions WITH/WITHOUT VALUE have a converions function between the types.
+// or use a function that returns the stored value with the same name for both types.
+
 #define TRY_OUTSIDE_RUN(somethingThatReturnsResult) \
 	 do \
 	 { \
@@ -130,15 +133,19 @@ Vm::Vm(Allocator& allocator)
 // The GC might run during the constructor so the values have to be checked inside mark for begin null.
 // This also may be fixable by making constant classes that are always marked.
 // Currently only strings and functions can be constant because they don't contain any changing data.
+
+// When adding a new type remember to set it to nullptr here and mark it in Vm::mark().
 	, m_listType(nullptr)
 	, m_listIteratorType(nullptr)
 	, m_numberType(nullptr)
 	, m_intType(nullptr)
 	, m_floatType(nullptr)
+	, m_boolType(nullptr)
 	, m_stopIterationType(nullptr)
 	, m_stringType(nullptr)
 	, m_typeErrorType(nullptr)
 	, m_nameErrorType(nullptr)
+	, m_zeroDivisionErrorType(nullptr)
 	, m_finallyBlockDepth(0)
 {
 	// Cannot use allocateNativeClass overload with initializer list inside constructor because the GC might run. 
@@ -152,16 +159,16 @@ Vm::Vm(Allocator& allocator)
 		auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount, &m_builtins, nullptr);
 		type->fields.set(nameObj, Value(functionObj));
 	};
-	addFn(m_listType, "$iter", List::iter, 1);
-	addFn(m_listType, "push", List::push, 2);
-	addFn(m_listType, "size", List::get_size, 1);
-	addFn(m_listType, "$get_index", List::get_index, 2);
-	addFn(m_listType, "$set_index", List::set_index, 3);
+	addFn(m_listType, "$iter", List::iter, List::iterArgCount);
+	addFn(m_listType, "push", List::push, List::pushArgCount);
+	addFn(m_listType, "size", List::get_size, List::getSizeArgCount);
+	addFn(m_listType, "$get_index", List::get_index, List::getIndexArgCount);
+	addFn(m_listType, "$set_index", List::set_index, List::setIndexArgCount);
 
 	auto listIteratorString = m_allocator->allocateStringConstant("_ListIterator").value;
 	m_listIteratorType = m_allocator->allocateNativeClass<ListIterator>(listIteratorString, ListIterator::construct, nullptr);
-	addFn(m_listIteratorType, "$init", ListIterator::init, 2);
-	addFn(m_listIteratorType, "$next", ListIterator::next, 1);
+	addFn(m_listIteratorType, "$init", ListIterator::init, ListIterator::initArgCount);
+	addFn(m_listIteratorType, "$next", ListIterator::next, ListIterator::nextArgCount);
 
 	auto numberString = m_allocator->allocateStringConstant("Number").value;
 	m_numberType = m_allocator->allocateClass(numberString);
@@ -184,20 +191,30 @@ Vm::Vm(Allocator& allocator)
 	m_floatType = m_allocator->allocateClass(floatString);
 	m_floatType->superclass = *m_numberType;
 
+	auto boolString = m_allocator->allocateStringConstant("Bool").value;
+	m_boolType = m_allocator->allocateClass(boolString);
+
 	auto stringString = m_allocator->allocateStringConstant("String").value;
 	m_stringType = m_allocator->allocateClass(stringString);
-	addFn(m_stringType, "len", String::len, 1);
+	addFn(m_stringType, "len", String::len, String::lenArgCount);
 
 	auto stopIterationString = m_allocator->allocateStringConstant("StopIteration").value;
 	m_stopIterationType = m_allocator->allocateClass(stopIterationString);
 
 	auto typeErrorString = m_allocator->allocateStringConstant("TypeError").value;
 	m_typeErrorType = m_allocator->allocateClass(typeErrorString);
+	addFn(m_typeErrorType, "$init", GenericStringError::init, GenericStringError::initArgCount);
+	addFn(m_typeErrorType, "$str", GenericStringError::str, GenericStringError::strArgCount);
 
 	auto nameErrorString = m_allocator->allocateStringConstant("NameError").value;
 	m_nameErrorType = m_allocator->allocateClass(nameErrorString);
-	addFn(m_nameErrorType, "$init", NameError::init, NameError::initArgCount);
-	addFn(m_nameErrorType, "$str", NameError::str, NameError::strArgCount);
+	addFn(m_nameErrorType, "$init", GenericStringError::init, GenericStringError::initArgCount);
+	addFn(m_nameErrorType, "$str", GenericStringError::str, GenericStringError::strArgCount);
+
+	auto zeroDivisonErrorString = m_allocator->allocateStringConstant("ZeroDivisionError").value;
+	m_zeroDivisionErrorType = m_allocator->allocateClass(zeroDivisonErrorString);
+	addFn(m_zeroDivisionErrorType, "$init", GenericStringError::init, GenericStringError::initArgCount);
+	addFn(m_zeroDivisionErrorType, "$str", GenericStringError::str, GenericStringError::strArgCount);
 
 	reset();
 }
@@ -257,9 +274,12 @@ void Vm::reset()
 	m_builtins.set(m_intType->name, Value(m_intType));
 	m_builtins.set(m_floatType->name, Value(m_floatType));
 	m_builtins.set(m_stringType->name, Value(m_stringType));
+	m_builtins.set(m_boolType->name, Value(m_boolType));
 	m_builtins.set(m_stopIterationType->name, Value(m_stopIterationType));
 	m_builtins.set(m_listIteratorType->name, Value(m_listIteratorType));
+	m_builtins.set(m_typeErrorType->name, Value(m_typeErrorType));
 	m_builtins.set(m_nameErrorType->name, Value(m_nameErrorType));
+	m_builtins.set(m_zeroDivisionErrorType->name, Value(m_zeroDivisionErrorType));
 }
 
 #define TRY TRY_INSIDE_RUN
@@ -309,7 +329,7 @@ Vm::Result Vm::run()
 			} \
 			else \
 			{ \
-				return fatalError("no operator" #op " for these types"); \
+				goto unsupportedTypes##overloadNameString; \
 			} \
 		} \
 		else \
@@ -333,9 +353,12 @@ Vm::Result Vm::run()
 			} \
 			else \
 			{ \
-				return fatalError("no operator " #op " for these types"); \
+				goto unsupportedTypes##overloadNameString; \
 			} \
 		} \
+		break; \
+		unsupportedTypes##overloadNameString: \
+		TRY(throwTypeErrorUnsupportedOperandTypesFor(#op, lhs, rhs)); \
 		break; \
 	}
 		case Op::Add: BINARY_ARITHMETIC_OP(+, m_addString)
@@ -376,15 +399,17 @@ Vm::Result Vm::run()
 					goto noOverloadForDivision;
 
 				if (b == static_cast<Float>(0))
-					return fatalError("cannot divide by 0");
+					TRY(throwErrorWithMsg(m_zeroDivisionErrorType, "division by zero"));
 
 				m_stack.pop();
 				m_stack.top() = Value::floatNum(a / b);
 
 				break;
 			}
+			break;
 		noOverloadForDivision:
-			return fatalError("no operator / for these types");
+			TRY(throwTypeErrorUnsupportedOperandTypesFor("/", lhs, rhs));
+			break;
 		}
 		case Op::Modulo: 
 		{
@@ -426,15 +451,17 @@ Vm::Result Vm::run()
 					goto noOverloadForModulo;
 
 				if (b == static_cast<Float>(0))
-					return fatalError("cannot divide by 0");
+					TRY(throwErrorWithMsg(m_zeroDivisionErrorType, "division by zero"));
 
 				m_stack.pop();
 				m_stack.top() = Value::floatNum(fmod(a, b));
 
 				break;
 			}
+			break;
 		noOverloadForModulo:
-			return fatalError("no operator % for these types");
+			TRY(throwTypeErrorUnsupportedOperandTypesFor("%", lhs, rhs));
+			break;
 		}
 
 #define BINARY_COMPARASION_OP(op, overloadNameString) \
@@ -593,7 +620,7 @@ Vm::Result Vm::run()
 			bool doesNotAlreadyExist = m_globals->set(name, value);
 			if (doesNotAlreadyExist == false)
 			{
-				TRY(throwNameError("redeclaration of '%s'", name->chars));
+				TRY(throwErrorWithMsg(m_nameErrorType, "redeclaration of '%s'", name->chars));
 			}
 			m_stack.pop();
 			m_stack.pop();
@@ -731,11 +758,11 @@ Vm::Result Vm::run()
 		{
 			const auto jump = readUint32();
 			const auto& value = m_stack.peek(0);
-			if ((value.type != ValueType::Bool))
+			if ((value.isBool() == false))
 			{
-				return fatalError("must be bool");
+				TRY(throwTypeErrorExpectedFound(m_boolType, value));
 			}
-			if (value.as.boolean)
+			if (value.asBool())
 			{
 				m_instructionPointer += jump;
 			}
@@ -746,11 +773,11 @@ Vm::Result Vm::run()
 		{
 			const auto jump = readUint32();
 			const auto& value = m_stack.peek(0);
-			if ((value.type != ValueType::Bool))
+			if (value.isBool() == false)
 			{
-				return fatalError("must be bool");
+				TRY(throwTypeErrorExpectedFound(m_boolType, value));
 			}
-			if (value.as.boolean == false)
+			if (value.asBool() == false)
 			{
 				m_instructionPointer += jump;
 			}
@@ -761,11 +788,11 @@ Vm::Result Vm::run()
 		{
 			const auto jump = readUint32();
 			const auto& value = m_stack.peek(0);
-			if ((value.type != ValueType::Bool))
+			if (value.isBool() == false)
 			{
-				return fatalError("must be bool");
+				TRY(throwTypeErrorExpectedFound(m_boolType, value));
 			}
-			if (value.as.boolean == false)
+			if (value.asBool() == false)
 			{
 				m_instructionPointer += jump;
 			}
@@ -1009,6 +1036,19 @@ Vm::Result Vm::run()
 			auto& superclassValue = m_stack.peek(0);
 			if ((superclassValue.isObj() == false) || (superclassValue.asObj()->isClass() == false))
 			{
+				const auto superclassValueClass = getClass(superclassValue);
+				if (superclassValueClass.has_value())
+				{
+					TRY(throwErrorWithMsg(
+						m_typeErrorType, 
+						"expected a class found '%s'", 
+						superclassValueClass->name->chars));
+				}
+				else
+				{
+					TRY(throwErrorWithMsg(m_typeErrorType, "expected a class"));
+				}
+
 				return fatalError("expected class");
 			}
 			auto superclass = superclassValue.asObj()->asClass();
@@ -1084,7 +1124,8 @@ uint8_t Vm::readUint8()
 Vm::Result Vm::fatalError(const char* format, ...)
 {
 	// Save the instruction pointer so onVmError can read it.
-	m_callStack.top().instructionPointerBeforeCall = m_instructionPointer;
+	if (m_callStack.isEmpty() == false)
+		m_callStack.top().instructionPointerBeforeCall = m_instructionPointer;
 	va_list args;
 	va_start(args, format);
 	const auto message = formatToTempBuffer(format, args);
@@ -1099,10 +1140,10 @@ Vm::Result Vm::callObjFunction(ObjFunction* function, int argCount, int numberOf
 	{
 		return fatalError("expected %d arguments but got %d", function->argCount, argCount);
 	}
-
+	if (m_callStack.isEmpty() == false)
+		m_callStack.top().instructionPointerBeforeCall = m_instructionPointer;
 	TRY_PUSH_CALL_STACK();
 	auto& frame = m_callStack.top();
-	frame.instructionPointerBeforeCall = m_instructionPointer;
 	m_instructionPointer = function->byteCode.code.data();
 	frame.values = m_stack.topPtr - argCount;
 	frame.callable = function;
@@ -1143,11 +1184,13 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			{
 				return fatalError("expected %d arguments but got %d", function->argCount, argCount);
 			} 
+			// TODO Maybe put the common parts into a function idk.
+			if (m_callStack.isEmpty() == false)
+				m_callStack.top().instructionPointerBeforeCall = m_instructionPointer;
 			TRY_PUSH_CALL_STACK();
 			auto& frame = m_callStack.top();
 			frame.callable = function;
 			frame.isInitializer = isInitializer;
-			frame.instructionPointerBeforeCall = m_instructionPointer;
 			m_globals = function->globals;
 			try
 			{
@@ -1181,6 +1224,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 				m_stack.topPtr++;
 			};
 
+			// TODO: Add constructor for bool.
 			if (class_ == m_intType)
 			{
 				if (argCount != 1)
@@ -1219,6 +1263,9 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			}
 			else
 			{
+				// TODO: Maybe for special types just create an instance  in the constructor and call a native function
+				// This would require the functions to be able to set arguments.
+
 				auto instance = class_->isNative()
 					? static_cast<Obj*>(m_allocator->allocateNativeInstance(class_))
 					: static_cast<Obj*>(m_allocator->allocateInstance(class_));
@@ -1385,7 +1432,32 @@ Vm::Result Vm::throwValue(const Value& value)
 {
 	if (m_exceptionHandlers.isEmpty())
 	{
-		return fatalError("uncaught exception");
+		auto class_ = getClass(value);
+		std::optional<std::string_view> exceptionTypeName;
+		std::optional<std::string_view> message;
+		if (class_.has_value())
+		{
+			exceptionTypeName = class_->name->chars;
+			if (const auto strFunction = class_->fields.get(m_strString); strFunction.has_value())
+			{
+				auto arguments = value;
+				const auto result = callFromVmAndReturnValue(*strFunction, &arguments, 1);
+				if (result.type != ResultType::Ok)
+				{
+					m_callStack.clear();
+					return fatalError("%s.$str() failed", class_->name->chars);
+				}
+				const auto& returnValue = m_stack.top();
+				if ((returnValue.isObj() == false) || (returnValue.asObj()->asString() == false))
+				{
+					m_callStack.clear();
+ 					return fatalError("%s.$str() has to return values of type 'String'", class_->name->chars);
+				}
+				message = returnValue.asObj()->asString()->chars;
+			}
+		}
+		m_errorReporter->onUncaughtException(*this, exceptionTypeName, message);
+		return Result::fatal();
 	}
 
 	if (m_finallyBlockDepth > 0)
@@ -1404,7 +1476,7 @@ Vm::Result Vm::throwValue(const Value& value)
 		}
 		m_callStack.pop();
 	}
-
+	
 	m_stack.topPtr = handler.stackTopPtrBeforeTry;
 	m_instructionPointer = handler.handlerCodeLocation;
 	TRY_PUSH(value);
@@ -1421,6 +1493,7 @@ std::optional<ObjClass&> Vm::getClass(const Value& value)
 	if (value.isFloat())
 		return *m_floatType;
 
+	// TODO: Implement a class for every build in type. Reuse Function for different types.
 	if (value.isObj())
 	{
 		if (value.as.obj->isString())
@@ -1431,11 +1504,6 @@ std::optional<ObjClass&> Vm::getClass(const Value& value)
 			return *value.as.obj->asNativeInstance()->class_;
 	}
 	return std::nullopt;
-}
-
-Value Vm::typeErrorExpected(ObjClass*)
-{
-	return Value(m_allocator->allocateInstance(m_typeErrorType));
 }
 
 std::optional<Value&> Vm::atGlobal(ObjString* name)
@@ -1452,7 +1520,7 @@ Vm::ResultWithValue Vm::getGlobal(ObjString* name)
 	const auto value = atGlobal(name);
 	if (value.has_value() == false)
 	{
-		RETURN_WITHOUT_VALUE(throwNameError("'%s' is not defined", name->chars));
+		RETURN_WITHOUT_VALUE(throwErrorWithMsg(m_nameErrorType, "'%s' is not defined", name->chars));
 	}
 	return ResultWithValue::ok(*value);
 }
@@ -1462,7 +1530,7 @@ Vm::Result Vm::setGlobal(ObjString* name, Value& value)
 	bool doesNotAlreadyExist = m_globals->set(name, value);
 	if (doesNotAlreadyExist)
 	{
-		return throwNameError("'%s' is not defined", name->chars);
+		return throwErrorWithMsg(m_nameErrorType, "'%s' is not defined", name->chars);
 	}
 	return Result::ok();
 }
@@ -1544,8 +1612,8 @@ Vm::Result Vm::pushDummyCallFrame()
 
 void Vm::popCallStack()
 {
-	m_instructionPointer = m_callStack.top().instructionPointerBeforeCall;
 	m_callStack.pop();
+	m_instructionPointer = m_callStack.top().instructionPointerBeforeCall;
 	auto callable = m_callStack.top().callable;
 	if (callable != nullptr)
 	{
@@ -1625,7 +1693,8 @@ Value Vm::callFromNativeFunction(const Value& calle, Value* values, int argCount
 	switch (result.type)
 	{
 	case ResultType::ExceptionHandled:
-		ASSERT_NOT_REACHED();
+		ASSERT_NOT_REACHED(); // Just a test.
+		[[fallthrough]];
 	case ResultType::Ok:
 	{
 		const auto& returnValue = m_stack.peek(0);
@@ -1638,90 +1707,23 @@ Value Vm::callFromNativeFunction(const Value& calle, Value* values, int argCount
 	const auto returnValue = m_stack.top();
 	m_stack.pop();
 	return returnValue;
-
-	//int numberOfValuesToPopOffExceptArgs = 0;
-	//if (calle.isObj() && calle.as.obj->isClass())
-	//{
-	//	numberOfValuesToPopOffExceptArgs = 1;
-	//	if (m_stack.push(calle) == false)
-	//	{
-	//		throw FatalException{};
-	//	}
-	//}
-
-	//for (int i = 0; i < argCount; i++)
-	//{
-	//	if (m_stack.push(values[i]) == false)
-	//	{
-	//		throw FatalException{};
-	//	}
-	//}
-
-	//const auto callResult = callValue(calle, argCount, numberOfValuesToPopOffExceptArgs);
-	//switch (callResult.type)
-	//{
-	//case ResultType::Ok: break;
-	//case ResultType::Fatal: throw FatalException{};
-	//case ResultType::Exception: throw NativeException(callResult.exceptionValue);
-	//}
-
-	//// TODO: Would also need to check for native function in constructors.
-	//// A simpler solution might be returning if the function is a native function from callValue
-	//// Becuase so many places call callValue, I could create a new function callValueAndReturnIfNative.
-	//// Then just call this function from callValue and ignore the reutrn value.
-	//if (calle.isObj())
-	//{
-	//	auto shouldCallRun = true;
-
-	//	if (calle.as.obj->isClass())
-	//	{
-	//		auto optInitializer = calle.as.obj->asClass()->fields.get(m_initString);
-	//		if ((optInitializer.has_value() == false)
-	//			|| (optInitializer->isObj() && optInitializer->as.obj->isNativeFunction()))
-	//		{
-	//			shouldCallRun = false;
-	//		}
-	//	}
-	//	else if (calle.as.obj->isNativeFunction())
-	//	{
-	//		shouldCallRun = false;
-	//	}
-
-	//	if (shouldCallRun == false)
-	//	{
-	//		const auto& returnValue = m_stack.peek(0);
-	//		m_stack.pop();
-	//		return returnValue;
-	//	}
-	//}
-
-	//const auto runResult = run();
-	//TRY(
-	//switch (runResult.type)
-	//{
-	//case ResultType::Ok:
-	//{
-	//	const auto& returnValue = m_stack.peek(0);
-	//	m_stack.pop();
-	//	return returnValue;
-	//}
-	//case ResultType::Fatal: throw FatalException{};
-	//case ResultType::Exception: throw NativeException(runResult.exceptionValue);
-	//}
-
-	//ASSERT_NOT_REACHED();
-	//return Value::null();
 }
 
-Vm::Result Vm::throwNameError(const char* format, ...)
+Vm::Result Vm::throwErrorWithMsg(ObjClass* class_, const char* format, ...)
 {
-	const auto instance = m_allocator->allocateInstance(m_nameErrorType);
-	TRY_PUSH(Value(instance)); // GC
-
 	va_list args;
 	va_start(args, format);
-	const auto message = formatToTempBuffer(format, args);
+	const auto result = throwErrorWithMsgImplementation(class_, format, args);
 	va_end(args);
+	return result;
+}
+
+Vm::Result Vm::throwErrorWithMsgImplementation(ObjClass* class_, const char* format, va_list args)
+{
+	const auto instance = m_allocator->allocateInstance(class_);
+	TRY_PUSH(Value(instance)); // GC
+
+	const auto message = formatToTempBuffer(format, args);
 
 	const auto string = m_allocator->allocateString(message);
 	instance->fields.set(m_msgString, Value(string));
@@ -1729,11 +1731,40 @@ Vm::Result Vm::throwNameError(const char* format, ...)
 	return throwValue(Value(instance));
 }
 
+Vm::Result Vm::throwTypeErrorUnsupportedOperandTypesFor(const char* op, const Value& a, const Value& b)
+{
+	const auto aClass = getClass(a), bClass = getClass(b);
+	if ((aClass.has_value() == false) || (bClass.has_value() == false))
+	{
+		return throwErrorWithMsg(m_typeErrorType, "unsupported operand types for %s", op);
+	}
+
+	return throwErrorWithMsg(
+		m_typeErrorType, 
+		"unsupported operand types for %s: '%s' and '%s'",
+		op, aClass->name->chars, bClass->name->chars);
+}
+
+Vm::Result Vm::throwTypeErrorExpectedFound(ObjClass* expected, const Value& found)
+{
+	const auto foundClass = getClass(found);
+	if (foundClass.has_value())
+	{
+		return throwErrorWithMsg(
+			m_typeErrorType,
+			"expected '%s', found '%s'",
+			expected->name->chars, foundClass->name->chars);
+	}
+	else
+	{
+		return throwErrorWithMsg(m_typeErrorType, "expected '%s'", expected->name->chars);
+	}
+}
+
 Vm::Result Vm::callFromVmAndReturnValue(const Value& calle, Value* values, int argCount)
 {
 	TRY(pushDummyCallFrame());
 	const auto result = callAndReturnValue(calle, values, argCount);
-	m_stack.pop();
 	if (result.type == ResultType::Exception)
 		TRY(throwValue(result.exceptionValue));
 	TRY(result);
@@ -1765,6 +1796,9 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 	if (vm->m_floatType != nullptr)
 		allocator.addObj(vm->m_floatType);
 
+	if (vm->m_boolType != nullptr)
+		allocator.addObj(vm->m_boolType);
+
 	if (vm->m_listIteratorType != nullptr)
 		allocator.addObj(vm->m_listIteratorType);
 
@@ -1779,6 +1813,9 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 
 	if (vm->m_nameErrorType)
 		allocator.addObj(vm->m_nameErrorType);
+
+	if (vm->m_zeroDivisionErrorType)
+		allocator.addObj(vm->m_zeroDivisionErrorType);
 
 	for (const auto& frame : vm->m_callStack)
 	{

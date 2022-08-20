@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <array>
 
+// TODO: Maybe add class 'Type'
+
 namespace Voxl
 {
 
@@ -132,10 +134,11 @@ private:
 	Value callFromNativeFunction(const Value& calle, Value* values = nullptr, int argCount = 0);
 	// Returns on the stack.
 	Result callFromVmAndReturnValue(const Value& calle, Value* values = nullptr, int argCount = 0);
-	Result throwNameError(const char* format, ...);
+	Result throwErrorWithMsg(ObjClass* class_, const char* format, ...);
+	Result throwErrorWithMsgImplementation(ObjClass* class_, const char* format, va_list args);
 
-	//Result add()
-
+	Result throwTypeErrorUnsupportedOperandTypesFor(const char* op, const Value& a, const Value& b);
+	Result throwTypeErrorExpectedFound(ObjClass* expected, const Value& found);
 
 private:
 	static void mark(Vm* vm, Allocator& allocator);
@@ -186,9 +189,11 @@ public:
 	ObjClass* m_numberType;
 	ObjClass* m_intType;
 	ObjClass* m_floatType;
+	ObjClass* m_boolType;
 	ObjClass* m_stringType;
 	ObjClass* m_stopIterationType;
 	ObjClass* m_typeErrorType;
+	ObjClass* m_zeroDivisionErrorType;
 	ObjClass* m_nameErrorType;
 
 	Allocator::MarkingFunctionHandle m_rootMarkingFunctionHandle;

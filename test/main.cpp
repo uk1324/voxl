@@ -57,6 +57,8 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "native_class", "53" },
 	{ "import_from_native_module", "123456" },
 	{ "undefined_variable", "undefinedundefined" },
+	{ "division_by_zero", "divison by zero" },
+	{ "if_non_bool", "type error" },
 };
 
 void testFailed(std::string_view name)

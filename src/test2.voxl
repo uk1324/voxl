@@ -1,11 +1,13 @@
-try {
-	put(x);
-} catch NameError {
-	put("undefined");
+fn call_test(n) {
+	test(n);
 }
 
-try {
-	x = 3;
-} catch NameError {
-	put("undefined");
+fn test(n) {
+	if n < 3 {
+		call_test(n + 1);
+	} else {
+		throw 2;
+	}
 }
+
+test(0);

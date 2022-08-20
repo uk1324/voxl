@@ -9,6 +9,7 @@ namespace Voxl
 namespace String
 {
 
+static constexpr int lenArgCount = 1;
 LocalValue len(Context& c);
 
 }

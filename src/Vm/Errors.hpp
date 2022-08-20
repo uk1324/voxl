@@ -6,7 +6,7 @@
 namespace Voxl
 {
 
-namespace NameError
+namespace GenericStringError
 {
 	static constexpr int initArgCount = 2;
 	LocalValue init(Context& c);

@@ -453,7 +453,12 @@ Compiler::Status Compiler::tryStmt(const TryStmt& stmt)
 	}
 	else
 	{
+		const auto jumpPastFinallyRethrow = emitJump(Op::Jump);
 		setJumpToHere(jumpToFinallyWithRethrow);
+		// This code handles the case if there is a throw inside catch. 
+		// TODO: Comment this better and maybe rename some things.
+		emitOp(Op::Throw);
+		setJumpToHere(jumpPastFinallyRethrow);
 	}
 
 	return Status::Ok;

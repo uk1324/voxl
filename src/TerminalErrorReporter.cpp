@@ -89,35 +89,19 @@ void TerminalErrorReporter::onCompilerError(const SourceLocation& location, std:
 void TerminalErrorReporter::onVmError(const Vm& vm, std::string_view message)
 {
 	m_out << "fatal runtime error: " << message << '\n';
-	for (auto frame = vm.m_callStack.crbegin(); frame != vm.m_callStack.crend(); ++frame)
-	{
-		// TODO: Also print native functions. Currently calling a native function doesn't store it in the call frame.
-		const auto callable = frame->callable;
-		if (callable == nullptr)
-			continue;
-
-		if (callable->isFunction())
-		{
-			const auto function = callable->asFunction();
-			const auto instructionOffset = frame->instructionPointerBeforeCall - function->byteCode.code.data();
-			const auto lineNumber = function->byteCode.lineNumberAtOffset[instructionOffset] + 1;
-			m_out << "line " << lineNumber << " in " << function->name->chars << "()\n";
-		}
-		else if (callable->isNativeFunction())
-		{
-			const auto function = callable->asNativeFunction();
-			m_out << "in native " << function->name->chars << "()\n";
-		}
-		else
-		{
-			ASSERT_NOT_REACHED();
-		}
-	}
+	printStackTrace(vm);
 }
 
-void TerminalErrorReporter::onUncaughtException(const Vm&, const Value&, std::string_view)
+void TerminalErrorReporter::onUncaughtException(const Vm& vm, std::optional<std::string_view> exceptionTypeName, std::optional<std::string_view> message)
 {
-	ASSERT_NOT_REACHED();
+	if (exceptionTypeName.has_value() == false)
+		m_out << "Uncaught error\n";
+
+	if (message.has_value() == false)
+		m_out << "Uncaught " << *exceptionTypeName << '\n';
+
+	m_out << "Uncaught " << *exceptionTypeName << ": " << *message << '\n';
+	printStackTrace(vm);
 }
 
 void TerminalErrorReporter::errorAt(const SourceLocation& location, std::string_view message)
@@ -186,6 +170,34 @@ void TerminalErrorReporter::printRedTildes(size_t count)
 		m_out << '~';
 	}
 	m_out << TERM_COL_RESET "\n";
+}
+
+void TerminalErrorReporter::printStackTrace(const Vm& vm)
+{
+	for (auto frame = vm.m_callStack.crbegin(); frame != vm.m_callStack.crend(); ++frame)
+	{
+		// TODO: Also print native functions. Currently calling a native function doesn't store it in the call frame.
+		const auto callable = frame->callable;
+		if (callable == nullptr)
+			continue;
+
+		if (callable->isFunction())
+		{
+			const auto function = callable->asFunction();
+			const auto instructionOffset = frame->instructionPointerBeforeCall - function->byteCode.code.data();
+			const auto lineNumber = (size_t)(instructionOffset) > 100 ? 1 : function->byteCode.lineNumberAtOffset[instructionOffset] + 1;
+			m_out << "line " << lineNumber << " in " << function->name->chars << "()\n";
+		}
+		else if (callable->isNativeFunction())
+		{
+			const auto function = callable->asNativeFunction();
+			m_out << "in native " << function->name->chars << "()\n";
+		}
+		else
+		{
+			ASSERT_NOT_REACHED();
+		}
+	}
 }
 
 bool TerminalErrorReporter::isVisible(char c)

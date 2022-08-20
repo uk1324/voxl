@@ -66,7 +66,7 @@ public:
 		return as.obj;
 	}
 
-	bool asBool()
+	bool asBool() const
 	{
 		ASSERT(isBool());
 		return as.boolean;

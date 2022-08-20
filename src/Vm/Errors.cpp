@@ -3,7 +3,7 @@
 
 using namespace Voxl;
 
-LocalValue NameError::init(Context& c)
+LocalValue GenericStringError::init(Context& c)
 {
 	auto self = c.args(0);
 	auto string = c.args(1);
@@ -11,7 +11,7 @@ LocalValue NameError::init(Context& c)
 	return LocalValue::null(c);
 }
 
-LocalValue NameError::str(Context& c)
+LocalValue GenericStringError::str(Context& c)
 {
 	auto self = c.args(0);
 	return self.get("msg");

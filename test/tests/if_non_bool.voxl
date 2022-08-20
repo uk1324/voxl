@@ -1,0 +1,9 @@
+fn test() {}
+
+try {
+	if test {
+	
+	}
+} catch TypeError => error {
+	put("type error");
+}
