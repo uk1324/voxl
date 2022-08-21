@@ -96,11 +96,10 @@ void TerminalErrorReporter::onUncaughtException(const Vm& vm, std::optional<std:
 {
 	if (exceptionTypeName.has_value() == false)
 		m_out << "Uncaught error\n";
-
-	if (message.has_value() == false)
+	else if (message.has_value() == false)
 		m_out << "Uncaught " << *exceptionTypeName << '\n';
-
-	m_out << "Uncaught " << *exceptionTypeName << ": " << *message << '\n';
+	else
+		m_out << "Uncaught " << *exceptionTypeName << ": " << *message << '\n';
 	printStackTrace(vm);
 }
 

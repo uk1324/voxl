@@ -1,37 +1,6 @@
 #include <Context.hpp>
+#include <ContextTry.hpp>
 #include <Vm/Vm.hpp>
-
-#define TRY(somethingThatReturnsResult) \
-	do \
-	{ \
-		const auto expressionResult = somethingThatReturnsResult; \
-		switch (expressionResult.type) \
-		{ \
-		case Vm::ResultType::Exception: \
-			throw NativeException(expressionResult.exceptionValue); \
-		case Vm::ResultType::Fatal: \
-			throw Vm::FatalException(); \
-		case Vm::ResultType::ExceptionHandled: \
-		case Vm::ResultType::Ok: \
-			break; \
-		} \
-	} while(false)
-
-#define TRY_WITH_VALUE(resultWithValue) \
-	do \
-	{ \
-		const auto expressionResult = resultWithValue; \
-		switch (resultWithValue.type) \
-		{ \
-		case Vm::ResultType::Exception: \
-			throw NativeException(expressionResult.value); \
-		case Vm::ResultType::Fatal: \
-			throw Vm::FatalException(); \
-		case Vm::ResultType::ExceptionHandled: \
-		case Vm::ResultType::Ok: \
-			break; \
-		} \
-	} while(false)
 
 using namespace Voxl;
 
@@ -87,9 +56,25 @@ LocalValue LocalValue::floatNum(Float value, Context& context)
 	return LocalValue(Value(value), context);
 }
 
+LocalValue LocalValue::boolean(bool value, Context& context)
+{
+	return LocalValue(Value(value), context);
+}
+
 LocalValue LocalValue::null(Context& context)
 {
 	return LocalValue(Value::null(), context);
+}
+
+bool LocalValue::operator==(const LocalValue& other)
+{
+	auto& vm = m_context.vm;
+	if ((vm.m_stack.push(value) == false)|| (vm.m_stack.push(other.value) == false))
+	{
+		TRY(vm.fatalError("stack overflow"));
+	}
+	TRY(vm.equals());
+	return vm.m_stack.popAndReturn().asBool();
 }
 
 std::optional<LocalValue> LocalValue::at(std::string_view fieldName)
@@ -120,7 +105,7 @@ LocalObjString LocalValue::asString()
 	auto obj = value.as.obj;
 	if ((value.isObj() == false) || (obj->isString() == false))
 	{
-		throw NativeException(m_context.typeErrorMustBe("TODO"));
+		TRY(m_context.vm.throwTypeErrorExpectedFound(m_context.vm.m_stringType, value));
 	}
 	return LocalObjString(obj->asString(), m_context);
 }
@@ -171,7 +156,9 @@ Float LocalValue::asNumber() const
 	if (value.isInt())
 		return static_cast<Float>(value.asInt());
 
-	throw m_context.typeErrorMustBe("number");
+	TRY(m_context.vm.throwTypeErrorExpectedFound(m_context.vm.m_numberType, value));
+	ASSERT_NOT_REACHED();
+	return std::numeric_limits<Float>::infinity();
 }
 
 Context::Context(Value* args, int argCount, Allocator& allocator, Vm& vm)
@@ -192,11 +179,6 @@ LocalValue Context::args(size_t index)
 	}
 
 	return LocalValue(m_args[i], *this);
-}
-
-LocalValue Context::typeErrorMustBe(std::string_view /*whatItMustBe*/)
-{
-	return LocalValue(Value::null(), *this);
 }
 
 std::optional<LocalValue> Context::at(std::string_view name)

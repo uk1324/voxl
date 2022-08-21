@@ -1,0 +1,17 @@
+class Test {}
+
+test : Test();
+test.a = 0;
+
+fn t() {
+	put("t");
+	ret test;
+}
+
+fn b() {
+	put("b");
+	ret 1;
+}
+
+t().a += b();
+put(test.a);

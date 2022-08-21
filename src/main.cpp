@@ -20,8 +20,6 @@ using namespace Voxl;
 // because the function return will pop them anyway.
 // Could optimize also be creating an instruction to pop n values of the stack.
 
-// TODO: Make static vector class
-
 // How to synchronize this without semicolons
 // function(
 //		1 +,

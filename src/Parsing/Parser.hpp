@@ -7,6 +7,8 @@
 
 #include <vector>
 
+// TODO: Where should the isAtEnd() check be removed? The checks should normally throw an error and isAtEnd() might sometimes make it so the 
+// error doesn't happen. I think, although I am not sure.
 namespace Voxl
 {
 

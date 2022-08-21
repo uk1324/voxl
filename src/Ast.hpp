@@ -27,6 +27,7 @@ enum class ExprType
 	Assignment,
 	GetField,
 	List,
+	Dict,
 	Lambda,
 	Stmt,
 };
@@ -193,6 +194,19 @@ struct ListExpr final : public Expr
 	ListExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size_t end);
 
 	std::vector<std::unique_ptr<Expr>> values;
+};
+
+struct DictExpr final : public Expr
+{
+	struct Pair
+	{
+		std::unique_ptr<Expr> key;
+		std::unique_ptr<Expr> value;
+	};
+
+	DictExpr(std::vector<Pair> values, size_t start, size_t end);
+
+	std::vector<Pair> values;
 };
 
 struct LambdaExpr final : public Expr

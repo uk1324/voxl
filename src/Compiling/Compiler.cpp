@@ -1,3 +1,4 @@
+#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -653,6 +654,7 @@ Compiler::Status Compiler::compile(const std::unique_ptr<Expr>& expr)
 		CASE_EXPR_TYPE(Call, callExpr)
 		CASE_EXPR_TYPE(Assignment, assignmentExpr)
 		CASE_EXPR_TYPE(List, listExpr)
+		CASE_EXPR_TYPE(Dict, dictExpr)
 		CASE_EXPR_TYPE(GetField, getFieldExpr)
 		CASE_EXPR_TYPE(Lambda, lambdaExpr)
 		CASE_EXPR_TYPE(Stmt, stmtExpr)
@@ -687,6 +689,14 @@ Compiler::Status Compiler::compileBinaryExpr(const std::unique_ptr<Expr>& lhs, T
 
 	TRY(compile(lhs));
 	TRY(compile(rhs));
+	return compileBinaryExpr(op);
+}
+
+Compiler::Status Compiler::compileBinaryExpr(TokenType op)
+{
+	ASSERT(op != TokenType::AndAnd);
+	ASSERT(op != TokenType::OrOr);
+
 	switch (op)
 	{
 	case TokenType::Plus: emitOp(Op::Add); break;
@@ -696,7 +706,7 @@ Compiler::Status Compiler::compileBinaryExpr(const std::unique_ptr<Expr>& lhs, T
 	case TokenType::Slash: emitOp(Op::Divide); break;
 	case TokenType::Percent: emitOp(Op::Modulo); break;
 	case TokenType::EqualsEquals: emitOp(Op::Equals); break;
-	case TokenType::NotEquals: emitOp(Op::NotEquals); break;
+	case TokenType::NotEquals: emitOp(Op::Equals); emitOp(Op::Not); break;
 	case TokenType::Less: emitOp(Op::Less); break;
 	case TokenType::LessEquals: emitOp(Op::LessEqual); break;
 	case TokenType::More: emitOp(Op::More); break;
@@ -704,8 +714,8 @@ Compiler::Status Compiler::compileBinaryExpr(const std::unique_ptr<Expr>& lhs, T
 	case TokenType::LeftBracket: emitOp(Op::GetIndex); break;
 	default:
 		ASSERT_NOT_REACHED();
+		return Status::Error;
 	}
-
 	return Status::Ok;
 }
 
@@ -783,23 +793,27 @@ Compiler::Status Compiler::identifierExpr(const IdentifierExpr& expr)
 
 Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 {
-	if (expr.op.has_value())
+	if (expr.lhs->type == ExprType::Binary)
 	{
-		TRY(compileBinaryExpr(expr.lhs, *expr.op, expr.rhs));
-	}
-	else
-	{
-		TRY(compile(expr.rhs));
-	}
-
-	// TODO: Lhs get evaluted twice this can be fixed changing the order of the operands of get 
-	// and set field.
-	// Evaluating lhs, duplicating it, evaluating rhs, evaluating op, assigning.
-	if (expr.lhs->type == ExprType::Identifier)
-	{
-		const auto lhs = static_cast<IdentifierExpr&>(*expr.lhs.get()).identifier;
-		TRY(setVariable(lhs, expr.location()));
-		return Status::Ok;
+		const auto lhs = static_cast<BinaryExpr*>(expr.lhs.get());
+		if (lhs->op == TokenType::LeftBracket)
+		{
+			TRY(compile(lhs->lhs));
+			TRY(compile(lhs->rhs));
+			if (expr.op.has_value())
+			{
+				emitOp(Op::CloneTopTwo);
+				emitOp(Op::GetIndex);
+				TRY(compile(expr.rhs));
+				TRY(compileBinaryExpr(*expr.op));
+			}
+			else
+			{
+				TRY(compile(expr.rhs));
+			}
+			emitOp(Op::SetIndex);
+			return Status::Ok;
+		}
 	}
 	else if (expr.lhs->type == ExprType::GetField)
 	{
@@ -807,19 +821,30 @@ Compiler::Status Compiler::assignmentExpr(const AssignmentExpr& expr)
 		TRY(compile(lhs->lhs));
 		const auto fieldNameConstant = m_allocator.allocateStringConstant(lhs->fieldName).constant;
 		TRY(loadConstant(fieldNameConstant));
+		if (expr.op.has_value())
+		{
+			emitOp(Op::CloneTopTwo);
+			emitOp(Op::GetField);
+			TRY(compile(expr.rhs));
+			TRY(compileBinaryExpr(*expr.op));
+		}
+		else
+		{
+			TRY(compile(expr.rhs));
+		}
 		emitOp(Op::SetField);
 		return Status::Ok;
 	}
-	else if (expr.lhs->type == ExprType::Binary)
+	else if (expr.lhs->type == ExprType::Identifier)
 	{
-		const auto lhs = static_cast<BinaryExpr*>(expr.lhs.get());
-		if (lhs->op == TokenType::LeftBracket)
-		{
-			TRY(compile(lhs->lhs));
-			TRY(compile(lhs->rhs));
-			emitOp(Op::SetIndex);
-			return Status::Ok;
-		}
+		if (expr.op.has_value())
+			TRY(compileBinaryExpr(expr.lhs, *expr.op, expr.rhs));
+		else
+			TRY(compile(expr.rhs));
+
+		const auto lhs = static_cast<IdentifierExpr&>(*expr.lhs.get()).identifier;
+		TRY(setVariable(lhs, expr.location()));
+		return Status::Ok;
 	}
 
 	return errorAt(expr.location(), "invalid left side of assignment");
@@ -850,6 +875,18 @@ Compiler::Status Compiler::listExpr(const ListExpr& expr)
 	{
 		TRY(compile(value));
 		emitOp(Op::ListPush);
+	}
+	return Status::Ok;
+}
+
+Compiler::Status Compiler::dictExpr(const DictExpr& expr)
+{
+	emitOp(Op::CreateDict);
+	for (const auto& [key, value] : expr.values)
+	{
+		TRY(compile(key));
+		TRY(compile(value));
+		emitOp(Op::DictSet);
 	}
 	return Status::Ok;
 }

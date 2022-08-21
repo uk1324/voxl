@@ -49,7 +49,12 @@ Token Scanner::token()
 		case '+':
 		{
 			if (match('+'))
+			{
+				if (match('='))
+					return makeToken(TokenType::PlusPlusEquals);
+
 				return makeToken(TokenType::PlusPlus);
+			}
 
 			if (match('='))
 				return makeToken(TokenType::PlusEquals);

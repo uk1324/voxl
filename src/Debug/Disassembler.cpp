@@ -124,7 +124,6 @@ size_t Voxl::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::StoreMethod: return justOp("storeMethod");
 		case Op::Concat: return justOp("concat");
 		case Op::Equals: return justOp("equals");
-		case Op::NotEquals: return justOp("notEquals");
 		case Op::GetConstant: return opConstant("loadConstant", byteCode, offset, allocator);
 		case Op::GetLocal: return opNumber("loadLocal", byteCode, offset);
 		case Op::SetLocal: return opNumber("setLocal", byteCode, offset);
@@ -153,12 +152,15 @@ size_t Voxl::disassembleInstruction(const ByteCode& byteCode, size_t offset, con
 		case Op::MatchClass: return justOp("matchClass");
 		case Op::Import: return justOp("import");
 		case Op::CloneTop: return justOp("cloneTop");
+		case Op::CloneTopTwo: return justOp("cloneTopTwo");
 		case Op::ModuleImportAllToGlobalNamespace: return justOp("moduleImportAllToGlobalNamespace");
 		case Op::ModuleSetLoaded: return justOp("moduleSetLoaded");
 		case Op::FinallyBegin: return justOp("finallyBegin");
 		case Op::FinallyEnd: return justOp("finallyEnd");
 		case Op::CreateList: return justOp("createList");
 		case Op::ListPush: return justOp("listPush");
+		case Op::CreateDict: return justOp("dictCreate");
+		case Op::DictSet: return justOp("dictSet");
 		case Op::Rethrow: return justOp("rethrow");
 		case Op::Inherit: return justOp("opInherit");
 		case Op::ExpressionStatementBegin: return justOp("expressionStatementBegin");

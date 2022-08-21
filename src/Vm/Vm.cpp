@@ -1,5 +1,6 @@
 #include <Vm/Vm.hpp>
 #include <Vm/List.hpp>
+#include <Vm/Dict.hpp>
 #include <Vm/String.hpp>
 #include <Vm/Number.hpp>
 #include <Vm/Errors.hpp>
@@ -127,6 +128,7 @@ Vm::Vm(Allocator& allocator)
 	, m_geString(allocator.allocateStringConstant("$ge").value)
 	, m_getIndexString(allocator.allocateStringConstant("$get_index").value)
 	, m_setIndexString(allocator.allocateStringConstant("$set_index").value)
+	, m_eqString(allocator.allocateStringConstant("$eq").value)
 	, m_strString(allocator.allocateStringConstant("$str").value)
 	, m_msgString(allocator.allocateStringConstant("msg").value)
 	, m_emptyString(allocator.allocateStringConstant("").value)
@@ -137,10 +139,13 @@ Vm::Vm(Allocator& allocator)
 // When adding a new type remember to set it to nullptr here and mark it in Vm::mark().
 	, m_listType(nullptr)
 	, m_listIteratorType(nullptr)
+	, m_dictType(nullptr)
 	, m_numberType(nullptr)
 	, m_intType(nullptr)
 	, m_floatType(nullptr)
 	, m_boolType(nullptr)
+	, m_typeType(nullptr)
+	, m_nullType(nullptr)
 	, m_stopIterationType(nullptr)
 	, m_stringType(nullptr)
 	, m_typeErrorType(nullptr)
@@ -150,15 +155,15 @@ Vm::Vm(Allocator& allocator)
 {
 	// Cannot use allocateNativeClass overload with initializer list inside constructor because the GC might run. 
 
-	auto listString = m_allocator->allocateStringConstant("List").value;
-	m_listType = m_allocator->allocateNativeClass(listString, List::init, List::free);
-
 	auto addFn = [this](ObjClass* type, std::string_view name, NativeFunction function, int argCount)
 	{
 		auto nameObj = m_allocator->allocateStringConstant(name).value;
 		auto functionObj = m_allocator->allocateForeignFunction(nameObj, function, argCount, &m_builtins, nullptr);
 		type->fields.set(nameObj, Value(functionObj));
 	};
+
+	auto listString = m_allocator->allocateStringConstant("List").value;
+	m_listType = m_allocator->allocateNativeClass(listString, List::init, List::free);
 	addFn(m_listType, "$iter", List::iter, List::iterArgCount);
 	addFn(m_listType, "push", List::push, List::pushArgCount);
 	addFn(m_listType, "size", List::get_size, List::getSizeArgCount);
@@ -169,6 +174,12 @@ Vm::Vm(Allocator& allocator)
 	m_listIteratorType = m_allocator->allocateNativeClass<ListIterator>(listIteratorString, ListIterator::construct, nullptr);
 	addFn(m_listIteratorType, "$init", ListIterator::init, ListIterator::initArgCount);
 	addFn(m_listIteratorType, "$next", ListIterator::next, ListIterator::nextArgCount);
+
+	auto dictString = m_allocator->allocateStringConstant("Dict").value;
+	m_dictType = m_allocator->allocateNativeClass(dictString, Dict::init, Dict::free);
+	addFn(m_dictType, "$get_index", Dict::get_index, Dict::getIndexArgCount);
+	addFn(m_dictType, "$set_index", Dict::set_index, Dict::setIndexArgCount);
+	addFn(m_dictType, "size", Dict::get_size, Dict::getSizeArgCount);
 
 	auto numberString = m_allocator->allocateStringConstant("Number").value;
 	m_numberType = m_allocator->allocateClass(numberString);
@@ -194,9 +205,16 @@ Vm::Vm(Allocator& allocator)
 	auto boolString = m_allocator->allocateStringConstant("Bool").value;
 	m_boolType = m_allocator->allocateClass(boolString);
 
+	auto typeString = m_allocator->allocateStringConstant("Type").value;
+	m_typeType = m_allocator->allocateClass(typeString);
+
+	auto nullString = m_allocator->allocateStringConstant("String").value;
+	m_nullType = m_allocator->allocateClass(nullString);
+
 	auto stringString = m_allocator->allocateStringConstant("String").value;
 	m_stringType = m_allocator->allocateClass(stringString);
 	addFn(m_stringType, "len", String::len, String::lenArgCount);
+	addFn(m_stringType, "$hash", String::hash, String::hashArgCount);
 
 	auto stopIterationString = m_allocator->allocateStringConstant("StopIteration").value;
 	m_stopIterationType = m_allocator->allocateClass(stopIterationString);
@@ -270,6 +288,7 @@ void Vm::reset()
 	m_builtins.clear();
 	m_modules.clear();
 	m_builtins.set(m_listType->name, Value(m_listType));
+	m_builtins.set(m_dictType->name, Value(m_dictType));
 	m_builtins.set(m_numberType->name, Value(m_numberType));
 	m_builtins.set(m_intType->name, Value(m_intType));
 	m_builtins.set(m_floatType->name, Value(m_floatType));
@@ -361,6 +380,9 @@ Vm::Result Vm::run()
 		TRY(throwTypeErrorUnsupportedOperandTypesFor(#op, lhs, rhs)); \
 		break; \
 	}
+		// Making function that work both from the vm and from the ffi is hard because for simple types the values don't have to be on the stack,
+		// but for overload calls they need to be. It also requires calling callFromVmAndReturn. The simples way to implement this would be
+		// to just make everything a function even for basic types. 
 		case Op::Add: BINARY_ARITHMETIC_OP(+, m_addString)
 		case Op::Subtract: BINARY_ARITHMETIC_OP(-, m_subString)
 		case Op::Multiply: BINARY_ARITHMETIC_OP(*, m_mulString)
@@ -526,23 +548,7 @@ Vm::Result Vm::run()
 
 		case Op::Equals:
 		{
-			auto& lhs = m_stack.peek(1);
-			auto& rhs = m_stack.peek(0);
-			Value result(lhs == rhs);
-			m_stack.pop();
-			m_stack.pop();
-			TRY_PUSH(result);
-			break;
-		}
-
-		case Op::NotEquals:
-		{
-			auto& lhs = m_stack.peek(1);
-			auto& rhs = m_stack.peek(0);
-			Value result(!(lhs == rhs));
-			m_stack.pop();
-			m_stack.pop();
-			TRY_PUSH(result);
+			TRY(equals());
 			break;
 		}
 
@@ -676,9 +682,9 @@ Vm::Result Vm::run()
 
 		case Op::SetField:
 		{
-			auto fieldName = m_stack.peek(0).as.obj->asString();
-			auto lhs = m_stack.peek(1);
-			auto rhs = m_stack.peek(2);
+			auto rhs = m_stack.peek(0);
+			auto fieldName = m_stack.peek(1).as.obj->asString();
+			auto lhs = m_stack.peek(2);
 			TRY(setField(lhs, fieldName, rhs));
 			m_stack.pop();
 			m_stack.pop();
@@ -718,7 +724,7 @@ Vm::Result Vm::run()
 
 		case Op::SetIndex:
 		{
-			auto& value = m_stack.peek(1);
+			auto& value = m_stack.peek(2);
 			if (auto class_ = getClass(value); class_.has_value())
 			{
 				auto setIndexFunction = class_->fields.get(m_setIndexString);
@@ -956,12 +962,6 @@ Vm::Result Vm::run()
 
 		case Op::MatchClass:
 		{
-			//const auto& class_ = m_stack.peek(0).as.obj->asClass();
-			//const auto& value = m_stack.peek(1);
-			//const auto valueClass = getClass(value);
-			//m_stack.top() = Value(valueClass.has_value() && (&*valueClass == class_));
-			//break;
-
 			const auto& class_ = m_stack.peek(0).as.obj->asClass();
 			const auto& value = m_stack.peek(1);
 			auto valueClass = getClass(value);
@@ -997,20 +997,7 @@ Vm::Result Vm::run()
 		case Op::ModuleImportAllToGlobalNamespace:
 		{
 			auto module = m_stack.peek(0).asObj()->asModule();
-			if (module->isLoaded == false)
-			{
-				return fatalError("import error");
-			}
-			for (auto& [key, value] : module->globals)
-			{
-				// TODO: maybe check if this overrides.
-				// Would require the function to return if the key already exits. Right now it sets it and returns false.
-				if (isModuleMemberPublic(key))
-					m_globals->set(key, value);
-					// TODO: Change
-					//setGlobal(key, value);
-					//setGlobal(key, value);
-			}
+			TRY(importAllFromModule(module));
 			m_stack.pop();
 			break;
 		}
@@ -1018,6 +1005,14 @@ Vm::Result Vm::run()
 		case Op::CloneTop:
 		{
 			TRY_PUSH(m_stack.peek(0));
+			break;
+		}
+
+		case Op::CloneTopTwo:
+		{
+			ASSERT(m_stack.size() >= 2);
+			TRY_PUSH(m_stack.peek(1));
+			TRY_PUSH(m_stack.peek(1));
 			break;
 		}
 
@@ -1036,20 +1031,7 @@ Vm::Result Vm::run()
 			auto& superclassValue = m_stack.peek(0);
 			if ((superclassValue.isObj() == false) || (superclassValue.asObj()->isClass() == false))
 			{
-				const auto superclassValueClass = getClass(superclassValue);
-				if (superclassValueClass.has_value())
-				{
-					TRY(throwErrorWithMsg(
-						m_typeErrorType, 
-						"expected a class found '%s'", 
-						superclassValueClass->name->chars));
-				}
-				else
-				{
-					TRY(throwErrorWithMsg(m_typeErrorType, "expected a class"));
-				}
-
-				return fatalError("expected class");
+				TRY(throwTypeErrorExpectedFound(m_typeType, superclassValue));
 			}
 			auto superclass = superclassValue.asObj()->asClass();
 			class_->superclass = *superclass;
@@ -1067,7 +1049,7 @@ Vm::Result Vm::run()
 		case Op::CreateList:
 		{
 			auto list = m_allocator->allocateNativeInstance(m_listType);
-			static_cast<List*>(list)->initialize();
+			List::init(static_cast<List*>(list));
 			TRY_PUSH(Value(list));
 			break;
 		}
@@ -1080,11 +1062,28 @@ Vm::Result Vm::run()
 			auto listObj = listValue.asObj();
 			ASSERT(listObj->isNativeInstance());
 			auto listInstance = listObj->asNativeInstance();
-			// TODO: Make this check a function.
-			ASSERT(listInstance->class_->mark == reinterpret_cast<MarkingFunctionPtr>(List::mark));
+			ASSERT(listInstance->isOfType<List>());
 			const auto list = static_cast<List*>(listInstance);
 			m_stack.pop();
 			list->push(newElement);
+			break;
+		}
+
+		case Op::CreateDict:
+		{
+			auto dict = m_allocator->allocateNativeInstance(m_dictType);
+			Dict::init(static_cast<Dict*>(dict));
+			TRY_PUSH(Value(dict));
+			break;
+		}
+
+		case Op::DictSet:
+		{
+			const auto dict = m_stack.peek(2);
+			auto insert = m_dictType->fields.get(m_setIndexString);
+			ASSERT(insert.has_value());
+			TRY(callValue(*insert, 3, 0));
+			m_stack.top() = dict;
 			break;
 		}
 
@@ -1120,7 +1119,6 @@ uint8_t Vm::readUint8()
 	return value;
 }
 
-// TODO: could make a constructor for NativeFunctionResult that takes the vm and a message which it logs.
 Vm::Result Vm::fatalError(const char* format, ...)
 {
 	// Save the instruction pointer so onVmError can read it.
@@ -1197,7 +1195,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 				const auto args = m_stack.topPtr - argCount;
 				Context context(args, argCount, *m_allocator, *this);
 				const auto result = function->function(context);
-				m_stack.topPtr -= numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount);
+				m_stack.popN(numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount));
 				TRY_PUSH(isInitializer ? args[0] : result.value);
 				popCallStack();
 			}
@@ -1294,8 +1292,11 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 		case ObjType::BoundFunction:
 		{
 			auto boundFunction = obj->asBoundFunction();
+
 			// Replace the function with the bound value
+			ASSERT(numberOfValuesToPopOffExceptArgs == 1);
 			m_stack.topPtr[-argCount - 1] = boundFunction->value;
+
 			if (boundFunction->callable->isBoundFunction())
 			{
 				return fatalError("cannot bind a function twice");
@@ -1318,7 +1319,7 @@ std::optional<Value> Vm::atField(Value& value, ObjString* fieldName)
 	// TODO: When using type errors just use
 	/*printf("expected %s got %s", a->name, b->name)*/
 	// Dereferencing the results from HashTable::get() because it return a std::optional<Value&> not std::optional<Value>.
-	// Can't use a reference type because bound functions can be allocated.
+	// Can't use a reference type because bound functions be created and returned.
 
 	if (value.isObj())
 	{
@@ -1488,20 +1489,27 @@ Vm::Result Vm::throwValue(const Value& value)
 
 std::optional<ObjClass&> Vm::getClass(const Value& value)
 {
-	if (value.isInt())
-		return *m_intType;
-	if (value.isFloat())
-		return *m_floatType;
-
 	// TODO: Implement a class for every build in type. Reuse Function for different types.
-	if (value.isObj())
+	switch (value.type)
 	{
-		if (value.as.obj->isString())
-			return *m_stringType;
-		if (value.as.obj->isInstance())
-			return *value.as.obj->asInstance()->class_;
-		if (value.as.obj->isNativeInstance())
-			return *value.as.obj->asNativeInstance()->class_;
+	case ValueType::Int: return *m_intType;
+	case ValueType::Float: return *m_floatType;
+	case ValueType::Null: return *m_nullType;
+	case ValueType::Bool: return *m_boolType;
+	case ValueType::Obj:
+	{
+		const auto obj = value.asObj();
+		switch (obj->type)
+		{
+		case ObjType::String: return *m_stringType;
+		case ObjType::Class: return *m_typeType;
+		case ObjType::Instance: return *value.as.obj->asInstance()->class_;
+		case ObjType::NativeInstance: return *value.as.obj->asNativeInstance()->class_;
+		default:
+			break;
+		}
+		break;
+	}
 	}
 	return std::nullopt;
 }
@@ -1597,7 +1605,26 @@ Vm::Result Vm::importModule(ObjString* name)
 	TRY_PUSH(Value(compilerResult.module));
 	m_modules.set(pathString, Value(compilerResult.module));
 	TRY(callFromVmAndReturnValue(Value(compilerResult.program)));
+	m_stack.pop();
+	return Result::ok();
+}
 
+Vm::Result Vm::importAllFromModule(ObjModule* module)
+{
+	if (module->isLoaded == false)
+	{
+		return fatalError("cannot use all from partially initialized module");
+	}
+	for (auto& [key, value] : module->globals)
+	{
+		// TODO: maybe check if this overrides.
+		// Would require the function to return if the key already exits. Right now it sets it and returns false.
+		if (isModuleMemberPublic(key))
+			m_globals->set(key, value);
+		// TODO: Change
+		//setGlobal(key, value);
+		//setGlobal(key, value);
+	}
 	return Result::ok();
 }
 
@@ -1641,27 +1668,22 @@ bool Vm::isModuleMemberPublic(const ObjString* name)
 Vm::Result Vm::callAndReturnValue(const Value& calle, Value* values, int argCount)
 {
 	int numberOfValuesToPopOffExceptArgs = 0;
-	if (calle.isObj() && calle.as.obj->isClass())
+	if (calle.isObj() && (calle.as.obj->isClass() || calle.as.obj->isBoundFunction()))
 	{
 		numberOfValuesToPopOffExceptArgs = 1;
-		if (m_stack.push(calle) == false)
-		{
-			throw FatalException{};
-		}
+		TRY_PUSH(calle);
 	}
 
 	for (int i = 0; i < argCount; i++)
 	{
-		if (m_stack.push(values[i]) == false)
-		{
-			throw FatalException{};
-		}
+		TRY_PUSH(values[i]);
 	}
 
 	TRY(callValue(calle, argCount, numberOfValuesToPopOffExceptArgs));
 
 	if (calle.isObj())
 	{
+		// Make this check inside callValue, because this is error prone.
 		auto shouldCallRun = true;
 
 		if (calle.as.obj->isClass())
@@ -1677,6 +1699,10 @@ Vm::Result Vm::callAndReturnValue(const Value& calle, Value* values, int argCoun
 		{
 			shouldCallRun = false;
 		}
+		else if (calle.as.obj->isBoundFunction() && calle.as.obj->asBoundFunction()->callable->isNativeFunction())
+		{
+			shouldCallRun = false;
+		}
 
 		if (shouldCallRun == false)
 		{
@@ -1685,28 +1711,6 @@ Vm::Result Vm::callAndReturnValue(const Value& calle, Value* values, int argCoun
 	}
 
 	return run();
-}
-
-Value Vm::callFromNativeFunction(const Value& calle, Value* values, int argCount)
-{
-	const auto result = callAndReturnValue(calle, values, argCount);
-	switch (result.type)
-	{
-	case ResultType::ExceptionHandled:
-		ASSERT_NOT_REACHED(); // Just a test.
-		[[fallthrough]];
-	case ResultType::Ok:
-	{
-		const auto& returnValue = m_stack.peek(0);
-		m_stack.pop();
-		return returnValue;
-	}
-	case ResultType::Fatal: throw FatalException{};
-	case ResultType::Exception: throw NativeException(result.exceptionValue);
-	}
-	const auto returnValue = m_stack.top();
-	m_stack.pop();
-	return returnValue;
 }
 
 Vm::Result Vm::throwErrorWithMsg(ObjClass* class_, const char* format, ...)
@@ -1761,6 +1765,55 @@ Vm::Result Vm::throwTypeErrorExpectedFound(ObjClass* expected, const Value& foun
 	}
 }
 
+Vm::Result Vm::equals()
+{
+	auto a = m_stack.peek(1), b = m_stack.peek(0);
+	auto returnValue = [this](bool value)
+	{
+		m_stack.pop();
+		m_stack.pop();
+		TRY_PUSH(Value(value));
+		return Result::ok();
+	};
+
+	if (a.isInt() && a.isFloat())
+		return returnValue(a.asInt() == a.asFloat());
+
+	if (a.isFloat() && b.isInt())
+		return returnValue(a.asFloat() == static_cast<Float>(b.asInt()));
+
+	if (a.isInt() && b.isInt())
+		return returnValue(a.asInt() == b.asInt());
+
+	if (a.isFloat() && b.isFloat())
+		return returnValue(a.asFloat() == b.asFloat());
+
+	if (a.isNull() && b.isNull())
+		return returnValue(true);
+	
+	if (a.isBool() && b.isBool())
+		return returnValue(a.asBool() == b.asBool());
+
+	if (a.isObj())
+	{
+		const auto aObj = a.asObj();
+		const auto bObj = a.asObj();
+
+		const auto method = getMethod(a, m_eqString);
+		if (method.has_value())
+		{
+			TRY(callFromVmAndReturnValue(*method, m_stack.topPtr - 2));
+			if (m_stack.top().isBool() == false)
+				TRY(throwTypeErrorExpectedFound(m_boolType, m_stack.top()));
+			return Result::ok();
+		}
+
+		return returnValue((a.type == b.type) && (aObj == bObj));
+	}
+
+	return returnValue(false);
+}
+
 Vm::Result Vm::callFromVmAndReturnValue(const Value& calle, Value* values, int argCount)
 {
 	TRY(pushDummyCallFrame());
@@ -1772,7 +1825,6 @@ Vm::Result Vm::callFromVmAndReturnValue(const Value& calle, Value* values, int a
 	return Result::ok();
 }
 
-
 void Vm::mark(Vm* vm, Allocator& allocator)
 {
 	for (auto& value : vm->m_stack)
@@ -1783,40 +1835,26 @@ void Vm::mark(Vm* vm, Allocator& allocator)
 	// Maybe be faster not to add the strings becuase they are constants.
 	allocator.addHashTable(vm->m_modules);
 
+#define ADD(obj) \
+	if (vm->obj != nullptr) \
+		allocator.addObj(vm->obj);
+	ADD(m_listType);
+	ADD(m_dictType);
+	ADD(m_numberType);
+	ADD(m_intType);
+	ADD(m_floatType);
+	ADD(m_boolType);
+	ADD(m_typeType);
+	ADD(m_nullType);
+	ADD(m_listIteratorType);
+	ADD(m_stopIterationType);
+	ADD(m_stringType);
+	ADD(m_typeErrorType);
+	ADD(m_nameErrorType);
+	ADD(m_zeroDivisionErrorType);
+#undef ADD
+
 	allocator.addHashTable(vm->m_builtins);
-	if (vm->m_listType != nullptr)
-		allocator.addObj(vm->m_listType);
-
-	if (vm->m_numberType != nullptr)
-		allocator.addObj(vm->m_numberType);
-
-	if (vm->m_intType != nullptr)
-		allocator.addObj(vm->m_intType);
-
-	if (vm->m_floatType != nullptr)
-		allocator.addObj(vm->m_floatType);
-
-	if (vm->m_boolType != nullptr)
-		allocator.addObj(vm->m_boolType);
-
-	if (vm->m_listIteratorType != nullptr)
-		allocator.addObj(vm->m_listIteratorType);
-
-	if (vm->m_stopIterationType != nullptr)
-	allocator.addObj(vm->m_stopIterationType);
-
-	if (vm->m_stringType != nullptr)
-		allocator.addObj(vm->m_stringType);
-
-	if (vm->m_typeErrorType)
-		allocator.addObj(vm->m_typeErrorType);
-
-	if (vm->m_nameErrorType)
-		allocator.addObj(vm->m_nameErrorType);
-
-	if (vm->m_zeroDivisionErrorType)
-		allocator.addObj(vm->m_zeroDivisionErrorType);
-
 	for (const auto& frame : vm->m_callStack)
 	{
 		if (frame.callable != nullptr)

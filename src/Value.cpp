@@ -148,39 +148,6 @@ std::ostream& operator<< (std::ostream& os, Voxl::Obj* obj)
 	return os;
 }
 
-bool operator==(const Value& lhs, const Value& rhs)
-{
-	if (lhs.isInt() && rhs.isFloat())
-		return static_cast<Float>(lhs.asInt()) == rhs.asFloat();
-	if (lhs.isFloat() && rhs.isInt())
-		return lhs.asFloat() == static_cast<Float>(rhs.asInt());
-
-	if (lhs.type != rhs.type)
-		return false;
-
-	switch (lhs.type)
-	{
-		case ValueType::Int: return lhs.as.intNumber == rhs.as.intNumber;
-		case ValueType::Float: return lhs.as.floatNumber == rhs.as.floatNumber;
-		case ValueType::Null: return true;
-		case ValueType::Bool: return lhs.as.boolean == rhs.as.boolean;
-		case ValueType::Obj:
-		{
-			const auto lhsObj = lhs.asObj();
-			const auto rhsObj = rhs.asObj();
-			if (lhsObj->isString() && rhsObj->isString())
-				return lhsObj->asString()->chars == rhsObj->asString()->chars;
-
-			ASSERT_NOT_REACHED();
-			return false;
-		}
-
-		default:
-			ASSERT_NOT_REACHED();
-			return false;
-	}
-}
-
 NativeException::NativeException(const LocalValue& value)
 	: value(value.value)
 {}

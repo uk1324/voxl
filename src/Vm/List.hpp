@@ -19,7 +19,6 @@ struct List : public ObjNativeInstance
 	static constexpr int setIndexArgCount = 3;
 	static LocalValue set_index(Context& c);
 
-	void initialize();
 	void push(const Value& value);
 
 	static void init(List* list);

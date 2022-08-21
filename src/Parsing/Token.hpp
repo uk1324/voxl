@@ -36,6 +36,7 @@ enum class TokenType
 	Or,
 	OrOr,
 	PlusPlus,
+	PlusPlusEquals,
 	Dot,
 
 	// Symbols

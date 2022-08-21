@@ -92,6 +92,5 @@ public:
 
 std::ostream& operator<< (std::ostream& os, Voxl::Value value);
 std::ostream& operator<< (std::ostream& os, Voxl::Obj* obj);
-bool operator== (const Voxl::Value& lhs, const Voxl::Value& rhs);
 
 #undef VALUE_TYPE_LIST

@@ -26,6 +26,7 @@ public:
 	[[nodiscard]] bool push(const T& value);
 	[[nodiscard]] bool push();
 	void pop();
+	void popN(size_t n);
 	T popAndReturn();
 	T& peek(size_t i);
 	T& top();
@@ -98,7 +99,16 @@ void StaticStack<T, SIZE>::pop()
 }
 
 template<typename T, size_t SIZE>
-inline T StaticStack<T, SIZE>::popAndReturn()
+void StaticStack<T, SIZE>::popN(size_t n)
+{
+	topPtr -= n;
+	ASSERT(topPtr >= data());
+	for (size_t i = 0; i < n; i++)
+		topPtr[i].~T();
+}
+
+template<typename T, size_t SIZE>
+T StaticStack<T, SIZE>::popAndReturn()
 {
 	ASSERT(topPtr != data());
 	topPtr--;

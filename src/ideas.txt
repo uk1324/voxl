@@ -106,3 +106,6 @@ output:
 
 Another option would be to only allow compile time expressions. Then the default values would be stored inside the class and push on the stack like in the frist example.
 
+
+Infix binary function calls
+(a \dot b) or (a `dot` b)

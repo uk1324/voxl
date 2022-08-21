@@ -21,7 +21,6 @@ namespace Voxl
 		More,
 		MoreEqual,
 		Equals,
-		NotEquals,
 		// }
 
 
@@ -56,6 +55,9 @@ namespace Voxl
 		// Python has an instruction LIST_APPEND that also takes the offset from TOS and uses it for list comprehensions.
 		ListPush, // [list, element] -> [list]
 
+		CreateDict, // [] -> [dict]
+		DictSet, // [dict, key, value] -> [dict]
+
 		CreateClass, // [name] -> [class]
 		Closure, // localsCount (localsCount * { indexU8, isLocalU8 }) [function] -> [closure]
 
@@ -83,7 +85,8 @@ namespace Voxl
 		Import, // [filename] -> [module]
 		ModuleSetLoaded, // [module] -> [module]
 		ModuleImportAllToGlobalNamespace, // [module] -> []
-		CloneTop, // [value] -> [value value]
+		CloneTop, // [value] -> [value, value]
+		CloneTopTwo, // [a, b] -> [a, b, a, b]
 		ExpressionStatementBegin, // [] -> []
 		ExpressionStatementReturn,
 		Inherit, // [class, superclass] -> [class]

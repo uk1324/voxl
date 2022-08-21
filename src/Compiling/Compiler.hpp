@@ -151,8 +151,11 @@ private:
 	Status useAllStmt(const UseAllStmt& stmt);
 	Status useSelectiveStmt(const UseSelectiveStmt& stmt);
 
+	// [] -> [result]
 	Status compile(const std::unique_ptr<Expr>& expr);
 	Status compileBinaryExpr(const std::unique_ptr<Expr>& lhs, TokenType op, const std::unique_ptr<Expr>& rhs);
+	// [lhs, rhs] -> [result].
+	Status compileBinaryExpr(TokenType op);
 	// TODO: perform constant folding
 	Status intConstantExpr(const IntConstantExpr& expr);
 	Status floatConstantExpr(const FloatConstantExpr& expr);
@@ -165,6 +168,7 @@ private:
 	Status callExpr(const CallExpr& expr);
 	Status assignmentExpr(const AssignmentExpr& expr);
 	Status listExpr(const ListExpr& expr);
+	Status dictExpr(const DictExpr& expr);
 	Status getFieldExpr(const GetFieldExpr& expr);
 	Status lambdaExpr(const LambdaExpr& expr);
 	Status stmtExpr(const StmtExpr& expr);

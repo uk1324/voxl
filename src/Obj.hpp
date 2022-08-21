@@ -171,9 +171,16 @@ struct ObjInstance : public Obj
 	HashTable fields;
 };
 
+// Native classes could be implemented using virtual inheritance, but then they would need to store more data 
+// and also checking if the type is correct would require a dynamic_cast which is more expensive and requires RTTI.
 struct ObjNativeInstance : public Obj
 {
 	ObjClass* class_;
+	template<typename T>
+	bool isOfType()
+	{
+		return class_->mark == reinterpret_cast<MarkingFunctionPtr>(T::mark);
+	}
 };
 
 struct ObjBoundFunction : public Obj

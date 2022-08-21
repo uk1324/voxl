@@ -537,6 +537,7 @@ std::unique_ptr<Expr> Parser::assignment()
 		return std::make_unique<AssignmentExpr>(std::move(lhs), std::move(rhs), std::nullopt, start, peekPrevious().end);
 	}
 	COMPOUND_OP(Plus)
+	COMPOUND_OP(PlusPlus)
 	COMPOUND_OP(Minus)
 	COMPOUND_OP(Star)
 	COMPOUND_OP(Slash)
@@ -680,7 +681,7 @@ std::unique_ptr<Expr> Parser::primary()
 	}
 	if (match(TokenType::LeftBracket))
 	{
-		size_t start = peekPrevious().start;
+		const auto start = peekPrevious().start;
 		if (match(TokenType::RightBracket))
 		{
 			// decltype because templates cannot deduce from "{}".
@@ -688,7 +689,7 @@ std::unique_ptr<Expr> Parser::primary()
 		}
 		std::vector<std::unique_ptr<Expr>> values;
 		
-		while (isAtEnd() == false)
+		for (;;)
 		{
 			values.push_back(expr());
 			if (match(TokenType::RightBracket))
@@ -699,6 +700,32 @@ std::unique_ptr<Expr> Parser::primary()
 			if (match(TokenType::RightBracket))
 			{
 				return std::make_unique<ListExpr>(std::move(values), start, peekPrevious().end);
+			}
+		}
+	}
+	if (match(TokenType::LeftBrace))
+	{
+		const auto start = peekPrevious().start;
+		if (match(TokenType::RightBrace))
+		{
+			return std::make_unique<DictExpr>(decltype(DictExpr::values)(), start, peekPrevious().end);
+		}
+		decltype(DictExpr::values) values;
+
+		for (;;)
+		{
+			auto key = expr();
+			expect(TokenType::Colon, "expected ':'");
+			auto value = expr();
+			values.push_back({ std::move(key), std::move(value) });
+			if (match(TokenType::RightBrace))
+			{
+				return std::make_unique<DictExpr>(std::move(values), start, peekPrevious().end);
+			}
+			expect(TokenType::Comma, "expected ','");
+			if (match(TokenType::RightBrace))
+			{
+				return std::make_unique<DictExpr>(std::move(values), start, peekPrevious().end);
 			}
 		}
 	}

@@ -1,0 +1,19 @@
+fn a() {
+	put("a");
+	ret 0;
+}
+
+fn b() {
+	put("b");
+	ret 1;
+}
+
+list : [0];
+
+fn l() {
+	put("l");
+	ret list;
+}
+
+l()[a()] += b();
+put(list[0]);

@@ -1,0 +1,6 @@
+x : {};
+x["abc"] = 2;
+x["efg"] = 1;
+
+put(x["abc"]);
+put(x["efg"]);

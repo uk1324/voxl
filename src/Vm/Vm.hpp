@@ -9,8 +9,6 @@
 #include <unordered_map>
 #include <array>
 
-// TODO: Maybe add class 'Type'
-
 namespace Voxl
 {
 
@@ -100,7 +98,7 @@ public:
 
 	void defineNativeFunction(std::string_view name, NativeFunction function, int argCount);
 	void createModule(std::string_view name, NativeFunction moduleMain);
-
+	void debugPrintStack();
 private:
 	Result run();
 
@@ -119,19 +117,17 @@ private:
 	Result getField(Value& value, ObjString* fieldName);
 	Result throwValue(const Value& value);
 	std::optional<ObjClass&> getClass(const Value& value);
-	Value typeErrorExpected(ObjClass* type);
 	std::optional<Value&> atGlobal(ObjString* name);
 	ResultWithValue getGlobal(ObjString* name);
 	Result setGlobal(ObjString* name, Value& value);
-	void debugPrintStack();
 	// If Result::Ok then on return Module is TOS.
 	Result importModule(ObjString* name);
+	Result importAllFromModule(ObjModule* module);
 	Vm::Result pushDummyCallFrame();
 	void popCallStack();
 	static bool isModuleMemberPublic(const ObjString* name);
 	// The call frame has to be either a native function or a dummy call frame before calling. Returns on the stack.
 	Result callAndReturnValue(const Value& calle, Value* values = nullptr, int argCount = 0);
-	Value callFromNativeFunction(const Value& calle, Value* values = nullptr, int argCount = 0);
 	// Returns on the stack.
 	Result callFromVmAndReturnValue(const Value& calle, Value* values = nullptr, int argCount = 0);
 	Result throwErrorWithMsg(ObjClass* class_, const char* format, ...);
@@ -139,6 +135,8 @@ private:
 
 	Result throwTypeErrorUnsupportedOperandTypesFor(const char* op, const Value& a, const Value& b);
 	Result throwTypeErrorExpectedFound(ObjClass* expected, const Value& found);
+	// Takes arguments and returns the value on the stack.
+	Result equals();
 
 private:
 	static void mark(Vm* vm, Allocator& allocator);
@@ -180,16 +178,20 @@ public:
 	ObjString* m_geString;
 	ObjString* m_getIndexString;
 	ObjString* m_setIndexString;
+	ObjString* m_eqString;
 	ObjString* m_strString;
 	ObjString* m_emptyString;
 	ObjString* m_msgString;
 
 	ObjClass* m_listType;
 	ObjClass* m_listIteratorType;
+	ObjClass* m_dictType;
+	ObjClass* m_typeType;
 	ObjClass* m_numberType;
 	ObjClass* m_intType;
 	ObjClass* m_floatType;
 	ObjClass* m_boolType;
+	ObjClass* m_nullType;
 	ObjClass* m_stringType;
 	ObjClass* m_stopIterationType;
 	ObjClass* m_typeErrorType;

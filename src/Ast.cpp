@@ -118,6 +118,11 @@ ListExpr::ListExpr(std::vector<std::unique_ptr<Expr>> values, size_t start, size
 	, values(std::move(values))
 {}
 
+DictExpr::DictExpr(std::vector<Pair> values, size_t start, size_t end)
+	: Expr(start, end, ExprType::Dict)
+	, values(std::move(values))
+{}
+
 LambdaExpr::LambdaExpr(std::vector<std::string_view> arguments, StmtList stmts, size_t start, size_t end)
 	: Expr(start, end, ExprType::Lambda)
 	, arguments(std::move(arguments))

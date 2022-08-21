@@ -6,6 +6,8 @@
 
 #define VOXL_DEBUG_STRESS_TEST_GC 
 
+//#define VOXL_DEBUG_LOG_GC
+
 //#define VOXL_EXECUTE_ASSERTS_IN_RELEASE
 
 // TODO: Maybe make a flag to check if the values on the stack are valid. Currently this can be done 

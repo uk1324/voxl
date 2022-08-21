@@ -117,6 +117,9 @@ private:
 	std::unordered_set<Obj**> m_localObjs;
 	std::unordered_set<Value*> m_localValues;
 
+	size_t m_bytesAllocated;
+	size_t m_bytesAllocatedAfterWhichTheGcRuns;
+
 	struct ObjStringHasher
 	{
 		size_t operator()(const ObjString* string) const
@@ -206,25 +209,3 @@ Voxl::ObjClass* Voxl::Allocator::allocateNativeClass(
 
 	return class_;
 }
-
-
-//return allocateNativeClass(name, init, free);
-//LocalObjClass class_(
-//	allocator.allocateNativeClass(name, init, free),
-//	*this);
-
-//for (const auto& method : methods)
-//{
-//	const auto methodName = allocator.allocateStringConstant(method.name).value;
-//	const auto methodDisplayedName =
-//		allocator.allocateStringConstant((std::string(name.chars, name.size) + "." + std::string(method.name))).value;
-//	const auto methodFunction = allocator.allocateForeignFunction(
-//		methodDisplayedName,
-//		method.function,
-//		method.argCount,
-//		vm.m_globals,
-//		context);
-
-//	bool inserted = class_->fields.insertIfNotSet(methodName, Value(methodFunction));
-//	ASSERT(inserted);
-//}

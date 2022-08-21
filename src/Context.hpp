@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Allocator.hpp>
+#include <ContextTry.hpp>
 #include <iostream>
 
 // No operator= needed for types becuase the only thing they need to manage is is their pointer registred and unregistred from the allocator.
@@ -63,11 +64,15 @@ public:
 	// if the field doesn't exist then the an exception would be thrown. The local value could also be 
 	// accessed using the '->' operator. The issues with this are that the conversion wouldn't happend when 
 	// using auto. The value access might also need to be a LocalValue so it doesn't get collected.
+
+	// If this didn't require a context argument it could use user defined literals with a _voxl prefix.
 	static LocalValue intNum(Int value, Context& context);
 	static LocalValue floatNum(Float value, Context& context);
+	static LocalValue boolean(bool value, Context& context);
 	static LocalValue null(Context& context);
 	template <typename ...Vals>
 	LocalValue operator()(const Vals&&... args);
+	bool operator== (const LocalValue& other);
 	std::optional<LocalValue> at(std::string_view fieldName);
 	LocalValue get(std::string_view fieldName);
 	void set(std::string_view fieldName, const LocalValue& rhs);
@@ -133,7 +138,6 @@ public:
 	Context(Value* args, int argCount, Allocator& allocator, Vm& vm);
 
 	LocalValue args(size_t index);
-	LocalValue typeErrorMustBe(std::string_view whatItMustBe);
 	std::optional<LocalValue> at(std::string_view name);
 	LocalValue get(std::string_view name);
 	void set(std::string_view name, const LocalValue& value);
@@ -180,29 +184,14 @@ LocalValue LocalValue::operator()(const Vals&&... args)
 	auto& vm = m_context.vm;
 	if constexpr (sizeof...(args) != 0)
 	{
-		// Could optmize by not creating a copy. This could be done by using a lambda and calling it with the expanded
-		// lambda arguments.
-		// Using an array of pointers could also work, but I am not sure if it will always compile correctly.
-		// Cannot use arrays of references because they are not allowed.
 		Value arguments[] = { args.value... };
-		const auto top = vm.m_stack.topPtr;
-		for (const auto arg : arguments)
-		{
-			const auto wasPushed = vm.m_stack.push(arg);
-			if (wasPushed == false)
-			{
-				[[maybe_unused]] const auto& _ = vm.fatalError("stack overflow");
-				throw Vm::FatalException();
-			}
-		}
-		const auto result = LocalValue(vm.callFromNativeFunction(value, top, sizeof...(args)), m_context);
-		vm.m_stack.topPtr -= sizeof...(args);
-		return result;
-		// Node does the same thing as this but without variadic templates. You just pass an array.
+		TRY(vm.callAndReturnValue(value, arguments, sizeof...(args)));
+		return LocalValue(vm.m_stack.popAndReturn(), m_context);
 	}
 	else
 	{
-		return LocalValue(vm.callFromNativeFunction(value, nullptr, 0), m_context);
+		TRY(vm.callAndReturnValue(value));
+		return LocalValue(vm.m_stack.popAndReturn(), m_context);
 	}
 }
 
@@ -212,11 +201,13 @@ LocalObj<T> LocalValue::asObj()
 	auto obj = value.as.obj;
 	if ((value.isObj() == false)
 		|| (obj->isNativeInstance() == false) 
-		|| (obj->asNativeInstance()->class_->mark != reinterpret_cast<MarkingFunctionPtr>(&T::mark)))
+		|| (obj->asNativeInstance()->isOfType<T>() == false))
 	{
-		throw NativeException(m_context.typeErrorMustBe("TODO"));
+		TRY(m_context.vm.throwErrorWithMsg(m_context.vm.m_typeErrorType, "unexpected type"));
 	}
 	return LocalObj<T>(reinterpret_cast<T*>(obj), m_context);
 }
 
 }
+
+#include <ContextTryUndef.hpp>

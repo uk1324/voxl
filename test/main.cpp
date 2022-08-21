@@ -59,6 +59,9 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "undefined_variable", "undefinedundefined" },
 	{ "division_by_zero", "divison by zero" },
 	{ "if_non_bool", "type error" },
+	{ "index_compound_assignment", "lab1" },
+	{ "field_compound_assignment", "tb1" },
+	{ "dict", "21" },
 };
 
 void testFailed(std::string_view name)

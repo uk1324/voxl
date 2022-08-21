@@ -39,14 +39,7 @@ LocalValue List::get_index(Context& c)
 LocalValue List::set_index(Context& c)
 {
 	// TODO: Change the order of arguments.
-	return LocalValue(c.args(1).asObj<List>()->data[c.args(2).asInt()] = c.args(0).value, c);
-}
-
-void List::initialize()
-{
-	capacity = 0;
-	size = 0;
-	data = nullptr;
+	return LocalValue(c.args(0).asObj<List>()->data[c.args(1).asInt()] = c.args(2).value, c);
 }
 
 void List::push(const Value& value)
@@ -65,7 +58,9 @@ void List::push(const Value& value)
 
 void List::init(List* list)
 {
-	list->initialize();
+	list->capacity = 0;
+	list->size = 0;
+	list->data = nullptr;
 }
 
 void List::free(List* list)

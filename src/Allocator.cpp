@@ -3,21 +3,35 @@
 #include <Debug/DebugOptions.hpp>
 #include <Utf8.hpp>
 #include <stdlib.h>
+#include <iostream>
 
 using namespace Voxl;
 
 Allocator::Allocator()
 	: m_head(nullptr)
 	, m_tail(nullptr)
+	, m_bytesAllocated(0)
+	, m_bytesAllocatedAfterWhichTheGcRuns(1024 * 1024)
 {}
 
 Allocator::~Allocator()
 {
+	std::vector<Obj*> classes;
+
 	auto obj = m_head;
 	while (obj != nullptr)
 	{
-		freeObj(obj);
-		obj = obj->next;
+		const auto next = obj->next;
+		if (obj->isClass() && obj->asClass()->nativeInstanceCount > 0)
+			classes.push_back(obj);
+		else
+			freeObj(obj);
+		obj = next;
+	}
+
+	for (auto& class_ : classes)
+	{
+		freeObj(class_);
 	}
 
 	for (const auto& constant : m_constants)
@@ -25,7 +39,6 @@ Allocator::~Allocator()
 		if (constant.isObj())
 		{
 			freeObj(constant.as.obj);
-			::operator delete(constant.as.obj);
 		}
 	}
 }
@@ -34,9 +47,20 @@ Obj* Allocator::allocateObj(size_t size, ObjType type)
 {
 #ifdef VOXL_DEBUG_STRESS_TEST_GC
 	runGc();
-#endif 
+#else
+	if (m_bytesAllocated >= m_bytesAllocatedAfterWhichTheGcRuns)
+	{
+		runGc();
+		// This makes the GC run more often because it reaches the threshold faster.
+		//if (m_bytesAllocated >= (m_bytesAllocatedAfterWhichTheGcRuns / 2))
+		//{
+			m_bytesAllocatedAfterWhichTheGcRuns *= 2;
+		//}
+	}
+#endif
 
 	auto obj = reinterpret_cast<Obj*>(::operator new(size));
+	m_bytesAllocated += size;
 	obj->type = type;
 	obj->isMarked = false;
 
@@ -94,16 +118,6 @@ ObjString* Allocator::allocateString(std::string_view chars, size_t length)
 	m_stringPool.insert(obj);
 	return obj;
 }
-
-//ObjFunction* Allocator::allocateFunction(ObjString* name, int argCount, HashTable* globals)
-//{
-//	auto obj = allocateObj(sizeof(ObjFunction), ObjType::Function)->asFunction();
-//	obj->argCount = argCount;
-//	obj->name = name;
-//	obj->globals = globals;
-//	new (&obj->byteCode) ByteCode();
-//	return obj;
-//}
 
 ObjClosure* Allocator::allocateClosure(ObjFunction* function)
 {
@@ -310,7 +324,6 @@ void Allocator::markObj(Obj* obj)
 			addHashTable(module->globals);
 			return;
 		}
-
 	}
 
 	ASSERT_NOT_REACHED();
@@ -358,6 +371,10 @@ size_t Allocator::createConstant(const Value& value)
 
 void Allocator::runGc()
 {
+#ifdef VOXL_DEBUG_LOG_GC
+	std::cout << "GC start\n";
+#endif 
+
 	m_markedObjs.clear();
 
 	for (auto& [function, data, _] : m_markingFunctions)
@@ -423,11 +440,14 @@ void Allocator::runGc()
 			}
 			auto next = obj->next;
 			freeObj(obj);
-			::operator delete(obj);
 			obj = next;
 		}
 	}
 	m_tail = previous;
+
+#ifdef VOXL_DEBUG_LOG_GC
+	std::cout << "GC end\n";
+#endif
 }
 
 void Allocator::addObj(Obj* obj)
@@ -468,12 +488,19 @@ void Allocator::unregisterMarkingFunction(size_t id)
 
 void Allocator::freeObj(Obj* obj)
 {
+	auto free = [this](void* ptr, size_t size)
+	{
+		::operator delete(ptr);
+		m_bytesAllocated -= size;
+	};
+
 	switch (obj->type)
 	{
 		case ObjType::Function:
 		{
 			auto function = obj->asFunction();
 			function->byteCode.~ByteCode();
+			free(obj, sizeof(ObjFunction));
 			break;
 		}
 
@@ -481,6 +508,7 @@ void Allocator::freeObj(Obj* obj)
 		{
 			auto closure = obj->asClosure();
 			::operator delete(closure->upvalues);
+			free(obj, sizeof(ObjFunction));
 			break;
 		}
 
@@ -493,6 +521,7 @@ void Allocator::freeObj(Obj* obj)
 			// Store free inside instance or use reference counting.
 			if (instance->class_->free != nullptr)
 				instance->class_->free(instance);
+			free(obj, sizeof(instance->class_->instanceSize));
 			break;
 		}
 
@@ -500,6 +529,7 @@ void Allocator::freeObj(Obj* obj)
 		{
 			auto instance = obj->asInstance();
 			instance->fields.~HashTable();
+			free(obj, sizeof(ObjInstance));
 			break;
 		}
 
@@ -507,6 +537,7 @@ void Allocator::freeObj(Obj* obj)
 		{
 			auto class_ = obj->asClass();
 			class_->fields.~HashTable();
+			free(obj, sizeof(ObjClass));
 			break;
 		}
 
@@ -514,14 +545,26 @@ void Allocator::freeObj(Obj* obj)
 		{
 			auto module = obj->asModule();
 			module->globals.~HashTable();
+			free(obj, sizeof(ObjModule));
+			break;
+		}
+
+		case ObjType::String:
+		{
+			// TODO: Maybe remove from string pool here instead of inside runGc()?
+			auto string = obj->asString();
+			free(obj, sizeof(ObjString) + string->size);
 			break;
 		}
 
 		case ObjType::Upvalue:
+			free(obj, sizeof(ObjUpvalue));
+			break;
 		case ObjType::NativeFunction:
+			free(obj, sizeof(ObjNativeFunction));
+			break;
 		case ObjType::BoundFunction:
-		case ObjType::String:
-			// TODO: Maybe remove from string pool here?
+			free(obj, sizeof(ObjBoundFunction));
 			break;
 	}
 }

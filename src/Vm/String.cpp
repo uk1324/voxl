@@ -8,3 +8,9 @@ LocalValue String::len(Context& c)
 	const auto string = c.args(0).asString();
 	return LocalValue::intNum(string.len(), c);
 }
+
+LocalValue String::hash(Context& c)
+{
+	const auto string = c.args(0).asString();
+	return LocalValue::intNum(string->hash, c);
+}
