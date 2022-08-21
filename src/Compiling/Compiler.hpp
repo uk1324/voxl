@@ -122,7 +122,7 @@ private:
 public:
 	Compiler(Allocator& allocator);
 
-	Result compile(const std::vector<std::unique_ptr<Stmt>>& ast, const SourceInfo& sourceInfo, ErrorReporter& errorReporter);
+	Result compile(const StmtList& ast, const SourceInfo& sourceInfo, ErrorReporter& errorReporter, std::optional<ObjModule*> = std::nullopt);
 
 private:
 	Status compileFunction(

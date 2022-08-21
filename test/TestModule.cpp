@@ -40,6 +40,11 @@ static LocalValue imported_get_number(Context& c)
 	return module.get("get_number")();
 }
 
+static LocalValue imported_get_number_2(Context& c)
+{
+	return c.get("get_number")();
+}
+
 }
 
 LocalValue testModuleMain(Context& c)
@@ -50,6 +55,9 @@ LocalValue testModuleMain(Context& c)
 	c.createFunction("get_5", get_5, 0);
 	c.createFunction("throw_3", throw_3, 0);
 	c.createFunction("imported_get_number", imported_get_number, 0);
+
+	c.useAllFromModule("imported");
+	c.createFunction("imported_get_number_2", imported_get_number_2, 0);
 
 	c.createClass<U8>(
 		"U8",

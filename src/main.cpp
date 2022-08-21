@@ -136,15 +136,20 @@ static LocalValue putln(Context& c)
 
 int main()
 {
-	//return runRepl();
+	return runRepl();
 
 	// TODO: Lambda vs function vs macro for reading instructions.
 	std::string_view filename("../../../src/test2.voxl");
 	const auto source = stringFromFile(filename);
+	if (source.has_value() == false)
+	{
+		std::cout << "failed to read file " << filename << '\n';
+		return EXIT_FAILURE;
+	}
 	SourceInfo sourceInfo;
-	sourceInfo.source = source;
+	sourceInfo.source = *source;
 	sourceInfo.displayedFilename = filename;
-	sourceInfo.directory = std::filesystem::path(filename).parent_path();
+	sourceInfo.workingDirectory = std::filesystem::path(filename).parent_path();
 	
 	TerminalErrorReporter errorReporter(std::cerr, sourceInfo, 8);
 

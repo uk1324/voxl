@@ -1,0 +1,3 @@
+use "test" -> (imported_get_number_2);
+
+put(imported_get_number_2());

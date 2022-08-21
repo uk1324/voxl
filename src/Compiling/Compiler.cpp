@@ -26,13 +26,13 @@ Compiler::Compiler(Allocator& allocator)
 	, m_module(nullptr)
 {}
 
-Compiler::Result Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& ast, const SourceInfo& sourceInfo, ErrorReporter& errorReporter)
+Compiler::Result Compiler::compile(const StmtList& ast, const SourceInfo& sourceInfo, ErrorReporter& errorReporter, std::optional<ObjModule*> module)
 {
 	m_hadError = false;
 	m_errorReporter = &errorReporter;
 	m_sourceInfo = &sourceInfo;
 
-	m_module = m_allocator.allocateModule();
+	m_module = module.has_value() ? *module : m_allocator.allocateModule();
 	const auto scriptName = m_allocator.allocateStringConstant("script").value;
 	auto scriptFunction = m_allocator.allocateFunctionConstant(scriptName, 0, &m_module->globals).value;
 	m_functionByteCodeStack.push_back(&scriptFunction->byteCode);

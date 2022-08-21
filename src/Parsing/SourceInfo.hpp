@@ -18,7 +18,7 @@ public:
 public:
 	// Don't know if it is safe for this to be a std::string_view.
 	std::string_view displayedFilename;
-	std::filesystem::path directory;
+	std::filesystem::path workingDirectory;
 	std::string_view source;
 	std::vector<size_t> lineStartOffsets;
 };

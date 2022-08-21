@@ -4,6 +4,7 @@
 #include <Compiling/Compiler.hpp>
 #include <TerminalErrorReporter.hpp>
 #include <Vm/Vm.hpp>
+#include <Put.hpp>
 #include <iostream>
 
 using namespace Voxl;
@@ -12,7 +13,7 @@ int Voxl::runRepl()
 {
 	SourceInfo sourceInfo;
 	sourceInfo.displayedFilename = "<repl>";
-	sourceInfo.directory = std::filesystem::current_path();
+	sourceInfo.workingDirectory = std::filesystem::current_path();
 
 	TerminalErrorReporter errorReporter(std::cerr, sourceInfo, 4);
 	Allocator allocator;
@@ -20,6 +21,9 @@ int Voxl::runRepl()
 	Scanner scanner;
 	Compiler compiler(allocator);
 	auto vm = std::make_unique<Vm>(allocator);
+	std::optional<ObjModule*> module;
+	vm->defineNativeFunction("put", put, 1);
+	vm->defineNativeFunction("putln", putln, 1);
 
 	std::string source;
 	std::string text;
@@ -51,7 +55,8 @@ int Voxl::runRepl()
 				break;
 			}
 
-			const auto compilerResult = compiler.compile(parserResult.ast, sourceInfo, errorReporter);
+			const auto compilerResult = compiler.compile(parserResult.ast, sourceInfo, errorReporter, module);
+			module = compilerResult.module;
 
 			if (compilerResult.hadError)
 				break;

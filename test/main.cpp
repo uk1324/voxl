@@ -62,6 +62,7 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "index_compound_assignment", "lab1" },
 	{ "field_compound_assignment", "tb1" },
 	{ "dict", "21" },
+	{ "import_all_from_native_module", "123456" },
 };
 
 void testFailed(std::string_view name)
@@ -116,7 +117,12 @@ int main()
 	{
 		auto filename = std::string("test/tests/") + std::string(name) + std::string(".voxl");
 		auto source = stringFromFile(filename);
-		SourceInfo sourceInfo{ filename, std::filesystem::path(filename).parent_path(), source };
+		if (source.has_value() == false)
+		{
+			std::cout << "couldn't open file " << filename << '\n';
+			return EXIT_FAILURE;
+		}
+		SourceInfo sourceInfo{ filename, std::filesystem::path(filename).parent_path(), *source };
 		TerminalErrorReporter errorReporter(std::cerr, sourceInfo, 8);
 
 		auto scannerResult = scanner.parse(sourceInfo, errorReporter);

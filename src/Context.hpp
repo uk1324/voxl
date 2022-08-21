@@ -150,6 +150,7 @@ public:
 		FreeFunction<T> free = nullptr,
 		void* context = nullptr);
 	LocalValue useModule(std::string_view name, std::optional<std::string_view> variableName);
+	void useAllFromModule(std::string_view name);
 
 public:
 	Allocator& allocator;

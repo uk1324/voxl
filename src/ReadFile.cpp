@@ -2,14 +2,13 @@
 #include <fstream>
 #include <iostream>
 
-std::string stringFromFile(std::string_view path)
+std::optional<std::string> Voxl::stringFromFile(std::string_view path)
 {
 	std::ifstream file(path.data(), std::ios::binary);
 
 	if (file.fail())
 	{
-		std::cerr << "couldn't open file \"" << path << "\"\n";
-		exit(EXIT_FAILURE);
+		return std::nullopt;
 	}
 
 	auto start = file.tellg();
@@ -18,16 +17,14 @@ std::string stringFromFile(std::string_view path)
 	file.seekg(start);
 	auto fileSize = end - start;
 
-	// Pointless memset
 	std::string result;
-
+	// Pointless memset
 	result.resize(fileSize);
 
 	file.read(result.data(), fileSize);
 	if (file.fail())
 	{
-		std::cerr << "couldn't read file \"" << path << "\"\n";
-		exit(EXIT_FAILURE);
+		return std::nullopt;
 	}
 
 	return result;

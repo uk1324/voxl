@@ -1,3 +1,4 @@
+#include "Context.hpp"
 #include <Context.hpp>
 #include <ContextTry.hpp>
 #include <Vm/Vm.hpp>
@@ -214,13 +215,23 @@ void Context::createFunction(std::string_view name, NativeFunction function, int
 		Value(allocator.allocateForeignFunction(nameString, function, argCount, vm.m_globals, context)));
 }
 
+void Context::useAllFromModule(std::string_view name)
+{
+	const auto nameString = allocator.allocateStringConstant(name).value;
+	TRY(vm.importModule(nameString));
+	auto module = vm.m_stack.top();
+	module.asObj()->asModule()->isLoaded = true;
+	TRY(vm.importAllFromModule(module.asObj()->asModule()));
+	vm.m_stack.pop();
+}
+
 LocalValue Context::useModule(std::string_view name, std::optional<std::string_view> variableName)
 {
 	const auto nameString = allocator.allocateStringConstant(name).value;
 	TRY(vm.importModule(nameString));
-	const auto module = vm.m_stack.top();
+	auto module = vm.m_stack.top();
 	vm.m_stack.pop();
-	
+	module.asObj()->asModule()->isLoaded = true;
 
 	if (variableName.has_value())
 	{

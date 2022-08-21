@@ -1575,7 +1575,7 @@ Vm::Result Vm::importModule(ObjString* name)
 		return Result::ok();
 	}
 	auto path = std::filesystem::absolute(
-		m_sourceInfo->directory / std::filesystem::path(std::string_view(name->chars, name->size)));
+		m_sourceInfo->workingDirectory / std::filesystem::path(std::string_view(name->chars, name->size)));
 	if (path.has_extension() == false)
 		path.replace_extension("voxl");
 	auto pathString = m_allocator->allocateStringConstant(path.string()).value;
@@ -1587,20 +1587,24 @@ Vm::Result Vm::importModule(ObjString* name)
 	SourceInfo sourceInfo;
 	// Should this be filename or pathString?
 	sourceInfo.displayedFilename = name->chars;
-	sourceInfo.directory = std::move(path.remove_filename());
+	sourceInfo.workingDirectory = std::move(path.remove_filename());
 	auto source = stringFromFile(pathString->chars);
+	if (source.has_value() == false)
+	{
+		return fatalError("couldn't open file %s", pathString->chars);
+	}
 	// If cannot find search the std library.
-	sourceInfo.source = source;
+	sourceInfo.source = *source;
 	auto scannerResult = m_scanner->parse(sourceInfo, *m_errorReporter);
 	auto parserResult = m_parser->parse(scannerResult.tokens, sourceInfo, *m_errorReporter);
 	if (scannerResult.hadError || parserResult.hadError)
 	{
-		return fatalError("import error");
+		return fatalError("failed to parse");
 	}
 	auto compilerResult = m_compiler->compile(parserResult.ast, sourceInfo, *m_errorReporter);
 	if (compilerResult.hadError)
 	{
-		return fatalError("import error");
+		return fatalError("failed to compile");
 	}
 	TRY_PUSH(Value(compilerResult.module));
 	m_modules.set(pathString, Value(compilerResult.module));
