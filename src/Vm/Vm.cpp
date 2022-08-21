@@ -1193,7 +1193,7 @@ Vm::Result Vm::callValue(Value value, int argCount, int numberOfValuesToPopOffEx
 			try
 			{
 				const auto args = m_stack.topPtr - argCount;
-				Context context(args, argCount, *m_allocator, *this);
+				Context context(args, argCount, *m_allocator, *this, function->context);
 				const auto result = function->function(context);
 				m_stack.popN(numberOfValuesToPopOffExceptArgs + static_cast<size_t>(argCount));
 				TRY_PUSH(isInitializer ? args[0] : result.value);

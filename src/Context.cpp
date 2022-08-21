@@ -1,4 +1,3 @@
-#include "Context.hpp"
 #include <Context.hpp>
 #include <ContextTry.hpp>
 #include <Vm/Vm.hpp>
@@ -162,11 +161,12 @@ Float LocalValue::asNumber() const
 	return std::numeric_limits<Float>::infinity();
 }
 
-Context::Context(Value* args, int argCount, Allocator& allocator, Vm& vm)
+Context::Context(Value* args, int argCount, Allocator& allocator, Vm& vm, void* data)
 	: m_args(args)
 	, m_argCount(argCount)
 	, allocator(allocator)
 	, vm(vm)
+	, data(data)
 {}
 
 LocalValue Context::args(size_t index)

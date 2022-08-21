@@ -135,7 +135,7 @@ class Vm;
 class Context
 {
 public:
-	Context(Value* args, int argCount, Allocator& allocator, Vm& vm);
+	Context(Value* args, int argCount, Allocator& allocator, Vm& vm, void* data);
 
 	LocalValue args(size_t index);
 	std::optional<LocalValue> at(std::string_view name);
@@ -159,6 +159,7 @@ public:
 public:
 	Value* const m_args;
 	const int m_argCount;
+	void* data;
 };
 
 template<typename T>
