@@ -1107,9 +1107,9 @@ void Vm::defineNativeFunction(std::string_view name, NativeFunction function, in
 	m_builtins.set(nameObj, Value(functionObj));
 }
 
-void Vm::createModule(std::string_view name, NativeFunction moduleMain)
+void Vm::createModule(std::string_view name, NativeFunction moduleMain, void* data)
 {
-	m_nativeModulesMains[name] = moduleMain;
+	m_nativeModulesMains[name] = { moduleMain, data };
 }
 
 uint8_t Vm::readUint8()
@@ -1568,7 +1568,7 @@ Vm::Result Vm::importModule(ObjString* name)
 	{
 		const auto moduleObj = m_allocator->allocateModule();
 		m_modules.set(name, Value(moduleObj));
-		const auto main = m_allocator->allocateForeignFunction(name, module->second, 0, &moduleObj->globals, nullptr);
+		const auto main = m_allocator->allocateForeignFunction(name, module->second.main, 0, &moduleObj->globals, module->second.data);
 		TRY_PUSH(Value(moduleObj));
 		TRY(callValue(Value(main), 0, 0));
 		m_stack.pop(); // Pop the return value.

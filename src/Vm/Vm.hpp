@@ -97,7 +97,7 @@ public:
 	void reset();
 
 	void defineNativeFunction(std::string_view name, NativeFunction function, int argCount);
-	void createModule(std::string_view name, NativeFunction moduleMain);
+	void createModule(std::string_view name, NativeFunction moduleMain, void* data = nullptr);
 	void debugPrintStack();
 private:
 	Result run();
@@ -142,7 +142,12 @@ private:
 	static void mark(Vm* vm, Allocator& allocator);
 
 public:
-	std::unordered_map<std::string_view, NativeFunction> m_nativeModulesMains;
+	struct NativeModuleMain
+	{
+		NativeFunction main;
+		void* data;
+	};
+	std::unordered_map<std::string_view, NativeModuleMain> m_nativeModulesMains;
 
 	HashTable m_modules;
 
