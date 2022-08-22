@@ -1,4 +1,3 @@
-#include "Compiler.hpp"
 #include <Compiling/Compiler.hpp>
 #include <Debug/DebugOptions.hpp>
 #include <Asserts.hpp>
@@ -897,8 +896,8 @@ Compiler::Status Compiler::lambdaExpr(const LambdaExpr& expr)
 	const auto [nameConstant, name] = m_allocator.allocateStringConstant(ANONYMOUS_FUNCTION_NAME);
 	const auto [functionConstant, function] =
 		m_allocator.allocateFunctionConstant(name, static_cast<int>(expr.arguments.size()), &m_module->globals);
-	TRY(compileFunction(function, expr.arguments, expr.stmts, expr.location()));
 	TRY(loadConstant(functionConstant));
+	TRY(compileFunction(function, expr.arguments, expr.stmts, expr.location()));
 	return Status::Ok;
 }
 

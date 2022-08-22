@@ -136,7 +136,7 @@ static LocalValue putln(Context& c)
 
 int main()
 {
-	return runRepl();
+	//return runRepl();
 
 	// TODO: Lambda vs function vs macro for reading instructions.
 	std::string_view filename("../../../src/test2.voxl");

@@ -125,6 +125,7 @@ public:
 	Result compile(const StmtList& ast, const SourceInfo& sourceInfo, ErrorReporter& errorReporter, std::optional<ObjModule*> = std::nullopt);
 
 private:
+	// Function is TOS.
 	Status compileFunction(
 		ObjFunction* function,
 		const std::vector<std::string_view>& arguments, 

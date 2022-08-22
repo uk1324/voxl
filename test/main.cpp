@@ -63,6 +63,7 @@ std::pair<std::string_view, std::string_view> tests[] = {
 	{ "field_compound_assignment", "tb1" },
 	{ "dict", "21" },
 	{ "import_all_from_native_module", "123456" },
+	{ "lambda_closure", "2" },
 };
 
 void testFailed(std::string_view name)
