@@ -1,3 +1,4 @@
+#include "Context.hpp"
 #include <Context.hpp>
 #include <ContextTry.hpp>
 #include <Vm/Vm.hpp>
@@ -40,6 +41,12 @@ LocalValue::LocalValue(const LocalValue& other)
 LocalValue::LocalValue(std::string_view string, Context& context)
 	: LocalValue(Value(context.allocator.allocateString(string)), context)
 {}
+
+// Have to create an operator= because it stores a reference which cannot be reassigned.
+LocalValue& LocalValue::operator=(const LocalValue & other)
+{
+	value = other.value;
+}
 
 LocalValue::~LocalValue()
 {

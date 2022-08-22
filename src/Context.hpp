@@ -57,6 +57,7 @@ public:
 	LocalValue(const LocalObj<T>& obj);
 	LocalValue(const LocalValue& other);
 	LocalValue(std::string_view string, Context& context);
+	LocalValue& operator= (const LocalValue& other);
 	~LocalValue();
 
 	// Could implement getting fields by returing a object that could be assigned which would set the field
