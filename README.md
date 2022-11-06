@@ -1,5 +1,7 @@
 ## voxl is an embeddable scripting language
 
+
+
 ## Language features
 
 ### variables
@@ -157,7 +159,7 @@ add : |x, y, z| a + b;
 
 Multi-statement anonymous functions have to use braces
 
-```rust
+```
 abs : |x| {
 	if x < 0 {
 		ret -x;
@@ -170,7 +172,7 @@ abs : |x| {
 
 Nested functions can capture the variables of the outer functions.
 
-````rust
+````
 fn make_counter() {
 	i : 0;
 	ret || { i += 1; ret i; };
@@ -219,7 +221,7 @@ derived_instance.put_name();
 
 New methods can be added to existing classes using the `impl` statement.
 
-````rust
+````
 impl Number {
 	cube() {
         ret $ * $ * $;
@@ -227,7 +229,7 @@ impl Number {
 }
 ```
 
-```javascript
+```
 put((0.5).cube());
 // Outputs "0.125".
 ```
@@ -236,7 +238,7 @@ put((0.5).cube());
 
 Classes can overload how operators like `+` , `*` or indexing and others work on them.
 
-```javascript
+```
 class Vec2 {
 	$init(x, y) {
 		$.x = x;
@@ -289,7 +291,7 @@ Int and Float are both derived from the Number class.
 
 ###### List
 
-```rust
+```
 list : [1, 2, 3];
 impl List {
 	find(item) {
@@ -320,7 +322,7 @@ dict["abc"] += 1;
 
 Modules are imported using the `use` statement. The `use` keyword has to be followed by the string containing a path to a file or the module's name. In the case a path is used the `.voxl` extension can be omitted. 
 
-```javascript
+```
 // Crates a variable named 'test' which can be used to access the module's members.
 use "file/test";
 
