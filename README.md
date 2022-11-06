@@ -1,7 +1,6 @@
 ## voxl is an embeddable scripting language
 
 
-
 ## Language features
 
 ### variables
@@ -34,11 +33,11 @@ put(x);
 
 ```rust
 if x < 5 {
-	put("x is smaller than 5");
+    put("x is smaller than 5");
 } elif x < 10 {
-	put("x is smaller than 10");
+    put("x is smaller than 10");
 } else {
-	put("x is bigger or equal to 10");
+    put("x is bigger or equal to 10");
 }
 ```
 
@@ -63,29 +62,29 @@ while i < 10 {
 
 ### for ... in
 
-`for ... in ` loops are used to iterate iterables, which are instances of classes than have a `$iter` method that returns an iterator of the type. The iterator's type has to have a `$next` method which returns the next item or throws `StopIteration.`
+`for ... in ` loops are used to iterate iterables, which are instances of types than have an `$iter` method that returns an iterator of the type. The iterator's type has to have a `$next` method which returns the next item or throws `StopIteration`.
 
 Example: Range iterator
 
 ```javascript
 class Range {
     $init(n) {
-		$.current = 0;
+        $.current = 0;
     	if n >= 0 {
-			$.max = 0;
+            $.max = 0;
     	} else {
-			$.max = n;    		
+            $.max = n;    		
     	}
     }
     
     $iter() {
-    	// Returns itself.
+        // Returns itself.
     	ret $;
     }
     
     $next() {
-    	if $.current >= $.max {
-    		throw StopIteration();
+        if $.current >= $.max {
+    	    throw StopIteration();
     	}
     	result : $.current;
     	$.current += 1;
@@ -96,7 +95,7 @@ class Range {
 
 ```rust
 for i in Range(10) {
-	put(i);
+    put(i);
 }
 // Outputs "0123456789".
 ```
@@ -108,18 +107,18 @@ match can be used similarly to C's switch statement or for pattern matching.
 ```rust
 one : 1;
 match x {
-	{0} => { put("x is 0"); }
+    {0} => { put("x is 0"); }
     // The cases don't have to be constants.
-	{one + 1} => { put("x is 2"); }
-	* => { put("else / default"); }
+    {one + 1} => { put("x is 2"); }
+    * => { put("else / default"); }
 }
 ```
 
 ```rust
 match expr {
-	Number => { put("<number>"); }
-	BinaryExpr(lhs = Number, rhs = Number) => { put("<number> + <number>"); }
-	BinaryExpr(lhs = BinaryExpr, rhs = Number(value = {1})) => { put("<bianry expr> + 1"); }
+    Number => { put("<number>"); }
+    BinaryExpr(lhs = Number, rhs = Number) => { put("<number> + <number>"); }
+    BinaryExpr(lhs = BinaryExpr, rhs = Number(value = {1})) => { put("<bianry expr> + 1"); }
 }
 ```
 
@@ -127,21 +126,23 @@ match expr {
 
 ```javascript
 try {
-	// Exceptions can be created using the `throw` statement.
-	throw Error("error");
-	// Any exception throw while executing the `try` block will be caught by and the `catch` block will execute.
+    // Exceptions can be created using the `throw` statement.
+    throw Error("error");
+    // Any exception thrown inside the `try` block will be caught if there is a matching `catch` block.
 } catch Error { 
-	// After the catch keyword there has to be a pattern. The same thing that is used in match statements. The pattern can be followed by arrow and a variable name. The variable stores the caught exception. There can be multiple catch blocks if none of them match the exception will be rethrown.
-	put("caught");
+    // After the catch keyword there has to be a pattern. The same thing that is used in match statements. 
+    put("caught");
 } catch Int => value {
-	
-} finally {
-	// The finally block always executes.
-	// If an exception is thrown inside the finally block the program terminates.
+    // The pattern can be followed by arrow and a variable name that is used to access the caught exception.
+} 
+// If no catch block matches the exception it gets rethrown.
+finally {
+    // The finally block always executes.
+    // If an exception is thrown inside the finally block the program terminates.
 }
 ```
 
-Types that are thrown should have a `$str` method. The string returned by this function is displayed if the exception isn't caught.
+If an exception is not caught the program terminates and the message returned by the exception's `$str` method is displayed.
 
 ### functions
 
@@ -161,10 +162,10 @@ Multi-statement anonymous functions have to use braces
 
 ```rust
 abs : |x| {
-	if x < 0 {
-		ret -x;
-	}
-	ret x;
+    if x < 0 {
+        ret -x;
+    }
+    ret x;
 };
 ```
 
@@ -174,8 +175,8 @@ Nested functions can capture the variables of the outer functions.
 
 ```rust
 fn make_counter() {
-	i : 0;
-	ret || { i += 1; ret i; };
+    i : 0;
+    ret || { i += 1; ret i; };
 }
 ```
 
@@ -191,20 +192,20 @@ put(counter());
 
 ```javascript
 class Base {
-	$init(name) {
-		$.name = name;
-	}
-	
-	put_name() {
-		put($.name);
-	}
+    $init(name) {
+        $.name = name;
+    }
+    
+    put_name() {
+        put($.name);
+    }
 }
 
 class Derived < Base {
-	$init() {
-		// Methods are just functions that take the instance as the first argument.
-		Base.$init($, "dervied");
-	}
+    $init() {
+        // Methods are just functions that take an instance as the first argument.
+        Base.$init($, "dervied");
+    }
 }.
 ```
 
@@ -236,42 +237,42 @@ put((0.5).cube());
 
 ### operator overloading
 
-Classes can overload how operators like `+` , `*` or indexing and others work on them.
+Classes can overload how operators like `+` , `*` or indexing.
 
 ```javascript
 class Vec2 {
-	$init(x, y) {
-		$.x = x;
-		$.y = y;
-	}
+    $init(x, y) {
+        $.x = x;
+        $.y = y;
+    }
 	
-	$add(other) {
-		ret Vec2($.x + other.x, $.y + other.y);
-	}
+    $add(other) {
+        ret Vec2($.x + other.x, $.y + other.y);
+    }
 	
-	$mul(other) {
-		match other {
-			Number => { ret Vec2($.x * other, $.y * other); }
-			Vec2 => { ret Vec2($.x * other.x, $.y * other.y); }
-			* => { throw Error("no matching overload"); }
-		}
-	}
+    $mul(other) {
+        match other {
+            Number => { ret Vec2($.x * other, $.y * other); }
+            Vec2 => { ret Vec2($.x * other.x, $.y * other.y); }
+            * => { throw Error("no matching overload"); }
+        }
+    }
 	
-	$get_index(i) {
-		match => {
-			{0} => { ret $.x; }
-			{1} => { ret $.y; }
-			* => throw Error("index out of range");
-		}
-	}
+    $get_index(i) {
+        match => {
+            {0} => { ret $.x; }
+            {1} => { ret $.y; }
+            * => throw Error("index out of range");
+        }
+    }
 	
-	$set_index(i, value) {
-		match => {
-			{0} => { $.x = value; }
-			{1} => { $.y = value; }
-			* => throw Error("index out of range");
-		}
-	}
+    $set_index(i, value) {
+        match => {
+            {0} => { $.x = value; }
+	    {1} => { $.y = value; }
+            * => throw Error("index out of range");
+        }
+    }
 }
 ```
 
@@ -294,24 +295,24 @@ Int and Float are both derived from the Number class.
 ```rust
 list : [1, 2, 3];
 impl List {
-	find(item) {
-		for i in Range($.size()) {
-			if $[i] == item {
-				ret i;
-			}
-		}
-		ret -1;
-	}
+    find(item) {
+        for i in Range($.size()) {
+            if $[i] == item {
+                ret i;
+            }
+        }
+        ret -1;
+    }
 }
 
 for item in list {
-	put(item);
+    put(item);
 }
 ```
 
 ###### Dict
 
-Dict stores key value pairs. They key value's type has to have a `$hash` method.
+Dict stores key value pairs. They key's type has to have a `$hash` method.
 
 ```
 dict : { "abc" : 3, "abc" + "efg" : 4 };
@@ -340,7 +341,7 @@ Module members can be made private by prefixing the variable with an underscore.
 
 ### foreign function interface
 
-The FFI can be used to create functions and types in C++ that can be used inside the language. 
+The FFI can be used to create functions and types using C++ that can be accessed inside the language. 
 
 An FFI function has to have the following signature.
 
@@ -355,14 +356,14 @@ using namespace Voxl;
 
 static constexpr int addArgCount = 2;
 LocalValue add(Context& c) {
-	auto self = c.args(0);
-	auto other= c.args(1);
-	return c.get("Vec2")(self.get("x") + other.get("x"), self.get("y") + other.get("y"));
+    auto self = c.args(0);
+    auto other= c.args(1);
+    return c.get("Vec2")(self.get("x") + other.get("x"), self.get("y") + other.get("y"));
 }
 
 static constexpr int floorArgCount = 1;
 LocalValue floor(Context& c) {
-	auto number = c.args(0);
+    auto number = c.args(0);
     // Could just use asNumber();
     if (number.isInt()) {
         return number;
@@ -414,8 +415,7 @@ struct Type : public ObjNativeInstance {
 }
 ```
 
-Inside the module main function the type can be created.
-
+The type can be defined in the module's main function.
 ```c++
 c.createClass<Type>(
     "Type",
